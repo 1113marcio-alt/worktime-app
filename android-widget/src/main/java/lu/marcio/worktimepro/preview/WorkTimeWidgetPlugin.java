@@ -53,8 +53,10 @@ public final class WorkTimeWidgetPlugin extends Plugin {
 
     @PluginMethod
     public void updateState(PluginCall call) {
+        Integer seconds = call.getInt("workedSeconds", 0);
+        long safeMillis = Math.max(0L, seconds == null ? 0L : seconds.longValue()) * 1000L;
         WidgetStore.setState(appContext(),
-            call.getString("state", "idle"), call.getString("started", ""));
+            call.getString("state", "idle"), call.getString("started", ""), safeMillis);
         WorkTimeWidgetProvider.updateAll(appContext());
         WorkTimeNotification.update(appContext());
         call.resolve();
