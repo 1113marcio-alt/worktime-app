@@ -166,3 +166,40 @@ test("turnos da Preview são preservados em snapshots da versão 2", () => {
   assert.equal(data.shiftDrafts[0].id, "d1");
   assert.equal(app.evaluate("isValidWorkTimeBackup(snapshotAllData())"), true);
 });
+
+
+test("taxa de pensão e abatimento LU acompanham o mês de 2026", () => {
+  const app = makeApp();
+  assert.equal(app.evaluate('getLuxSocialParameters("2026-11").pensionRate'), 0.085);
+  assert.equal(app.evaluate('getLuxSocialParameters("2026-11").depAllowance'), 692.83);
+  assert.equal(app.evaluate('getLuxSocialParameters("2026-02").depAllowance'), 675.94);
+  assert.equal(app.evaluate('getLuxSocialParameters("2025-02").pensionRate'), 0.08);
+  assert.equal(app.evaluate('getLuxSocialParameters("2025-02").depAllowance'), 659.45);
+});
+
+test("simulação de mês vazio não inventa crédito fiscal", () => {
+  const app = makeApp({ cisCredit: 50 }, {});
+  assert.equal(app.evaluate('calculateMonthData("2026-11").totalGross'), 0);
+  assert.equal(app.evaluate('calculateMonthData("2026-11").cisCreditApplied'), 0);
+  assert.equal(app.evaluate('calculateMonthData("2026-11").finalNet'), 0);
+});
+
+test("CIS manual fica separado do líquido das horas, sem apagar a configuração antiga", () => {
+  const old = { "2026-11-18": { date: "2026-11-18", type: "work",
+    normal: 8, extra: 1, night: 0, includeBonus: true, note: "Exemplo" } };
+  const app = makeApp({ cisCredit: 50 }, old);
+  const d = app.evaluate('calculateMonthData("2026-11")');
+  assert.ok(Math.abs(d.totalGross - 197.3) < 0.001);
+  assert.equal(d.cisCreditApplied, 50);
+  assert.ok(d.netBeforeCredit < d.totalGross);
+  assert.ok(Math.abs(d.finalNet - d.netBeforeCredit - 50) < 0.001);
+  assert.equal(app.evaluate("settings.cisCredit"), 50);
+  assert.equal(app.evaluate('entries["2026-11-18"].normal'), 8);
+});
+
+test("painel e salário comunicam separadamente o CIS", () => {
+  assert.ok(source.includes('id="homeCreditNotice"'));
+  assert.ok(source.includes('id="salaryPreviewCredit"'));
+  assert.ok(source.includes('id="salaryPreviewWithCredit"'));
+  assert.ok(proSource.includes('formatMoney(data.netBeforeCredit)'));
+});
