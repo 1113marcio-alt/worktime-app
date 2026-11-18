@@ -100,3 +100,64 @@ body.wt-pro::before {content:"";position:fixed;inset:0;z-index:-1;pointer-events
 .wt-settings-stack > div {border:1px solid rgba(132,166,222,.13);background:rgba(17,29,52,.76);border-radius:15px;box-shadow:none;}
 .wt-settings-launch {border-color:rgba(95,159,255,.35);background:linear-gradient(135deg,#1b3159,#15233d);}
 .wt-settings-group button:focus-visible,.wt-settings-group summary:focus-visible {outline:2px solid #79aeff;outline-offset:2px;}
+
+/* A real light theme, rather than toggling body classes while the dark design stays. */
+html[data-wt-theme="light"], html[data-wt-theme="light"] body.wt-pro { color-scheme:light !important; }
+html[data-wt-theme="light"] body.wt-pro {background:#f3f7fd !important;color:#172640 !important;}
+html[data-wt-theme="light"] body.wt-pro::before {background:radial-gradient(ellipse at top,rgba(91,148,232,.17),transparent 60%) !important;}
+html[data-wt-theme="light"] .wt-main-header {background:rgba(255,255,255,.97) !important;border-color:#dae4f2 !important;}
+html[data-wt-theme="light"] .wt-card,
+html[data-wt-theme="light"] .wt-settings-group,
+html[data-wt-theme="light"] .wt-settings-stack > div {background:#fff !important;border-color:#d7e1ef !important;box-shadow:0 8px 28px rgba(52,78,135,.07) !important;color:#172640 !important;}
+html[data-wt-theme="light"] .wt-hero {background:linear-gradient(125deg,#e7eeff,#dbeaff) !important;border-color:#adc5f5 !important;color:#15335f !important;box-shadow:0 10px 30px rgba(36,83,151,.12) !important;}
+html[data-wt-theme="light"] .wt-hero-amount {color:#17355d !important;}
+html[data-wt-theme="light"] .wt-hero .text-blue-100,
+html[data-wt-theme="light"] .wt-hero .text-blue-200 {color:#35598b !important;}
+html[data-wt-theme="light"] .wt-balance-cell {background:#f2f6fe !important;border-color:#cddcf4 !important;}
+html[data-wt-theme="light"] .wt-balance-cell span {color:#536a89 !important;}
+html[data-wt-theme="light"] .wt-pill {background:#e3edff !important;color:#28558e !important;}
+html[data-wt-theme="light"] .wt-action,
+html[data-wt-theme="light"] .wt-draft,
+html[data-wt-theme="light"] .wt-cal-nav,
+html[data-wt-theme="light"] .wt-day,
+html[data-wt-theme="light"] .wt-entry-day {background:#eff4fc !important;color:#233e68 !important;border-color:#d5e0f1 !important;}
+html[data-wt-theme="light"] .wt-day.wt-selected {background:#3975d7 !important;color:#fff !important;}
+html[data-wt-theme="light"] .wt-day.wt-outside {background:transparent !important;color:#8797b3 !important;}
+html[data-wt-theme="light"] .wt-clock-card {background:linear-gradient(145deg,#e8f1ff,#dceaff) !important;color:#163965 !important;}
+html[data-wt-theme="light"] .wt-timer {color:#123a72 !important;}
+html[data-wt-theme="light"] .wt-clock-status,
+html[data-wt-theme="light"] .wt-note,
+html[data-wt-theme="light"] .wt-muted,
+html[data-wt-theme="light"] .wt-stat-label,
+html[data-wt-theme="light"] .wt-entry-sub,
+html[data-wt-theme="light"] .wt-action span:last-child,
+html[data-wt-theme="light"] .wt-cal-weekdays {color:#536987 !important;}
+html[data-wt-theme="light"] .wt-bottom {background:rgba(255,255,255,.98) !important;border-color:#dce5f2 !important;box-shadow:0 -8px 24px rgba(36,62,107,.07) !important;}
+html[data-wt-theme="light"] .wt-nav-item {color:#506684 !important;}
+html[data-wt-theme="light"] .wt-nav-item.active {color:#1f62ba !important;background:#e3efff !important;}
+html[data-wt-theme="light"] .wt-settings-group > summary {color:#1c3b68 !important;}
+html[data-wt-theme="light"] .wt-settings-launch {background:#e7f1ff !important;}
+html[data-wt-theme="light"] .wt-settings-stack > div {background:#f9fbff !important;}
+html[data-wt-theme="light"] .wt-chart-rail {background:#e4eafa !important;}
+html[data-wt-theme="light"] [class*="bg-slate-900"],
+html[data-wt-theme="light"] [class*="bg-slate-800"],
+html[data-wt-theme="light"] [class*="bg-slate-950"] {background-color:#edf3fb !important;border-color:#d6e0ee !important;}
+html[data-wt-theme="light"] [class*="text-slate-100"],
+html[data-wt-theme="light"] [class*="text-slate-200"],
+html[data-wt-theme="light"] [class*="text-slate-300"],
+html[data-wt-theme="light"] [class*="text-white"] {color:#1b2f50 !important;}
+html[data-wt-theme="light"] [class*="text-slate-400"],
+html[data-wt-theme="light"] [class*="text-slate-500"] {color:#536987 !important;}
+html[data-wt-theme="light"] .text-blue-400,
+html[data-wt-theme="light"] .text-blue-300 {color:#245fba !important;}
+html[data-wt-theme="light"] .text-amber-300 {color:#925500 !important;}
+html[data-wt-theme="light"] .text-emerald-400 {color:#087b56 !important;}
+html[data-wt-theme="light"] .text-red-400 {color:#ba3450 !important;}
+html[data-wt-theme="light"] select,
+html[data-wt-theme="light"] textarea,
+html[data-wt-theme="light"] input {color-scheme:light !important;background:#fff !important;color:#152d50 !important;border-color:#c5d4ea !important;}
+html[data-wt-theme="light"] .wt-button {background:#e0eafd !important;color:#1d457a !important;border-color:#a9c3ee !important;}
+html[data-wt-theme="light"] .wt-button.primary {background:#2f6fdb !important;color:#fff !important;}
+html[data-wt-theme="light"] .wt-button.cyan {background:#168679 !important;color:#fff !important;}
+html[data-wt-theme="light"] .wt-button.danger {color:#a92c4d !important;background:#ffe5eb !important;}
+html[data-wt-theme="light"] #pinLockModal {background:#eaf1fc !important;}
