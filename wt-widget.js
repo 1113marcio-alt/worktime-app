@@ -14,6 +14,12 @@
    const el=$("widgetStatus");
    if(el){el.textContent=message;el.className="wt-note "+(ok?"text-emerald-400":"text-amber-300");}
  }
+ function notificationStatus(message,ok){
+   const el=$("notificationStatus");
+   if(!el){status(message,ok);return;}
+   el.textContent=message;
+   el.className="wt-note "+(ok?"text-emerald-400":"text-amber-300");
+ }
  function readJson(key,defaultValue){
    try {const value=localStorage.getItem(key);return value?JSON.parse(value):defaultValue;}
    catch(_){return defaultValue;}
@@ -155,43 +161,43 @@
  async function configureNotifications(enabled){
    const p=plugin();
    if(!p || !p.setShiftNotifications) {
-     status("As notificações de turno estão disponíveis na Preview Android atualizada.",false);
+     notificationStatus("As notificações de turno estão disponíveis na Preview Android atualizada.",false);
      return;
    }
    try {
      const result=await p.setShiftNotifications({enabled:!!enabled});
      if(enabled && result && !result.systemAllowed) {
-       status("Para mostrar as notificações, autoriza-as nas Definições do Samsung.",false);
+       notificationStatus("Para mostrar as notificações, autoriza-as nas Definições do Samsung.",false);
      } else if(enabled) {
-       status("Notificações ativadas. O estado do turno aparece na barra de notificações.",true);
+       notificationStatus("Notificações ativadas. O estado do turno aparece na barra de notificações.",true);
      } else {
-       status("Notificações do turno desativadas.",true);
+       notificationStatus("Notificações do turno desativadas.",true);
      }
    } catch (_) {
-     status("Não foi possível alterar a preferência das notificações.",false);
+     notificationStatus("Não foi possível alterar a preferência das notificações.",false);
    }
  }
  async function toggleNotifications(){
    const checked=!!($("cfgShiftNotifications") && $("cfgShiftNotifications").checked);
    if (checked && !settings.widgetEnabled) {
      $("cfgShiftNotifications").checked=false;
-     status("Ativa primeiro o widget. Os botões da notificação usam o mesmo registo seguro.",false);
+     notificationStatus("Ativa primeiro o widget. Os botões da notificação usam o mesmo registo seguro.",false);
      return;
    }
    try {
      settings.shiftNotifications=checked;
      localStorage.setItem("wt_settings",JSON.stringify(settings));
      await configureNotifications(checked);
-   }catch(_){status("Não foi possível guardar a preferência das notificações.",false);}
+   }catch(_){notificationStatus("Não foi possível guardar a preferência das notificações.",false);}
  }
  async function openNotificationSettings(){
    const p=plugin();
    if(!p || !p.openNotificationSettings){
-     status("As definições de notificação só estão disponíveis no APK Android.",false);
+     notificationStatus("As definições de notificação só estão disponíveis no APK Android.",false);
      return;
    }
    try {await p.openNotificationSettings();}
-   catch(_){status("Não foi possível abrir as Definições do Android.",false);}
+   catch(_){notificationStatus("Não foi possível abrir as Definições do Android.",false);}
  }
  async function add(){
    const p=plugin();
