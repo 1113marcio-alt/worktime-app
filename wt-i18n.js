@@ -273,11 +273,169 @@ lu:{
 "Usar mínimo legal":"Gesetzleche Minimum benotzen"
 }
 };
+
+/* Complete the visible interface, including grouped settings and country widgets. */
+Object.assign(words.en,{
+"App Bloqueado":"App locked","Introduza o seu PIN de 4 dígitos":"Enter your 4-digit PIN",
+"Desbloquear":"Unlock","PIN incorreto!":"Incorrect PIN","Valores":"Amounts",
+"Os créditos fiscais são apresentados à parte.":"Tax credits are shown separately.",
+"Os valores salariais são estimativas. As regras fiscais e de compensação ainda não foram validadas para todos os países.":"Pay values are estimates. Tax and compensation rules are not verified for all countries.",
+"Consulta os dias e abre qualquer registo para o editar.":"View the days and open any entry to edit it.",
+"Trabalho":"Work","Férias":"Leave","Baixa":"Sick leave","Feriado":"Holiday","Hoje":"Today",
+"Os feriados nacionais são apresentados para LU, PT e FR. Feriados locais e situações especiais exigem confirmação.":"National holidays are available for LU, PT and FR. Local holidays and exceptional rules need checking.",
+"Os turnos terminados ficam como rascunhos antes de serem aplicados ao dia. As horas extraordinárias seguem o horário configurado apenas como sugestão. O suplemento noturno deve ser confirmado manualmente.":"Finished shifts remain drafts until added to a day. Overtime follows the configured schedule as a suggestion; confirm night premiums manually.",
+"Resumo do Mês Atual":"This month's summary","Horas Totais":"Total hours","Horas Extras":"Overtime hours","Líquido Est.":"Est. net",
+"Preencher semana (horário configurado)":"Fill week using schedule","H. Normais":"Regular h","H. Extras":"Overtime h","H. Noturnas":"Night h",
+"Montante acumulado dos registos, antes do crédito CIS configurado.":"Accumulated pay from recorded days, before any configured CIS credit.",
+"O Luxemburgo dispõe de uma estimativa por classe; França e Portugal precisam de retenção manual e dados adicionais. Confirma sempre com o recibo.":"Luxembourg has a tax-class estimate; France and Portugal require manually entered withholding and extra details. Always check your payslip.",
+"Estimativa salarial — confirmar com o recibo":"Pay estimate — check your payslip","PDF / Imprimir":"PDF / Print",
+"Horas Normais (0h)":"Regular hours (0h)","Horas Extras Isentas IRS (0h)":"Tax-exempt overtime (0h)",
+"Suplemento Noturno (0h)":"Night premium (0h)","Bónus Horário Fixo":"Fixed hourly bonus",
+"Férias / Feriados ( c/ Média 3M )":"Leave / holidays (three-month average)",
+"Subsídio Diário / Panier (Isento)":"Daily allowance / panier (exempt)",
+"TOTAL BRUTO":"GROSS TOTAL","Pensão (modelo LU)":"Pension (LU model)",
+"Saúde (3,05% - inclui base H. Extras)":"Health insurance (3.05%; includes base overtime)",
+"Dependência (abatimento 1/4 SSM)":"Long-term care (minimum-wage allowance)",
+"Outras contribuições sociais estimadas":"Other estimated social contributions",
+"Seguro Acidente (AAA - Pago 100% pelo Patrão)":"Accident insurance (AAA — employer-paid)",
+"Retenção IRS (Horas Extras = 0% IRS)":"Withholding tax (overtime treatment varies)",
+"Crédito Fiscal Salariado (CIS)":"Employee tax credit (CIS)",
+"Salário Líquido Estimado":"Estimated net salary","Valor a receber na conta bancária":"Estimated amount paid",
+"Conferir com a Fiche de Salaire do Patrão":"Compare with employer payslip",
+"Saldo de Férias e Média de 3 Meses":"Leave balance and three-month average",
+"Valor Real do teu Dia de Férias (Lei do Luxemburgo):":"Estimated leave-day value (Luxembourg):",
+"Feriados":"Holidays","As compensações dependem das regras e do horário aplicável.":"Compensation depends on applicable rules and work schedules.",
+"Organizadas por assunto. Abre apenas o grupo que precisas de ajustar.":"Settings are grouped by topic. Open only the section you need.",
+"Por defeito abre no Relógio de ponto para marcares a entrada imediatamente.":"The app opens the time clock by default for quick clock-in.",
+"Automático (apenas LU, aproximado)":"Automatic (LU only, approximate)",
+"Taxas manuais (outros países)":"Manual rates (other countries)",
+"Usar também o calendário de feriados do país empregador":"Use the employer country's holiday calendar too",
+"Ativa os dias de trabalho e define entrada, saída e pausa não remunerada. A opção «Preencher Semana» usa estas horas apenas para novos dias; nunca substitui registos existentes.":"Choose workdays and set start, finish and unpaid break. Fill Week only adds new days and never overwrites entries.",
+"O backup só está seguro quando existir fora da aplicação.":"A backup is only safe once stored outside this app.",
+"Antes de importar ou instalar versões novas, exporte e guarde o ficheiro JSON fora da aplicação.":"Export and store the JSON file outside this app before imports or updates.",
+"O PIN protege apenas a interface, não encripta os dados. Guarda-o num local seguro.":"Your PIN locks the app interface; it does not encrypt your data. Keep it safe.",
+"Taxa social manual (%)":"Manual social-contribution rate (%)","Retenção manual (%)":"Manual withholding rate (%)",
+"Classe 1 (Solteiro/Divorciado)":"Class 1 (Single/Divorced)",
+"Classe 1a (Monoparental)":"Class 1a (Single parent)",
+"Classe 2 (Casado / PACS)":"Class 2 (Married/PACS)",
+"Taxa IRS Manual Opcional (%)":"Optional manual tax rate (%)",
+"Crédito Fiscal CIS (€/mês)":"CIS tax credit (€/month)",
+"Valor a receber na conta bancária":"Amount estimated to reach bank account",
+"Dias com registos":"Days with entries",
+"Taxa social manual (%)":"Manual social rate (%)",
+"País dos Feriados e Férias":"Holiday calendar country",
+"Usar mínimo legal":"Use legal minimum",
+"Relógio de ponto":"Time clock",
+"Guardar Registo do Dia":"Save day entry",
+"Notas (Rota, camião, observações)":"Notes (route, truck, observations)",
+"Tipo de Dia":"Day type",
+"Majoração Hora Extra (%)":"Overtime premium (%)",
+"Majoração Noturna (%)":"Night premium (%)",
+"Média 3M Extra p/ Férias (€/dia)":"3-month average for paid leave (€/day)",
+"Feriado Oficial":"Public holiday",
+"Baixa Médica":"Sick leave",
+"Folga / Descanso":"Day off / rest",
+"Trabalho Normal":"Regular work",
+"Data":"Date","Guardar Registo do Dia":"Save day entry",
+"Segurança":"Security",
+"Restaurar Backup anterior (.json)":"Restore previous backup (.json)",
+"Repor dados anteriores à última importação":"Restore data from before last import",
+"Alternar entre Modo Escuro e Claro":"Switch between dark and light modes",
+"Ativar modo claro":"Use light theme","Ativar modo escuro":"Use dark theme",
+"Guardar PIN de 4 dígitos":"Save 4-digit PIN",
+"Voltar":"Back","Guardar":"Save","Cancelar":"Cancel",
+"Região do calendário (opcional)":"Calendar region (optional)",
+"Segunda":"Monday","Terça":"Tuesday","Quarta":"Wednesday","Quinta":"Thursday","Sexta":"Friday",
+"Sábado":"Saturday","Domingo":"Sunday","Trabalha":"Working","Pausa (min)":"Break (min)",
+"Saída":"Finish","Retomar trabalho":"Resume work","Em pausa":"On break","Turno em curso":"Shift in progress",
+"Iniciar pausa":"Start break",
+"Turnos por guardar":"Unconfirmed shifts",
+"Trabalha":"Working day",
+"País da empresa e residência":"Employer and residence countries",
+"Modo escuro":"Dark mode","Modo claro":"Light mode"
+});
+Object.assign(words.fr,{
+"Usar também o calendário de feriados do país empregador":"Utiliser aussi le calendrier des jours fériés du pays de l'employeur",
+"Ativar modo claro":"Activer le thème clair","Ativar modo escuro":"Activer le thème sombre",
+"Valor a receber na conta bancária":"Montant estimé à recevoir",
+"Segunda":"Lundi","Terça":"Mardi","Quarta":"Mercredi","Quinta":"Jeudi","Sexta":"Vendredi",
+"Sábado":"Samedi","Domingo":"Dimanche","Trabalha":"Travaille","Pausa (min)":"Pause (min)",
+"Saída":"Départ","Voltar":"Retour","Guardar":"Enregistrer","Cancelar":"Annuler",
+"Em pausa":"En pause","Turno em curso":"Service en cours","Retomar trabalho":"Reprendre le travail",
+"Iniciar pausa":"Commencer une pause","O backup só está seguro quando existir fora da aplicação.":"La sauvegarde n'est sûre que si elle est enregistrée hors de l'application."
+});
+Object.assign(words.de,{
+"Usar também o calendário de feriados do país empregador":"Auch Feiertage des Arbeitgeberlandes verwenden",
+"Região do calendário (opcional)":"Kalenderregion (optional)",
+"Ativar modo claro":"Helles Design aktivieren","Ativar modo escuro":"Dunkles Design aktivieren",
+"Segunda":"Montag","Terça":"Dienstag","Quarta":"Mittwoch","Quinta":"Donnerstag","Sexta":"Freitag",
+"Sábado":"Samstag","Domingo":"Sonntag","Trabalha":"Arbeitet","Pausa (min)":"Pause (Min.)",
+"App Bloqueado":"App gesperrt","Introduza o seu PIN de 4 dígitos":"4-stellige PIN eingeben","Desbloquear":"Entsperren",
+"Retenção manual (%)":"Manueller Steuerabzug (%)","Taxa social manual (%)":"Manuelle Sozialabgaben (%)",
+"Em pausa":"In Pause","Turno em curso":"Schicht läuft","Retomar trabalho":"Arbeit fortsetzen",
+"Iniciar pausa":"Pause beginnen","Guardar PIN":"PIN speichern","Dados e segurança":"Daten und Sicherheit",
+"Valor a receber na conta bancária":"Geschätzte Auszahlung"
+});
+Object.assign(words.es,{
+"Usar também o calendário de feriados do país empregador":"Usar también los festivos del país del empleador",
+"Região do calendário (opcional)":"Región del calendario (opcional)",
+"Ativar modo claro":"Activar tema claro","Ativar modo escuro":"Activar tema oscuro",
+"Segunda":"Lunes","Terça":"Martes","Quarta":"Miércoles","Quinta":"Jueves","Sexta":"Viernes",
+"Sábado":"Sábado","Domingo":"Domingo","Trabalha":"Trabaja","Pausa (min)":"Pausa (min)",
+"App Bloqueado":"App bloqueada","Introduza o seu PIN de 4 dígitos":"Introduce tu PIN de 4 cifras","Desbloquear":"Desbloquear",
+"Retenção manual (%)":"Retención manual (%)","Taxa social manual (%)":"Cotización social manual (%)",
+"Em pausa":"En pausa","Turno em curso":"Turno en curso","Retomar trabalho":"Reanudar trabajo",
+"Iniciar pausa":"Iniciar pausa","Valor a receber na conta bancária":"Importe neto estimado"
+});
+Object.assign(words.lu,{
+"Usar também o calendário de feriados do país empregador":"Och d'Feierdeeg vum Land vum Patron benotzen",
+"Região do calendário (opcional)":"Kalennerregioun (optional)",
+"Ativar modo claro":"Hell Modus aktivéieren","Ativar modo escuro":"Donkele Modus aktivéieren",
+"Segunda":"Méindeg","Terça":"Dënschdeg","Quarta":"Mëttwoch","Quinta":"Donneschdeg","Sexta":"Freideg",
+"Sábado":"Samschdeg","Domingo":"Sonndeg","Trabalha":"Schafft","Pausa (min)":"Paus (Min.)",
+"App Bloqueado":"App gespaart","Introduza o seu PIN de 4 dígitos":"Gëff däi 4-Zifferen PIN an","Desbloquear":"Entspären",
+"Retenção manual (%)":"Manuelle Steierofzuch (%)","Taxa social manual (%)":"Manuell Sozialbäiträg (%)",
+"Em pausa":"An der Paus","Turno em curso":"Schicht leeft","Retomar trabalho":"Aarbecht weiderféieren",
+"Iniciar pausa":"Paus ufänken"
+});
+const dynamicLabels={
+en:{employer:"Employer",salaryLeave:"pay and leave",calendar:"Calendar",holidays:"holidays",
+  national:"National holidays available.",unverified:"Holidays not yet verified for this country.",
+  leave:"General legal minimum",days:"days",automatic:"Automatic updates enabled.",
+  custom:"Custom contractual value.",verify:"Legal minimum not verified for",enter:"Enter the value from your contract."},
+fr:{employer:"Employeur",salaryLeave:"salaire et congés",calendar:"Calendrier",holidays:"jours fériés",
+  national:"Jours fériés nationaux disponibles.",unverified:"Jours fériés non vérifiés pour ce pays.",
+  leave:"Minimum légal général",days:"jours",automatic:"Mise à jour automatique activée.",
+  custom:"Valeur personnalisée selon contrat.",verify:"Minimum légal non vérifié pour",enter:"Saisissez la valeur prévue au contrat."},
+de:{employer:"Arbeitgeber",salaryLeave:"Lohn und Urlaub",calendar:"Kalender",holidays:"Feiertage",
+  national:"Nationale Feiertage verfügbar.",unverified:"Feiertage für dieses Land noch nicht geprüft.",
+  leave:"Allgemeiner gesetzlicher Mindesturlaub",days:"Tage",automatic:"Automatische Anpassung aktiv.",
+  custom:"Vertraglich festgelegter Wert.",verify:"Mindesturlaub noch nicht geprüft für",enter:"Wert laut Vertrag eingeben."},
+es:{employer:"Empleador",salaryLeave:"salario y vacaciones",calendar:"Calendario",holidays:"festivos",
+  national:"Festivos nacionales disponibles.",unverified:"Festivos sin verificar para este país.",
+  leave:"Mínimo legal general",days:"días",automatic:"Actualización automática activa.",
+  custom:"Valor personalizado del contrato.",verify:"Mínimo legal sin verificar para",enter:"Introduce el valor del contrato."},
+lu:{employer:"Patron",salaryLeave:"Pai a Congé",calendar:"Kalenner",holidays:"Feierdeeg",
+  national:"National Feierdeeg verfügbar.",unverified:"Feierdeeg nach net iwwerpréift.",
+  leave:"Allgemenge gesetzleche Minimum",days:"Deeg",automatic:"Automatesch Aktualiséierung aktiv.",
+  custom:"Vertraglech festgeluechte Wäert.",verify:"Minimum nach net iwwerpréift fir",enter:"Wäert vum Kontrakt aginn."}
+};
+
 const originals = new WeakMap();
 function normalize(code) { return ["fr","en","de","es","lu","pt"].includes(code)?code:"pt"; }
 function tr(text,language) {
  const locale=normalize(language);
  if(locale==="pt")return text;
+ const dl=dynamicLabels[locale];
+ const countryMsg=/^Empregador: ([A-Z]{2}) \(salário e férias\)\. Calendário: ([A-Z]{2}) \(feriados\)\. (.*)$/.exec(text);
+ if(countryMsg&&dl)return dl.employer+": "+countryMsg[1]+" ("+dl.salaryLeave+"). "+
+   dl.calendar+": "+countryMsg[2]+" ("+dl.holidays+"). "+
+   (countryMsg[3].startsWith("Feriados nacionais")?dl.national:dl.unverified);
+ const minMsg=/^Mínimo legal geral ([A-Z]{2}): (\d+) dias\. (.+)$/.exec(text);
+ if(minMsg&&dl)return dl.leave+" "+minMsg[1]+": "+minMsg[2]+" "+dl.days+". "+
+  (minMsg[3].startsWith("Atualização")?dl.automatic:dl.custom);
+ const noMin=/^Férias: mínimo legal ainda não verificado para ([A-Z]{2})/.exec(text);
+ if(noMin&&dl)return dl.verify+" "+noMin[1]+". "+dl.enter;
  const literal=(words[locale]||{})[text];
  if(literal)return literal;
  // Headings such as "4. País dos Feriados e Férias" keep the index.
@@ -305,10 +463,12 @@ function apply(language) {
    const content=node.nodeValue;
    const trimmed=content.trim();
    if(!trimmed)continue;
-   if(!originals.has(node))originals.set(node,trimmed);
-   const base=originals.get(node);
-   const translated=tr(base,locale);
+   let record=originals.get(node);
+   if(!record) {record={source:trimmed,last:trimmed}; originals.set(node,record);}
+   else if(trimmed!==record.last&&trimmed!==record.source)record.source=trimmed;
+   const translated=tr(record.source,locale);
    if(translated!==trimmed)node.nodeValue=content.replace(trimmed,translated);
+   record.last=translated;
  }
  document.querySelectorAll("input[placeholder], textarea[placeholder]").forEach(input=>{
    const original=input.dataset.wtOrigPlaceholder || input.getAttribute("placeholder");
