@@ -72,6 +72,8 @@ public final class WorkTimeWidgetPlugin extends Plugin {
 
     @PluginMethod
     public void getShiftNotificationStatus(PluginCall call) {
+        // Samsung permissions may have changed while the app was closed.
+        WorkTimeNotification.update(appContext());
         JSObject result = new JSObject();
         result.put("enabled", WidgetStore.notificationsEnabled(appContext()));
         result.put("systemAllowed", WorkTimeNotification.systemAllowed(appContext()));
