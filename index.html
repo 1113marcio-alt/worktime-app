@@ -572,7 +572,7 @@
           <h3 class="font-bold text-sm text-blue-400">5. Aparência</h3>
           <p class="text-xs text-slate-400">Alternar entre Modo Escuro e Claro</p>
         </div>
-        <button onclick="toggleTheme()" class="bg-slate-800 border border-slate-700 px-4 py-2 rounded-xl text-xs font-bold">
+        <button id="cfgThemeButton" onclick="toggleTheme()" class="bg-slate-800 border border-slate-700 px-4 py-2 rounded-xl text-xs font-bold">
           🌗 Alternar Tema
         </button>
       </div>
@@ -673,6 +673,7 @@
       cisCredit: 50,
       lang: "pt",
       startScreen: "ponto",
+      theme: "dark",
       holidayCountry: "LU",
       employerCountry: "LU",
       residenceCountry: "LU",
@@ -872,6 +873,7 @@
       renderWeeklySchedule();
       document.getElementById("cfgAnnualVacation").value = settings.annualVacation;
       document.getElementById("cfgSecurityPin").value = settings.securityPin || "";
+      applyTheme();
       refreshCountryPreferences();
       document.getElementById("bonusHintLabel").textContent = `Bónus: ${Number(settings.hourlyBonus).toFixed(2)} €/h • Panier: ${Number(settings.dailyPanier).toFixed(2)} €/dia`;
       applyTranslations();
@@ -1110,12 +1112,24 @@
       renderAll();
     }
 
+    function applyTheme() {
+      const light = settings.theme === "light";
+      document.documentElement.setAttribute("data-wt-theme", light ? "light" : "dark");
+      document.documentElement.classList.toggle("dark", !light);
+      document.documentElement.style.colorScheme = light ? "light" : "dark";
+      const button = document.getElementById("cfgThemeButton");
+      if (button) button.textContent = light ? "🌙 Ativar modo escuro" : "☀️ Ativar modo claro";
+    }
+
     function toggleTheme() {
-      document.documentElement.classList.toggle("dark");
-      document.body.classList.toggle("bg-slate-950");
-      document.body.classList.toggle("bg-slate-100");
-      document.body.classList.toggle("text-slate-100");
-      document.body.classList.toggle("text-slate-900");
+      settings.theme = settings.theme === "light" ? "dark" : "light";
+      try {
+        localStorage.setItem("wt_settings", JSON.stringify(settings));
+        applyTheme();
+        applyTranslations();
+      } catch (_) {
+        alert("Não foi possível guardar a preferência de aparência.");
+      }
     }
 
     // Parâmetros sociais LU: 2025/2026 com data de referência.
