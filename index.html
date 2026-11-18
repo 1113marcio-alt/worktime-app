@@ -923,7 +923,25 @@
     }
 
     function changeCalendarCountry() {
-      // Explicit override: separar feriados do local do empregador.
+      const calendar = document.getElementById("cfgHolidayCountry").value;
+      const employer = document.getElementById("cfgEmployerCountry").value;
+      // Uma escolha do calendário não pode alterar silenciosamente o regime
+      // fiscal ou os direitos laborais. Permitir alinhar ambos com aprovação.
+      if (calendar !== employer &&
+        confirm("Queres utilizar " + calendar +
+          " também como país do empregador para atualizar impostos e férias? " +
+          "OK = atualizar todos. Cancelar = alterar apenas os feriados.")) {
+        document.getElementById("cfgEmployerCountry").value = calendar;
+        document.getElementById("cfgSyncCalendarWithEmployer").checked = true;
+        settings.syncCalendarWithEmployer = true;
+        const minimum = window.WTCountryRules && WTCountryRules.legalLeave(calendar);
+        if (settings.vacationAuto !== false && minimum !== null && minimum !== undefined) {
+          settings.annualVacation = minimum;
+          document.getElementById("cfgAnnualVacation").value = minimum;
+        }
+        saveSettings();
+        return;
+      }
       document.getElementById("cfgSyncCalendarWithEmployer").checked = false;
       settings.syncCalendarWithEmployer = false;
       saveSettings();
