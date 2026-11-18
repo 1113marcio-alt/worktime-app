@@ -404,7 +404,9 @@
   function init() {
     if (!$("tab-home")) return;
     $("clockDate").textContent = displayDate(localDateKey(new Date()));
-    switchTab("home");
+    const preferred = ["ponto", "home", "calendario"].includes(settings.startScreen)
+      ? settings.startScreen : "ponto";
+    switchTab(preferred);
     render();
     // Atualizar apenas o cronómetro a cada segundo, sem reconstruir botões/rascunhos.
     window.setInterval(() => {
