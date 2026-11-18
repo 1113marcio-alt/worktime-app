@@ -103,3 +103,66 @@ test("uma importação inválida não altera os dados existentes", () => {
   assert.equal(app.values.get("wt_settings"), before);
   assert.equal(app.values.get("wt_pre_import_backup"), undefined);
 });
+
+
+const proSource = fs.readFileSync("pro-ui.js", "utf8");
+
+test("o novo relógio e o calendário têm JavaScript válido e todos os ecrãs existem", () => {
+  new vm.Script(proSource);
+  for (const id of ["tab-home", "tab-calendario", "tab-ponto", "tab-registo", "tab-folha", "tab-ferias", "tab-config",
+    "clockTimer", "clockPrimary", "clockFinish", "clockDraftList", "calendarGrid", "homeNet"]) {
+    assert.ok(source.includes('id="' + id + '"'), "Em falta: " + id);
+  }
+  assert.ok(source.includes('src="pro-ui.js"'));
+  assert.ok(source.includes('href="pro-ui.css"'));
+  assert.ok(fs.readFileSync("sw.js", "utf8").includes("./pro-ui.js"));
+  assert.ok(fs.readFileSync(".github/workflows/apk.yml", "utf8").includes("pro-ui.css pro-ui.js www/"));
+});
+
+test("o relógio contabiliza pausas e turnos que passam da meia-noite", () => {
+  const ctx = vm.createContext({ window: {}, Date, Intl, console });
+  vm.runInContext(proSource, ctx);
+  const helpers = ctx.window.ProUI.helpers;
+  assert.equal(helpers.localDateKey("2026-11-18T12:00:00Z").slice(0, 7), "2026-11");
+  const shift = {
+    start: "2026-11-18T22:00:00.000Z",
+    end: "2026-11-19T06:00:00.000Z",
+    breaks: [
+      { start: "2026-11-19T00:00:00.000Z", end: "2026-11-19T00:15:00.000Z" },
+      { start: "2026-11-19T03:00:00.000Z", end: "2026-11-19T03:15:00.000Z" }
+    ]
+  };
+  assert.equal(helpers.timeWorkedSeconds(shift, shift.end), 7.5 * 3600);
+  assert.equal(helpers.timeParts(7.5 * 3600), "07:30:00");
+});
+
+test("adicionar um turno a um registo existente só soma uma vez", () => {
+  const old = { "2026-11-18": { date: "2026-11-18", type: "work", normal: 6, extra: 1,
+    night: 0, includeBonus: true, note: "Rota original" } };
+  const app = makeApp({}, old);
+  const draft = { id: "turno-1", start: "2026-11-18T08:00:00.000Z",
+    end: "2026-11-18T10:00:00.000Z", breaks: [], seconds: 7200, date: "2026-11-18" };
+  app.values.set("wt_shift_drafts", JSON.stringify([draft]));
+  vm.runInContext(proSource, app.ctx);
+  app.ctx.window.ProUI.applyDraft("turno-1");
+  let entry = JSON.parse(app.values.get("wt_entries"))["2026-11-18"];
+  assert.equal(entry.normal, 8);
+  assert.equal(entry.extra, 1);
+  assert.equal(entry.shifts.length, 1);
+  assert.ok(entry.note.includes("Rota original"));
+  app.values.set("wt_shift_drafts", JSON.stringify([draft]));
+  app.ctx.window.ProUI.applyDraft("turno-1");
+  entry = JSON.parse(app.values.get("wt_entries"))["2026-11-18"];
+  assert.equal(entry.normal, 8, "Uma segunda aplicação não pode duplicar horas");
+});
+
+test("turnos da Preview são preservados em snapshots da versão 2", () => {
+  const app = makeApp({}, {});
+  const draft = { id: "d1", start: "2026-11-18T09:00:00Z",
+    end: "2026-11-18T10:00:00Z", breaks: [], seconds: 3600, date: "2026-11-18" };
+  app.values.set("wt_shift_drafts", JSON.stringify([draft]));
+  const data = app.evaluate("snapshotAllData()");
+  assert.equal(data.shiftDrafts.length, 1);
+  assert.equal(data.shiftDrafts[0].id, "d1");
+  assert.equal(app.evaluate("isValidWorkTimeBackup(snapshotAllData())"), true);
+});
