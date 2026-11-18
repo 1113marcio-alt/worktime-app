@@ -466,6 +466,18 @@
         </label>
         <p class="text-xs text-amber-300">Atenção: os botões do widget não pedem o PIN da aplicação. Ativa apenas num telemóvel pessoal protegido.</p>
         <button type="button" onclick="WTWidget.add()" class="wt-button primary w-full">➕ Adicionar ao ecrã inicial</button>
+        <div class="border-t border-slate-700/50 pt-3 mt-3 space-y-2">
+          <label class="flex items-center gap-3 text-sm font-semibold">
+            <input id="cfgShiftNotifications" type="checkbox" onchange="WTWidget.toggleNotifications()"
+              class="w-5 h-5 accent-blue-500" />
+            Mostrar notificação durante o turno
+          </label>
+          <p class="wt-note">Notificação opcional com estado do turno e botões Pausa/Retomar e Terminar. No Android, permite notificações da Preview nas definições do sistema.</p>
+          <button type="button" onclick="WTWidget.openNotificationSettings()"
+            class="wt-button w-full">🔔 Permissões de notificações do Samsung</button>
+          <p class="wt-note">Tal como o widget, os botões da notificação não pedem o PIN da aplicação.</p>
+        </div>
+
         <p class="wt-note" id="widgetStatus" aria-live="polite">Se não aparecer o aviso: mantém premida uma zona vazia do ecrã inicial → Widgets → WorkTime Pro 2 Preview.</p>
       </div>
 
@@ -713,6 +725,7 @@
       startScreen: "ponto",
       theme: "dark",
       widgetEnabled: false,
+      shiftNotifications: false,
       holidayCountry: "LU",
       employerCountry: "LU",
       residenceCountry: "LU",
@@ -904,6 +917,7 @@
       document.getElementById("cfgLang").value = settings.lang;
       document.getElementById("cfgStartScreen").value = ["ponto", "home", "calendario"].includes(settings.startScreen) ? settings.startScreen : "ponto";
       document.getElementById("cfgWidgetEnabled").checked = settings.widgetEnabled === true;
+      document.getElementById("cfgShiftNotifications").checked = settings.shiftNotifications === true;
       populateCountrySelects();
       document.getElementById("cfgHolidayCountry").value = settings.holidayCountry;
       document.getElementById("cfgEmployerCountry").value = settings.employerCountry || "LU";
