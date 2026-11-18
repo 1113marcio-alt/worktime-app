@@ -501,8 +501,9 @@ function prepareWidgetActivationTest(webEnabled,nativeInitiallyEnabled) {
   const app=makeApp({widgetEnabled:webEnabled}, {});
   const checkbox={checked:false};
   const feedback={textContent:"",className:""};
+  const notificationFeedback={textContent:"",className:""};
   app.ctx.document.getElementById=id=>id==="cfgWidgetEnabled"?checkbox:
-    id==="widgetStatus"?feedback:null;
+    id==="widgetStatus"?feedback:id==="notificationStatus"?notificationFeedback:null;
   app.ctx.document.addEventListener=()=>{};
   let nativeEnabled=nativeInitiallyEnabled;
   const enabledCalls=[];
@@ -539,7 +540,7 @@ test("se o Android desativou o widget, exige reativação explícita sem perder 
   assert.equal(x.getNative(),false);
   assert.equal(x.checkbox.checked,false);
   assert.deepEqual(x.enabledCalls,[]);
-  assert.ok(x.feedback.textContent.includes("reativ"));
+  assert.match(x.feedback.textContent,/reativ/i);
   await x.app.ctx.window.WTWidget.reactivate();
   assert.equal(x.getNative(),true);
   assert.equal(x.checkbox.checked,true);
