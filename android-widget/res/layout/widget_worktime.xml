@@ -21,11 +21,22 @@
       android:text="WorkTime Pro 2" android:textStyle="bold"
       android:textSize="12sp" android:textColor="#F6F9FF"
       android:singleLine="true" android:ellipsize="end" />
-    <TextView android:id="@+id/widget_status"
-      android:layout_width="match_parent" android:layout_height="wrap_content"
-      android:text="Pronto" android:textSize="10sp"
-      android:textColor="#BBD1F1" android:singleLine="true"
-      android:ellipsize="end" android:layout_marginTop="2dp" />
+    <!-- Chronometer uses Android's own ticker: it updates without
+         waking JavaScript or re-opening the app. -->
+    <LinearLayout android:layout_width="match_parent"
+      android:layout_height="wrap_content" android:orientation="horizontal"
+      android:gravity="center_vertical" android:layout_marginTop="2dp">
+      <TextView android:id="@+id/widget_status"
+        android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:text="Pronto" android:textSize="10sp"
+        android:textColor="#BBD1F1" android:singleLine="true"
+        android:ellipsize="end" />
+      <Chronometer android:id="@+id/widget_elapsed"
+        android:layout_width="wrap_content" android:layout_height="wrap_content"
+        android:layout_marginStart="4dp" android:textSize="12sp"
+        android:textStyle="bold" android:textColor="#D8F7FF"
+        android:format="%s" android:visibility="gone" />
+    </LinearLayout>
   </LinearLayout>
 
   <TextView android:id="@+id/widget_primary"
