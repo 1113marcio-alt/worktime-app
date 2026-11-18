@@ -289,6 +289,7 @@
     $("clockFinish").disabled = !shift;
     $("clockDiscard").hidden = !shift;
     renderDrafts();
+    renderHistory();
     if (window.WTLocale) window.WTLocale.apply(settings.lang);
   }
   async function primaryClockAction() {
@@ -354,6 +355,100 @@
     renderClock();
     if (window.WTWidget) window.WTWidget.publish();
   }
+  let historyFilter = "all";
+
+  // Historical data is read-only and derived exclusively from already saved
+  // daily entries and pending drafts. No migration or duplicate copies.
+  function historyRows() {
+    const rows = [];
+    for (const entry of Object.values(entries)) {
+      if (!entry || typeof entry !== "object" || typeof entry.date !== "string") continue;
+      const savedShifts = Array.isArray(entry.shifts) ? entry.shifts : [];
+      if (savedShifts.length) {
+        savedShifts.forEach(shift => {
+          if (!shift || typeof shift !== "object") return;
+          rows.push({date:entry.date,status:"saved",type:entry.type,
+            start:shift.start,end:shift.end,seconds:shift.seconds,breaks:shift.breaks,
+            note:entry.note || "",id:shift.id || null});
+        });
+      } else {
+        rows.push({date:entry.date,status:"saved",type:entry.type,
+          note:entry.note || "",hours:safeNumber(entry.normal)+safeNumber(entry.extra),
+          start:null,end:null,breaks:[],id:null,legacy:true});
+      }
+    }
+    for (const draft of drafts()) {
+      if (!draft || typeof draft !== "object" || typeof draft.date !== "string") continue;
+      rows.push({date:draft.date,status:"draft",type:"work",
+        start:draft.start,end:draft.end,seconds:draft.seconds,breaks:draft.breaks,
+        id:draft.id || null,source:draft.source || "app"});
+    }
+    rows.sort((a,b)=>(String(b.end || b.start || b.date))
+      .localeCompare(String(a.end || a.start || a.date))));
+    return rows;
+  }
+
+  function renderHistory() {
+    const container=$("clockHistoryList");
+    if(!container)return;
+    container.replaceChildren();
+    const rows=historyRows().filter(row => historyFilter==="all" || row.status===historyFilter);
+    $("historyCount").textContent=String(rows.length);
+    if(!rows.length){
+      const p=document.createElement("p");
+      p.className="wt-note";
+      p.textContent="Ainda não existem turnos nesta categoria.";
+      container.appendChild(p);
+      return;
+    }
+    rows.slice(0,60).forEach(row => {
+      const box=document.createElement("div");
+      box.className="wt-entry-line";
+      const date=document.createElement("span");
+      date.className="wt-entry-day";
+      const day=document.createElement("b");day.textContent=row.date.slice(-2);
+      const month=document.createElement("small");month.textContent=row.date.slice(5,7);
+      date.append(day,month);
+      const body=document.createElement("div");body.className="flex-1 min-w-0";
+      const title=document.createElement("div");title.className="wt-entry-title";
+      title.textContent=row.status==="draft" ? "Por confirmar" :
+        (row.type==="work" ? "Trabalho confirmado" : (row.type || "Registo"));
+      const interval=document.createElement("div");interval.className="wt-entry-sub";
+      const hours=Number.isFinite(row.seconds) ? (row.seconds/3600).toFixed(2) :
+        row.legacy ? row.hours.toFixed(2) : "—";
+      const times=row.start && row.end ? clockTime(row.start)+"–"+clockTime(row.end)+" · " : "";
+      interval.textContent=times+hours+" h"+(row.legacy?" · Registo manual (sem marcações)":"");
+      const pause=document.createElement("div");pause.className="wt-entry-sub";
+      const pauses=Array.isArray(row.breaks) ? row.breaks : [];
+      pause.textContent=pauses.length ? "Pausas: "+pauses.map(p => clockTime(p.start)+"–"+clockTime(p.end)).join(", ") :
+        (row.start ? "Sem pausas registadas" : "");
+      body.append(title,interval,pause);
+      const button=document.createElement("button");
+      button.className="wt-pill";
+      button.type="button";
+      button.textContent=row.status==="draft"?"Ver rascunho":"Ver dia";
+      button.onclick=()=>{
+        if(row.status==="draft"){
+          $("clockDraftList").scrollIntoView({behavior:"smooth",block:"center"});
+        }else{
+          openDate(row.date);
+        }
+      };
+      box.append(date,body,button);
+      container.appendChild(box);
+    });
+    if(rows.length>60){
+      const more=document.createElement("p");more.className="wt-note";
+      more.textContent="A mostrar os 60 registos mais recentes.";
+      container.appendChild(more);
+    }
+    if(window.WTLocale)window.WTLocale.apply(settings.lang);
+  }
+  function setHistoryFilter(filter){
+    historyFilter=["all","saved","draft"].includes(filter)?filter:"all";
+    renderHistory();
+  }
+
   function renderDrafts() {
     const container = $("clockDraftList");
     if (!container) return;
@@ -456,7 +551,7 @@
     if (tab === "home" || tab === "calendario" || tab === "ponto") render();
   }
   window.ProUI = {
-    init, render, onTabChange, stepMonth, openDate, openSelectedDay,
+    init, render, onTabChange, stepMonth, openDate, openSelectedDay, setHistoryFilter,
     primaryClockAction, finishShift, discardActive, applyDraft, discardDraft,
     // Pure helpers exported for automated tests.
     helpers: { localDateKey, timeWorkedSeconds, timeParts }
