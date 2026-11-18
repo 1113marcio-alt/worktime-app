@@ -580,6 +580,7 @@
           <button onclick="exportBackupJSON()" class="bg-blue-600/20 border border-blue-500/40 text-blue-300 py-2.5 px-3 rounded-xl font-semibold">
             ⬇️ Guardar Backup (.json)
           </button>
+          <p id="backupSaveStatus" class="col-span-2 text-[11px] text-slate-400" aria-live="polite">O backup só está seguro quando existir fora da aplicação.</p>
           <button onclick="exportCSV()" class="bg-emerald-600/20 border border-emerald-500/40 text-emerald-300 py-2.5 px-3 rounded-xl font-semibold">
             📊 Exportar Excel (.csv)
           </button>
@@ -1289,13 +1290,53 @@
       return { settings, entries, activeShift, shiftDrafts };
     }
 
-    function exportBackupJSON() {
+    // Android: guardar ficheiro JSON no cache temporário e abrir a folha
+    // de partilha do sistema para o utilizador guardar em Ficheiros/Drive/etc.
+    // O cache NÃO é um backup persistente até o utilizador o exportar.
+    async function exportBackupJSON() {
       const backup = { ...snapshotAllData(), exportedAt: new Date().toISOString(), schemaVersion: 2 };
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backup, null, 2));
-      const a = document.createElement("a");
-      a.href = dataStr;
-      a.download = "worktime_backup_" + new Date().toISOString().slice(0, 10) + ".json";
-      a.click();
+      const json = JSON.stringify(backup, null, 2);
+      const fileName = "worktime_backup_" + new Date().toISOString().slice(0, 10) + ".json";
+      const status = document.getElementById("backupSaveStatus");
+      const setStatus = message => { if (status) status.textContent = message; };
+      const capacitor = window.Capacitor && window.Capacitor.Plugins;
+      if (capacitor && capacitor.Filesystem && capacitor.Share) {
+        try {
+          setStatus("A preparar o ficheiro para partilhar...");
+          await capacitor.Filesystem.writeFile({
+            path: fileName, data: json, directory: "CACHE", encoding: "utf8"
+          });
+          const uri = await capacitor.Filesystem.getUri({path: fileName, directory: "CACHE"});
+          await capacitor.Share.share({
+            title: "Backup WorkTime Pro", text: "Guardar cópia dos registos WorkTime Pro",
+            files: [uri.uri]
+          });
+          setStatus("Escolha Guardar em Ficheiros/Drive e confirme que o ficheiro existe fora da app.");
+          return;
+        } catch (error) {
+          setStatus("A partilha foi cancelada ou falhou. O backup ainda não está confirmado.");
+          return;
+        }
+      }
+      // Fallback web: download normal de Blob, não 'data:' URLs no WebView.
+      try {
+        const file = new File([json],fileName,{type:"application/json"});
+        if (navigator.canShare && navigator.canShare({files:[file]})) {
+          await navigator.share({title:"Backup WorkTime Pro",files:[file]});
+          setStatus("Confirma que guardaste o backup na aplicação escolhida.");
+          return;
+        }
+        const url = URL.createObjectURL(file);
+        const a = document.createElement("a");
+        a.href = url; a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+        setStatus("Download solicitado. Verifica se o ficheiro JSON apareceu em Downloads.");
+      } catch (_) {
+        setStatus("Não foi possível guardar o backup neste dispositivo.");
+      }
     }
 
     function isPlainRecord(value) {
