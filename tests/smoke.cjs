@@ -603,3 +603,60 @@ test("notificações nativas autorizadas não são desativadas automaticamente a
   assert.equal(x.getNative(),true);
   assert.deepEqual(x.enabledCalls,[]);
 });
+
+
+test("widget compacto 4x1 mantém os botões e apresenta o novo logo WT", () => {
+  const widget = fs.readFileSync("android-widget/res/layout/widget_worktime.xml","utf8");
+  const dims = fs.readFileSync("android-widget/res/xml/worktime_widget_info.xml","utf8");
+  const provider = fs.readFileSync("android-widget/src/main/java/lu/marcio/worktimepro/preview/WorkTimeWidgetProvider.java","utf8");
+  assert.ok(widget.includes('android:orientation="horizontal"'));
+  assert.ok(widget.includes('android:src="@drawable/wt_logo_badge"'));
+  for(const id of ["widget_logo","widget_title","widget_status","widget_primary","widget_finish"])
+    assert.ok(widget.includes('android:id="@+id/'+id+'"'),id);
+  assert.ok(dims.includes('android:minHeight="65dp"'));
+  assert.ok(dims.includes('android:minWidth="250dp"'));
+  assert.ok(dims.includes('android:resizeMode="horizontal|vertical"'));
+  for(const id of ["widget_primary","widget_finish","widget_title","widget_logo"])
+    assert.ok(provider.includes("R.id."+id));
+  for(const operation of ["ACTION_START", "ACTION_PAUSE", "ACTION_RESUME", "ACTION_FINISH"])
+    assert.ok(provider.includes(operation));
+  assert.ok(provider.includes("WidgetStore.record(context, operation)"),
+    "As ações nativas continuam registadas na fila persistente");
+});
+
+test("ícone do Android e PWA compartilham o mesmo logotipo WT azul da aplicação", () => {
+  const foreground=fs.readFileSync("android-widget/res/drawable/wt_launcher_foreground.xml","utf8");
+  const badge=fs.readFileSync("android-widget/res/drawable/wt_logo_badge.xml","utf8");
+  const bg=fs.readFileSync("android-widget/res/drawable/wt_launcher_background.xml","utf8");
+  const svg=fs.readFileSync("wt-icon.svg","utf8");
+  const style=fs.readFileSync("pro-ui.css","utf8");
+  const manifest=JSON.parse(fs.readFileSync("manifest.json","utf8"));
+  const script=fs.readFileSync("scripts/install_android_widget.py","utf8");
+  assert.ok(foreground.includes('android:fillColor="#FFFFFF"'));
+  const path=foreground.match(/android:pathData="([^"]+)"/);
+  assert.ok(path,"As letras WT devem existir no vector");
+  assert.ok(svg.includes('d="'+path[1]+'"'),
+    "O mesmo desenho WT deve aparecer no ícone web e nativo");
+  for(const color of ["#2F6AF0","#54C8D9"]) {
+    assert.ok(bg.includes(color));
+    assert.ok(svg.includes(color));
+  }
+  assert.ok(badge.includes('@drawable/wt_launcher_foreground'));
+  assert.ok(style.toLowerCase().includes("#2f6af0"));
+  assert.ok(style.toLowerCase().includes("#54c8d9"));
+  for(const filename of ["ic_launcher.xml","ic_launcher_round.xml"]) {
+    const file="android-widget/res/mipmap-anydpi-v26/"+filename;
+    assert.ok(fs.existsSync(file));
+    const xml=fs.readFileSync(file,"utf8");
+    assert.ok(xml.includes('@drawable/wt_launcher_foreground'));
+    assert.ok(xml.includes('@drawable/wt_launcher_background'));
+  }
+  assert.ok(script.includes('app.set(f"{{{NS}}}icon", "@mipmap/ic_launcher")'));
+  assert.equal(manifest.icons[0].src,"./wt-icon.svg");
+  assert.ok(!manifest.icons[0].src.startsWith("https://"),
+    "Ícone não deve depender de um site externo");
+  assert.ok(source.includes('href="wt-icon.svg"'));
+  assert.ok(fs.readFileSync(".github/workflows/apk.yml","utf8")
+    .includes("wt-widget.js wt-icon.svg www/"));
+  assert.ok(fs.readFileSync("sw.js","utf8").includes("'./wt-icon.svg'"));
+});
