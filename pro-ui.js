@@ -23,7 +23,6 @@
     const codes = {pt:"pt-PT",fr:"fr-FR",de:"de-DE",es:"es-ES",en:"en-GB",lu:"lb-LU"};
     return codes[settings.lang] || "pt-PT";
   }
-  function tr(text) { return window.WTLocale ? window.WTLocale.tr(text, settings.lang) : text; }
   function localDateKey(value) {
     const d = value instanceof Date ? value : new Date(value);
     return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") +
@@ -278,20 +277,22 @@
     if (!$("clockTimer")) return;
     const shift = currentShift();
     const date = localDateKey(new Date());
-    const state = shift ? (shift.status === "paused" ? tr("Em pausa") : tr("Turno em curso")) : tr("Pronto para começar");
+    const state = shift ? (shift.status === "paused" ? "Em pausa" : "Turno em curso") : "Pronto para começar";
     $("clockTimer").textContent = shift ? timeParts(timeWorkedSeconds(shift)) : "00:00:00";
     $("clockStatus").textContent = state;
     $("clockDate").textContent = displayDate(shift ? localDateKey(shift.start) : date);
     $("clockStartTime").textContent = shift ? clockTime(shift.start) : "--:--";
     $("clockBreaks").textContent = shift ? String(shift.breaks.length) : "0";
-    $("clockPrimary").textContent = !shift ? "▶ " + tr("Iniciar turno") :
-      (shift.status === "paused" ? "▶ " + tr("Retomar trabalho") : "Ⅱ " + tr("Iniciar pausa"));
+    $("clockPrimary").textContent = !shift ? "▶ Iniciar turno" :
+      (shift.status === "paused" ? "▶ Retomar trabalho" : "Ⅱ Iniciar pausa");
     $("clockPrimary").className = "wt-button " + (!shift ? "primary" : "cyan");
     $("clockFinish").disabled = !shift;
     $("clockDiscard").hidden = !shift;
     renderDrafts();
+    if (window.WTLocale) window.WTLocale.apply(settings.lang);
   }
-  function primaryClockAction() {
+  async function primaryClockAction() {
+    if (window.WTWidget) await window.WTWidget.sync();
     const shift = currentShift();
     const time = new Date().toISOString();
     if (!shift) {
@@ -299,7 +300,10 @@
         id: "shift-" + Date.now() + "-" + Math.random().toString(36).slice(2, 8),
         start: time, breaks: [], status: "working"
       };
-      if (saveStored(ACTIVE_KEY, next)) renderClock();
+      if (saveStored(ACTIVE_KEY, next)) {
+        renderClock();
+        if (window.WTWidget) window.WTWidget.publish();
+      }
       return;
     }
     if (shift.status === "paused") {
@@ -311,9 +315,13 @@
       shift.breaks.push({ start: time, end: null });
       shift.status = "paused";
     }
-    if (saveStored(ACTIVE_KEY, shift)) renderClock();
+    if (saveStored(ACTIVE_KEY, shift)) {
+      renderClock();
+      if (window.WTWidget) window.WTWidget.publish();
+    }
   }
-  function finishShift() {
+  async function finishShift() {
+    if (window.WTWidget) await window.WTWidget.sync();
     const shift = currentShift();
     if (!shift) return;
     const end = new Date().toISOString();
@@ -335,13 +343,16 @@
     if (saveStored(DRAFTS_KEY, saved)) {
       try { localStorage.removeItem(ACTIVE_KEY); } catch (_) {}
       renderClock();
+      if (window.WTWidget) window.WTWidget.publish();
     }
   }
-  function discardActive() {
+  async function discardActive() {
+    if (window.WTWidget) await window.WTWidget.sync();
     if (!currentShift()) return;
     if (!confirm("Anular este turno em curso sem guardar as horas?")) return;
     localStorage.removeItem(ACTIVE_KEY);
     renderClock();
+    if (window.WTWidget) window.WTWidget.publish();
   }
   function renderDrafts() {
     const container = $("clockDraftList");
@@ -432,11 +443,13 @@
         shift ? timeParts(timeWorkedSeconds(shift)) : "00:00:00";
     }, 1000);
     window.addEventListener("focus", renderClock);
+    if (window.WTWidget) window.WTWidget.init();
   }
   function render() {
     renderHome();
     renderCalendar();
     renderClock();
+    if (window.WTLocale) window.WTLocale.apply(settings.lang);
   }
   function onTabChange(tab) {
     activeTab = tab;
