@@ -51,14 +51,66 @@ jobs:
         if: github.ref_name == 'worktime-pro-2'
         run: python3 scripts/install_android_widget.py
 
-      - name: Compilar APK
+      # Nunca imprimir senhas/chaves nem publicar o ficheiro .jks como artefacto.
+      # Sem os quatro segredos é apenas um APK DEBUG de teste, sem assinatura estável.
+      - name: Configurar assinatura permanente da Preview (se existir)
+        if: github.ref_name == 'worktime-pro-2'
+        env:
+          WT_KEYSTORE_B64: ${{ secrets.WORKTIME_PREVIEW_KEYSTORE_B64 }}
+          WT_STORE_PASS: ${{ secrets.WORKTIME_PREVIEW_STORE_PASSWORD }}
+          WT_KEY_ALIAS: ${{ secrets.WORKTIME_PREVIEW_KEY_ALIAS }}
+          WT_KEY_PASS: ${{ secrets.WORKTIME_PREVIEW_KEY_PASSWORD }}
+        shell: bash
         run: |
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug --stacktrace
+          if [ -n "$WT_KEYSTORE_B64" ] && [ -n "$WT_STORE_PASS" ] && [ -n "$WT_KEY_ALIAS" ] && [ -n "$WT_KEY_PASS" ]; then
+            umask 077
+            printf '%s' "$WT_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/worktime-preview.jks"
+            test -s "$RUNNER_TEMP/worktime-preview.jks"
+            echo "WORKTIME_SIGNED=true" >> "$GITHUB_ENV"
+            echo "WORKTIME_KEYSTORE_PATH=$RUNNER_TEMP/worktime-preview.jks" >> "$GITHUB_ENV"
+            echo "Assinatura permanente configurada; a compilar APK de atualização."
+          else
+            echo "WORKTIME_SIGNED=false" >> "$GITHUB_ENV"
+            echo "::warning::Sem chave de assinatura permanente; APK DEBUG poderá exigir reinstalação. Leia docs/ANDROID-SIGNING.md."
+          fi
 
-      - name: Disponibilizar APK
+      - name: Compilar e identificar o APK
+        shell: bash
+        env:
+          WT_STORE_PASS: ${{ secrets.WORKTIME_PREVIEW_STORE_PASSWORD }}
+          WT_KEY_ALIAS: ${{ secrets.WORKTIME_PREVIEW_KEY_ALIAS }}
+          WT_KEY_PASS: ${{ secrets.WORKTIME_PREVIEW_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          chmod +x android/gradlew
+          mkdir -p dist
+          if [ "${GITHUB_REF_NAME}" = "worktime-pro-2" ] && [ "${WORKTIME_SIGNED:-false}" = "true" ]; then
+            export WORKTIME_KEYSTORE_PASSWORD="$WT_STORE_PASS"
+            export WORKTIME_KEY_ALIAS="$WT_KEY_ALIAS"
+            export WORKTIME_KEY_PASSWORD="$WT_KEY_PASS"
+            python3 scripts/configure_android_release_signing.py
+            (cd android && ./gradlew assembleRelease --stacktrace)
+            cp android/app/build/outputs/apk/release/app-release.apk dist/WorkTime-Pro-2-PREVIEW-SIGNED.apk
+          else
+            (cd android && ./gradlew assembleDebug --stacktrace)
+            if [ "${GITHUB_REF_NAME}" = "worktime-pro-2" ]; then
+              cp android/app/build/outputs/apk/debug/app-debug.apk dist/WorkTime-Pro-2-PREVIEW-DEBUG.apk
+            else
+              cp android/app/build/outputs/apk/debug/app-debug.apk dist/WorkTime-Pro-Android-DEBUG.apk
+            fi
+          fi
+
+      - name: Apagar chave temporária do runner
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${WORKTIME_KEYSTORE_PATH:-}" ]; then
+            rm -f "$WORKTIME_KEYSTORE_PATH"
+          fi
+
+      - name: Disponibilizar APK (nunca a chave privada)
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.ref_name == 'worktime-pro-2' && 'WorkTime-Pro-2-Preview-APK' || 'WorkTime-Pro-Android-APK' }}
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: dist/*.apk
+          if-no-files-found: error
