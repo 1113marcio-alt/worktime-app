@@ -411,6 +411,10 @@
           <label class="block text-xs text-slate-400 mb-1">Restaurar Backup anterior (.json)</label>
           <input type="file" accept=".json" onchange="importBackupJSON(event)" class="w-full text-xs bg-slate-800 border border-slate-700 rounded-xl p-2" />
         </div>
+        <button onclick="restorePreviousState()" class="w-full bg-amber-600/20 border border-amber-500/40 text-amber-200 py-2.5 px-3 rounded-xl text-xs font-semibold">
+          ↩️ Repor dados anteriores à última importação
+        </button>
+        <p class="text-[11px] text-slate-400">Antes de importar ou instalar versões novas, exporte e guarde o ficheiro JSON fora da aplicação.</p>
       </div>
 
       <!-- 7. Segurança -->
@@ -491,7 +495,8 @@
       securityPin: ""
     };
 
-    let settings = JSON.parse(localStorage.getItem("wt_settings")) || defaultSettings;
+    // Combinar configurações antigas com valores padrão sem regravar os dados do utilizador.
+    let settings = { ...defaultSettings, ...(JSON.parse(localStorage.getItem("wt_settings")) || {}) };
     let entries = JSON.parse(localStorage.getItem("wt_entries")) || {};
     let privacyMode = false;
 
@@ -816,32 +821,95 @@
       });
     }
 
+    // O formato antigo { settings, entries } mantém-se compatível.
     function exportBackupJSON() {
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ settings, entries }, null, 2));
+      const backup = { settings, entries, exportedAt: new Date().toISOString(), schemaVersion: 1 };
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backup, null, 2));
       const a = document.createElement("a");
       a.href = dataStr;
-      a.download = "worktime_backup.json";
+      a.download = "worktime_backup_" + new Date().toISOString().slice(0, 10) + ".json";
       a.click();
     }
 
+    function isPlainRecord(value) {
+      return value !== null && typeof value === "object" && !Array.isArray(value);
+    }
+
+    function isValidWorkTimeBackup(value) {
+      if (!isPlainRecord(value) || !isPlainRecord(value.settings) || !isPlainRecord(value.entries)) return false;
+      return Object.entries(value.entries).every(([key, entry]) =>
+        /^\d{4}-\d{2}-\d{2}$/.test(key) &&
+        isPlainRecord(entry) &&
+        entry.date === key &&
+        typeof entry.type === "string" &&
+        ["normal", "extra", "night"].every(field => entry[field] === undefined || (typeof entry[field] === "number" && Number.isFinite(entry[field])))
+      );
+    }
+
+    // Guarda a cópia anterior localmente antes de qualquer restauro; não altera ficheiros antigos.
+    function restorePreviousState() {
+      const saved = localStorage.getItem("wt_pre_import_backup");
+      if (!saved) { alert("Ainda não existe uma cópia de recuperação de importação."); return; }
+      let parsed;
+      try { parsed = JSON.parse(saved); } catch (_) { alert("Cópia de recuperação inválida."); return; }
+      if (!isValidWorkTimeBackup(parsed)) { alert("Cópia de recuperação inválida."); return; }
+      if (!confirm("Repor os dados anteriores à última importação? Exporte um backup dos dados atuais antes de continuar.")) return;
+      try {
+        localStorage.setItem("wt_settings", JSON.stringify(parsed.settings));
+        localStorage.setItem("wt_entries", JSON.stringify(parsed.entries));
+        settings = { ...defaultSettings, ...parsed.settings };
+        entries = parsed.entries;
+        loadSettingsToInputs();
+        renderAll();
+        alert("Estado anterior à importação recuperado.");
+      } catch (_) {
+        alert("Não foi possível recuperar automaticamente. Utilize o backup JSON guardado.");
+      }
+    }
+
     function importBackupJSON(event) {
-      const file = event.target.files[0];
+      const file = event.target.files && event.target.files[0];
       if (!file) return;
       const reader = new FileReader();
       reader.onload = e => {
+        let parsed;
         try {
-          const parsed = JSON.parse(e.target.result);
-          if (parsed.settings) settings = parsed.settings;
-          if (parsed.entries) entries = parsed.entries;
-          localStorage.setItem("wt_settings", JSON.stringify(settings));
-          localStorage.setItem("wt_entries", JSON.stringify(entries));
+          parsed = JSON.parse(e.target.result);
+        } catch (_) {
+          alert("O ficheiro não contém JSON válido.");
+          return;
+        }
+        if (!isValidWorkTimeBackup(parsed)) {
+          alert("Backup inválido: é necessário conter configurações e registos compatíveis.");
+          return;
+        }
+        if (!confirm("Importar este backup vai substituir os registos e configurações atuais. Já guardou uma cópia JSON do estado atual?")) return;
+        const beforeSettings = localStorage.getItem("wt_settings");
+        const beforeEntries = localStorage.getItem("wt_entries");
+        const snapshot = { settings, entries };
+        try {
+          // Se o armazenamento estiver cheio, abortar antes de substituir os dados.
+          localStorage.setItem("wt_pre_import_backup", JSON.stringify(snapshot));
+          localStorage.setItem("wt_settings", JSON.stringify(parsed.settings));
+          localStorage.setItem("wt_entries", JSON.stringify(parsed.entries));
+          settings = { ...defaultSettings, ...parsed.settings };
+          entries = parsed.entries;
           loadSettingsToInputs();
           renderAll();
-          alert("Backup restaurado com sucesso!");
+          alert("Backup restaurado com sucesso. O estado anterior ficou guardado para recuperação.");
         } catch (err) {
-          alert("Ficheiro inválido.");
+          try {
+            if (beforeSettings === null) localStorage.removeItem("wt_settings");
+            else localStorage.setItem("wt_settings", beforeSettings);
+            if (beforeEntries === null) localStorage.removeItem("wt_entries");
+            else localStorage.setItem("wt_entries", beforeEntries);
+          } catch (_) {}
+          settings = snapshot.settings;
+          entries = snapshot.entries;
+          alert("Não foi possível restaurar o backup. Os dados anteriores foram mantidos sempre que possível.");
         }
       };
+      reader.onerror = () => alert("Não foi possível ler o ficheiro.");
       reader.readAsText(file);
     }
 
