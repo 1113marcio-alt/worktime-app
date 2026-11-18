@@ -35,6 +35,8 @@ function makeApp(initialSettings = {}, initialEntries = {}) {
     Date,
     console
   });
+  vm.runInContext(fs.readFileSync("country-rules.js", "utf8"), ctx);
+  ctx.WTCountryRules = ctx.window.WTCountryRules;
   vm.runInContext(appScript, ctx);
   // Estes testes isolam a lógica dos dados sem depender do layout do navegador.
   vm.runInContext("renderAll = function(){}; loadSettingsToInputs = function(){};", ctx);
@@ -44,6 +46,8 @@ function makeApp(initialSettings = {}, initialEntries = {}) {
 test("todo o JavaScript embutido mantém sintaxe válida", () => {
   for (const script of scripts) new vm.Script(script);
   new vm.Script(fs.readFileSync("sw.js", "utf8"));
+  new vm.Script(fs.readFileSync("country-rules.js", "utf8"));
+  new vm.Script(fs.readFileSync("wt-i18n.js", "utf8"));
 });
 
 test("configurações antigas e registos existentes continuam disponíveis", () => {
