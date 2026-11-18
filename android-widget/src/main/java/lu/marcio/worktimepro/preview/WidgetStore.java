@@ -17,6 +17,7 @@ public final class WidgetStore {
     private static final String KEY_STATE = "shift_state";
     private static final String KEY_STARTED = "shift_started";
     private static final String KEY_ENABLED = "widget_enabled";
+    private static final String KEY_NOTIFICATIONS = "notifications_enabled";
 
     private WidgetStore() {}
 
@@ -26,6 +27,14 @@ public final class WidgetStore {
 
     public static synchronized boolean isEnabled(Context context) {
         return prefs(context).getBoolean(KEY_ENABLED, false);
+    }
+
+    public static synchronized boolean notificationsEnabled(Context context) {
+        return prefs(context).getBoolean(KEY_NOTIFICATIONS, false);
+    }
+
+    public static synchronized void setNotificationsEnabled(Context context, boolean enabled) {
+        prefs(context).edit().putBoolean(KEY_NOTIFICATIONS, enabled).commit();
     }
 
     public static synchronized String state(Context context) {
@@ -71,7 +80,9 @@ public final class WidgetStore {
                 .putString(KEY_STATE, next);
             if ("start".equals(action)) edit.putString(KEY_STARTED, now);
             if ("finish".equals(action)) edit.remove(KEY_STARTED);
-            return edit.commit();
+            boolean saved = edit.commit();
+            if (saved) WorkTimeNotification.update(context);
+            return saved;
         } catch (JSONException ignored) { return false; }
     }
 
