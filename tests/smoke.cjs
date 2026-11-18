@@ -120,7 +120,7 @@ test("o novo relógio e o calendário têm JavaScript válido e todos os ecrãs 
   assert.ok(source.includes('src="pro-ui.js"'));
   assert.ok(source.includes('href="pro-ui.css"'));
   assert.ok(fs.readFileSync("sw.js", "utf8").includes("./pro-ui.js"));
-  assert.ok(fs.readFileSync(".github/workflows/apk.yml", "utf8").includes("pro-ui.css pro-ui.js country-rules.js wt-i18n.js wt-widget.js www/"));
+  assert.ok(fs.readFileSync(".github/workflows/apk.yml", "utf8").includes("pro-ui.css pro-ui.js country-rules.js wt-i18n.js wt-widget.js wt-icon.svg www/"));
 });
 
 test("o relógio contabiliza pausas e turnos que passam da meia-noite", () => {
