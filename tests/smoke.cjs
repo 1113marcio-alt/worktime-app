@@ -445,3 +445,53 @@ test("marcações de widget fechado são reaplicadas como rascunho sem duplicar 
   assert.equal(JSON.parse(app.values.get("wt_shift_drafts")).length,1);
   assert.equal(app.values.get("wt_entries"),"{}","O widget nunca escreve diretamente no histórico salarial");
 });
+
+
+test("histórico deriva de registos antigos, turnos confirmados e rascunhos sem apagar dados", () => {
+  const old={
+    "2026-11-16":{date:"2026-11-16",type:"work",normal:8,extra:1,note:"Rota antiga"},
+    "2026-11-17":{date:"2026-11-17",type:"work",normal:8,extra:0,
+      shifts:[{id:"saved-1",start:"2026-11-17T08:00:00Z",end:"2026-11-17T16:30:00Z",
+        seconds:28800,breaks:[{start:"2026-11-17T12:00:00Z",end:"2026-11-17T12:30:00Z"}]}]}
+  };
+  const app=makeApp({},old);
+  app.values.set("wt_shift_drafts",JSON.stringify([{
+    id:"draft-1",date:"2026-11-18",start:"2026-11-18T09:00:00Z",
+    end:"2026-11-18T10:00:00Z",seconds:3600,breaks:[]
+  }]));
+  vm.runInContext(proSource,app.ctx);
+  const rows=app.ctx.window.ProUI.helpers.historyRows();
+  assert.equal(rows.length,3);
+  assert.equal(rows.filter(row=>row.status==="saved").length,2);
+  assert.equal(rows.filter(row=>row.status==="draft").length,1);
+  assert.ok(rows.some(row=>row.legacy&&row.hours===9));
+  assert.ok(rows.some(row=>row.id==="saved-1"&&row.breaks.length===1));
+  assert.equal(JSON.parse(app.values.get("wt_entries"))["2026-11-16"].note,"Rota antiga");
+  assert.ok(source.includes('id="clockHistoryList"'));
+});
+
+test("notificações de turno só aparecem com autorização e reutilizam as ações seguras do widget", () => {
+  const notification="android-widget/src/main/java/lu/marcio/worktimepro/preview/WorkTimeNotification.java";
+  assert.ok(fs.existsSync(notification));
+  const native=fs.readFileSync(notification,"utf8");
+  const store=fs.readFileSync("android-widget/src/main/java/lu/marcio/worktimepro/preview/WidgetStore.java","utf8");
+  const plugin=fs.readFileSync("android-widget/src/main/java/lu/marcio/worktimepro/preview/WorkTimeWidgetPlugin.java","utf8");
+  const installer=fs.readFileSync("scripts/install_android_widget.py","utf8");
+  assert.ok(native.includes('WidgetStore.notificationsEnabled(context)'));
+  assert.ok(native.includes('WidgetStore.isEnabled(context)'));
+  assert.ok(native.includes('Manifest.permission.POST_NOTIFICATIONS'));
+  assert.ok(native.includes('setOngoing(true)'));
+  assert.ok(store.includes('KEY_NOTIFICATIONS'));
+  assert.ok(plugin.includes('setShiftNotifications'));
+  assert.ok(plugin.includes('openNotificationSettings'));
+  assert.ok(installer.includes('android.permission.POST_NOTIFICATIONS'));
+  assert.ok(source.includes('id="cfgShiftNotifications"'));
+  assert.ok(fs.readFileSync("wt-widget.js","utf8").includes('toggleNotifications'));
+});
+
+test("marcação na aplicação aguarda sincronização do widget e preserva rascunhos", () => {
+  assert.ok(proSource.includes("async function primaryClockAction()"));
+  assert.ok(proSource.includes("async function finishShift()"));
+  assert.ok(proSource.includes("async function discardActive()"));
+  new vm.Script(proSource);
+});
