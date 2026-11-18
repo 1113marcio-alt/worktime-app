@@ -916,6 +916,7 @@
       }
       if (settings.vacationAuto !== false && baseline !== null) {
         settings.annualVacation = baseline;
+        document.getElementById("cfgAnnualVacation").value = baseline;
       }
       // País do calendário e país de residência continuam independentes.
       saveSettings();
