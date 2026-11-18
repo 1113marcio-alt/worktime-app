@@ -163,6 +163,25 @@
         <div class="wt-flex"><h3 class="wt-section-title">Turnos por guardar</h3><span class="wt-pill"><span id="draftCount">0</span> rascunhos</span></div>
         <div id="clockDraftList" class="mt-2"></div>
       </div>
+      <div class="wt-card" id="clockHistoryCard">
+        <div class="wt-flex">
+          <div>
+            <p class="wt-kicker">Arquivo de horas</p>
+            <h3 class="wt-section-title mt-1">Histórico de turnos</h3>
+          </div>
+          <span class="wt-pill"><span id="historyCount">0</span> registos</span>
+        </div>
+        <p class="wt-note mt-2">Consulta os turnos e as pausas, incluindo os confirmados e os rascunhos. Os registos antigos sem marcações continuam visíveis.</p>
+        <label class="block text-xs wt-muted mt-3 mb-2" for="historyFilter">Mostrar</label>
+        <select id="historyFilter" onchange="ProUI.setHistoryFilter(this.value)"
+          class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm">
+          <option value="all">Todos os registos</option>
+          <option value="saved">Confirmados</option>
+          <option value="draft">Por confirmar</option>
+        </select>
+        <div id="clockHistoryList" class="mt-3" aria-live="polite"></div>
+        <p class="wt-note mt-2">O histórico é consultivo. Para corrigir horas confirmadas, abre o respetivo dia no calendário.</p>
+      </div>
       <button type="button" onclick="ProUI.openDate(document.getElementById('entryDate').value)" class="wt-button w-full">✍️ Registar / ajustar horas manualmente</button>
       <p class="wt-note">Os turnos terminados ficam como rascunhos antes de serem aplicados ao dia. As horas extraordinárias seguem o horário configurado apenas como sugestão. O suplemento noturno deve ser confirmado manualmente.</p>
     </section>
