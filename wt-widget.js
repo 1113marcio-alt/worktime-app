@@ -109,26 +109,48 @@
  }
  async function configure(enabled){
    const p=plugin();
-   if(!p){status("O widget está disponível no APK Android Preview, não no navegador.",false);return;}
-   try{
-     if(!enabled)await sync(); // import queued actions BEFORE disabling native controls.
-     await p.setEnabled({enabled:!!enabled});
+   if(!p){
+     status("O widget está disponível no APK Android Preview, não no navegador.",false);
+     return false;
+   }
+   try {
+     if(!enabled)await sync(); // Importar marcações antes de desativar.
+     const result=await p.setEnabled({enabled:!!enabled});
+     if(result && typeof result.enabled==="boolean" && result.enabled!==!!enabled)
+       throw new Error("Não foi possível confirmar o estado do widget.");
      if(enabled){
        await sync();
-       status("Widget ativo. Usa «Adicionar ao ecrã inicial» ou procura WorkTime Pro 2 nos Widgets do Samsung.",true);
+       status("Widget ativo. Os botões Iniciar, Pausa e Terminar estão disponíveis no ecrã inicial.",true);
      }else{
        status("Widget desativado. Os botões no ecrã inicial deixam de marcar horas.",false);
      }
-   }catch(_){status("Não foi possível aplicar a configuração do widget.",false);}
+     return true;
+   }catch(_){
+     status("Não foi possível aplicar a configuração do widget. Tenta novamente.",false);
+     return false;
+   }
  }
  async function toggle(){
    const el=$("cfgWidgetEnabled");
    const enabled=!!(el&&el.checked);
-   try{
+   const previous=!!settings.widgetEnabled;
+   const success=await configure(enabled);
+   if(!success){
+     if(el)el.checked=previous;
+     return;
+   }
+   try {
      settings.widgetEnabled=enabled;
      localStorage.setItem("wt_settings",JSON.stringify(settings));
-     await configure(enabled);
-   }catch(_){status("Não foi possível guardar a preferência do widget.",false);}
+   }catch(_){
+     status("Os botões foram alterados, mas a preferência não ficou guardada. Verifica o armazenamento.",false);
+   }
+ }
+ async function reactivate(){
+   const el=$("cfgWidgetEnabled");
+   if(!el)return;
+   el.checked=true;
+   await toggle();
  }
  async function configureNotifications(enabled){
    const p=plugin();
@@ -190,12 +212,39 @@
  }
  async function init(){
    if(ready)return;ready=true;
-   if($("cfgWidgetEnabled"))$("cfgWidgetEnabled").checked=!!settings.widgetEnabled;
-   await configure(!!settings.widgetEnabled);
+   const p=plugin();
+   // Não desativar automaticamente um widget que já tinha sido autorizado
+   // no Android. O estado nativo tem precedência sobre um backup desatualizado.
+   let native=null;
+   if(p && p.getStatus){
+     try{native=await p.getStatus();}catch(_){}
+   }
+   if(native && typeof native.enabled==="boolean"){
+     if(native.hasPendingEvents)await sync();
+     const previouslyEnabled=!!settings.widgetEnabled;
+     settings.widgetEnabled=native.enabled;
+     const checkbox=$("cfgWidgetEnabled");
+     if(checkbox)checkbox.checked=!!native.enabled;
+     if(previouslyEnabled!==native.enabled){
+       try{localStorage.setItem("wt_settings",JSON.stringify(settings));}catch(_){}
+     }
+     if(native.enabled){
+       await sync();
+       status("Widget ativo. Já podes marcar entrada, pausa e saída no ecrã inicial.",true);
+     }else{
+       status(previouslyEnabled
+         ? "A última instalação desativou o widget. Toca em «Reativar widget» para voltar a marcar."
+         : "Widget desativado. Ativa os botões rápidos ou toca em «Reativar widget».",false);
+     }
+   } else {
+     // Compatibilidade com a integração Android anterior.
+     if($("cfgWidgetEnabled"))$("cfgWidgetEnabled").checked=!!settings.widgetEnabled;
+     await configure(!!settings.widgetEnabled);
+   }
    if($("cfgShiftNotifications"))$("cfgShiftNotifications").checked=!!settings.shiftNotifications;
    await configureNotifications(!!settings.shiftNotifications);
    document.addEventListener("visibilitychange",()=>{if(!document.hidden)sync();});
    root.addEventListener("focus",()=>sync());
  }
- root.WTWidget={init,sync,publish,toggle,add,configure,toggleNotifications,openNotificationSettings,configureNotifications};
+ root.WTWidget={init,sync,publish,toggle,reactivate,add,configure,toggleNotifications,openNotificationSettings,configureNotifications};
 }(window));
