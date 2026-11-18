@@ -3,6 +3,8 @@ package lu.marcio.worktimepro.preview;
 import android.appwidget.AppWidgetManager;
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
+import android.provider.Settings;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
@@ -18,6 +20,7 @@ public final class WorkTimeWidgetPlugin extends Plugin {
         boolean enabled = Boolean.TRUE.equals(call.getBoolean("enabled", false));
         WidgetStore.setEnabled(appContext(), enabled);
         WorkTimeWidgetProvider.updateAll(appContext());
+        WorkTimeNotification.update(appContext());
         call.resolve();
     }
 
@@ -40,6 +43,36 @@ public final class WorkTimeWidgetPlugin extends Plugin {
             call.getString("state", "idle"), call.getString("started", ""));
         WorkTimeWidgetProvider.updateAll(appContext());
         call.resolve();
+    }
+
+    @PluginMethod
+    public void setShiftNotifications(PluginCall call) {
+        boolean enabled = Boolean.TRUE.equals(call.getBoolean("enabled", false));
+        WidgetStore.setNotificationsEnabled(appContext(),enabled);
+        WorkTimeNotification.update(appContext());
+        JSObject result = new JSObject();
+        result.put("systemAllowed", WorkTimeNotification.systemAllowed(appContext()));
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void getShiftNotificationStatus(PluginCall call) {
+        JSObject result = new JSObject();
+        result.put("enabled", WidgetStore.notificationsEnabled(appContext()));
+        result.put("systemAllowed", WorkTimeNotification.systemAllowed(appContext()));
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void openNotificationSettings(PluginCall call) {
+        try {
+            Intent intent = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS);
+            intent.putExtra(Settings.EXTRA_APP_PACKAGE, appContext().getPackageName());
+            getActivity().startActivity(intent);
+            call.resolve();
+        } catch (Exception err) {
+            call.reject("Não foi possível abrir as definições de notificações",err);
+        }
     }
 
     @PluginMethod
