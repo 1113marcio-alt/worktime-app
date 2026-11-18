@@ -464,6 +464,9 @@
           <input id="cfgWidgetEnabled" type="checkbox" onchange="WTWidget.toggle()" class="w-5 h-5 accent-blue-500" />
           Ativar os botões rápidos do widget
         </label>
+        <button type="button" onclick="WTWidget.reactivate()" class="wt-button cyan w-full">
+          🔄 Reativar widget (se só aparece «Abrir aplicação»)
+        </button>
         <p class="text-xs text-amber-300">Atenção: os botões do widget não pedem o PIN da aplicação. Ativa apenas num telemóvel pessoal protegido.</p>
         <button type="button" onclick="WTWidget.add()" class="wt-button primary w-full">➕ Adicionar ao ecrã inicial</button>
         <div class="border-t border-slate-700/50 pt-3 mt-3 space-y-2">
