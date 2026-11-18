@@ -130,6 +130,42 @@
      await configure(enabled);
    }catch(_){status("Não foi possível guardar a preferência do widget.",false);}
  }
+ async function configureNotifications(enabled){
+   const p=plugin();
+   if(!p || !p.setShiftNotifications) {
+     status("As notificações de turno estão disponíveis na Preview Android atualizada.",false);
+     return;
+   }
+   try {
+     const result=await p.setShiftNotifications({enabled:!!enabled});
+     if(enabled && result && !result.systemAllowed) {
+       status("Para mostrar as notificações, autoriza-as nas Definições do Samsung.",false);
+     } else if(enabled) {
+       status("Notificações ativadas. O estado do turno aparece na barra de notificações.",true);
+     } else {
+       status("Notificações do turno desativadas.",true);
+     }
+   } catch (_) {
+     status("Não foi possível alterar a preferência das notificações.",false);
+   }
+ }
+ async function toggleNotifications(){
+   const checked=!!($("cfgShiftNotifications") && $("cfgShiftNotifications").checked);
+   try {
+     settings.shiftNotifications=checked;
+     localStorage.setItem("wt_settings",JSON.stringify(settings));
+     await configureNotifications(checked);
+   }catch(_){status("Não foi possível guardar a preferência das notificações.",false);}
+ }
+ async function openNotificationSettings(){
+   const p=plugin();
+   if(!p || !p.openNotificationSettings){
+     status("As definições de notificação só estão disponíveis no APK Android.",false);
+     return;
+   }
+   try {await p.openNotificationSettings();}
+   catch(_){status("Não foi possível abrir as Definições do Android.",false);}
+ }
  async function add(){
    const p=plugin();
    if(!p){status("Instala a Preview Android com suporte a widgets.",false);return;}
@@ -151,8 +187,10 @@
    if(ready)return;ready=true;
    if($("cfgWidgetEnabled"))$("cfgWidgetEnabled").checked=!!settings.widgetEnabled;
    await configure(!!settings.widgetEnabled);
+   if($("cfgShiftNotifications"))$("cfgShiftNotifications").checked=!!settings.shiftNotifications;
+   await configureNotifications(!!settings.shiftNotifications);
    document.addEventListener("visibilitychange",()=>{if(!document.hidden)sync();});
    root.addEventListener("focus",()=>sync());
  }
- root.WTWidget={init,sync,publish,toggle,add,configure};
+ root.WTWidget={init,sync,publish,toggle,add,configure,toggleNotifications,openNotificationSettings,configureNotifications};
 }(window));
