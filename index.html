@@ -520,7 +520,7 @@
         <div class="grid grid-cols-2 gap-3 text-xs">
           <div>
             <label class="block text-slate-400 mb-1">Calendário Oficial</label>
-            <select id="cfgHolidayCountry" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm">
+            <select id="cfgHolidayCountry" onchange="changeCalendarCountry()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm">
               <option value="LU">🇱🇺 Luxemburgo (11 Feriados)</option>
               <option value="PT">🇵🇹 Portugal</option>
               <option value="FR">🇫🇷 França</option>
@@ -547,6 +547,10 @@
             <label class="block text-slate-400 mb-1">País de residência</label>
             <select id="cfgResidenceCountry" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm"></select>
           </div>
+          <label class="col-span-2 flex items-center gap-2 text-slate-300">
+            <input type="checkbox" id="cfgSyncCalendarWithEmployer" onchange="saveSettings()" class="w-4 h-4 accent-blue-500" />
+            Usar também o calendário de feriados do país empregador
+          </label>
           <div class="col-span-2">
             <label class="block text-slate-400 mb-1">Região do calendário (opcional)</label>
             <input id="cfgCalendarRegion" type="text" maxlength="100" onchange="saveSettings()" placeholder="Ex.: Lisboa, Grand Est" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
@@ -673,6 +677,7 @@
       employerCountry: "LU",
       residenceCountry: "LU",
       calendarRegion: "",
+      syncCalendarWithEmployer: true,
       vacationAuto: true,
       manualSocialRate: 0,
       weeklySchedule: {
@@ -689,7 +694,14 @@
     };
 
     // Combinar configurações antigas com valores padrão sem regravar os dados do utilizador.
-    let settings = { ...defaultSettings, ...(JSON.parse(localStorage.getItem("wt_settings")) || {}) };
+    const oldSettings = JSON.parse(localStorage.getItem("wt_settings")) || {};
+    let settings = { ...defaultSettings, ...oldSettings };
+    // Preservar férias contratuais introduzidas em versões anteriores.
+    if (oldSettings.annualVacation !== undefined && oldSettings.vacationAuto === undefined &&
+        Number(oldSettings.annualVacation) !== 26) settings.vacationAuto = false;
+    if (oldSettings.syncCalendarWithEmployer === undefined && oldSettings.holidayCountry &&
+        oldSettings.holidayCountry !== (oldSettings.employerCountry || "LU"))
+      settings.syncCalendarWithEmployer = false;
     let entries = JSON.parse(localStorage.getItem("wt_entries")) || {};
     let privacyMode = false;
 
@@ -855,6 +867,7 @@
       document.getElementById("cfgHolidayCountry").value = settings.holidayCountry;
       document.getElementById("cfgEmployerCountry").value = settings.employerCountry || "LU";
       document.getElementById("cfgResidenceCountry").value = settings.residenceCountry || "LU";
+      document.getElementById("cfgSyncCalendarWithEmployer").checked = settings.syncCalendarWithEmployer !== false;
       document.getElementById("cfgCalendarRegion").value = settings.calendarRegion || "";
       renderWeeklySchedule();
       document.getElementById("cfgAnnualVacation").value = settings.annualVacation;
@@ -878,6 +891,8 @@
       settings.lang = document.getElementById("cfgLang").value;
       settings.startScreen = document.getElementById("cfgStartScreen").value;
       settings.holidayCountry = document.getElementById("cfgHolidayCountry").value;
+      settings.syncCalendarWithEmployer = document.getElementById("cfgSyncCalendarWithEmployer").checked;
+      if (settings.syncCalendarWithEmployer) settings.holidayCountry = document.getElementById("cfgEmployerCountry").value;
       settings.employerCountry = document.getElementById("cfgEmployerCountry").value;
       settings.residenceCountry = document.getElementById("cfgResidenceCountry").value;
       settings.calendarRegion = document.getElementById("cfgCalendarRegion").value.trim();
@@ -895,10 +910,21 @@
       const country = document.getElementById("cfgEmployerCountry").value;
       const baseline = window.WTCountryRules && WTCountryRules.legalLeave(country);
       settings.employerCountry = country;
+      if (settings.syncCalendarWithEmployer !== false) {
+        settings.holidayCountry = country;
+        document.getElementById("cfgHolidayCountry").value = country;
+      }
       if (settings.vacationAuto !== false && baseline !== null) {
         settings.annualVacation = baseline;
       }
       // País do calendário e país de residência continuam independentes.
+      saveSettings();
+    }
+
+    function changeCalendarCountry() {
+      // Explicit override: separar feriados do local do empregador.
+      document.getElementById("cfgSyncCalendarWithEmployer").checked = false;
+      settings.syncCalendarWithEmployer = false;
       saveSettings();
     }
 
