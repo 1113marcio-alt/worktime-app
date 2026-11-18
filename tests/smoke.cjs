@@ -495,3 +495,58 @@ test("marcação na aplicação aguarda sincronização do widget e preserva ras
   assert.ok(proSource.includes("async function discardActive()"));
   new vm.Script(proSource);
 });
+
+
+function prepareWidgetActivationTest(webEnabled,nativeInitiallyEnabled) {
+  const app=makeApp({widgetEnabled:webEnabled}, {});
+  const checkbox={checked:false};
+  const feedback={textContent:"",className:""};
+  app.ctx.document.getElementById=id=>id==="cfgWidgetEnabled"?checkbox:
+    id==="widgetStatus"?feedback:null;
+  app.ctx.document.addEventListener=()=>{};
+  let nativeEnabled=nativeInitiallyEnabled;
+  const enabledCalls=[];
+  app.ctx.window.Capacitor={Plugins:{WorkTimeWidget:{
+    getStatus:async()=>({enabled:nativeEnabled,hasPendingEvents:false,
+      notificationsEnabled:false,state:"idle"}),
+    getPendingActions:async()=>({events:[]}),
+    updateState:async()=>{},
+    setEnabled:async({enabled})=>{
+      enabledCalls.push(enabled);
+      nativeEnabled=enabled;
+      return {enabled:nativeEnabled};
+    },
+    setShiftNotifications:async()=>({systemAllowed:true})
+  }}};
+  vm.runInContext(fs.readFileSync("wt-widget.js","utf8"),app.ctx);
+  return {app,checkbox,feedback,enabledCalls,getNative:()=>nativeEnabled};
+}
+
+test("o widget previamente autorizado continua ativo mesmo com backup local desatualizado",async()=>{
+  const x=prepareWidgetActivationTest(false,true);
+  await x.app.ctx.window.WTWidget.init();
+  assert.equal(x.checkbox.checked,true);
+  assert.equal(x.getNative(),true);
+  assert.deepEqual(x.enabledCalls,[],"a inicialização nunca desativa o widget já autorizado");
+  assert.equal(JSON.parse(x.app.values.get("wt_settings")).widgetEnabled,true);
+});
+
+test("se o Android desativou o widget, exige reativação explícita sem perder registos",async()=>{
+  const original={"2026-11-18":{date:"2026-11-18",type:"work",normal:8,extra:1}};
+  const x=prepareWidgetActivationTest(true,false);
+  x.app.values.set("wt_entries",JSON.stringify(original));
+  await x.app.ctx.window.WTWidget.init();
+  assert.equal(x.getNative(),false);
+  assert.equal(x.checkbox.checked,false);
+  assert.deepEqual(x.enabledCalls,[]);
+  assert.ok(x.feedback.textContent.includes("reativ"));
+  await x.app.ctx.window.WTWidget.reactivate();
+  assert.equal(x.getNative(),true);
+  assert.equal(x.checkbox.checked,true);
+  assert.deepEqual(x.enabledCalls,[true]);
+  assert.equal(JSON.parse(x.app.values.get("wt_settings")).widgetEnabled,true);
+  assert.deepEqual(JSON.parse(x.app.values.get("wt_entries")),original);
+  const plugin=fs.readFileSync("android-widget/src/main/java/lu/marcio/worktimepro/preview/WorkTimeWidgetPlugin.java","utf8");
+  assert.ok(plugin.includes("void getStatus(PluginCall call)"));
+  assert.ok(source.includes("WTWidget.reactivate()"));
+});
