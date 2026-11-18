@@ -42,6 +42,7 @@ public final class WorkTimeWidgetPlugin extends Plugin {
         WidgetStore.setState(appContext(),
             call.getString("state", "idle"), call.getString("started", ""));
         WorkTimeWidgetProvider.updateAll(appContext());
+        WorkTimeNotification.update(appContext());
         call.resolve();
     }
 
