@@ -102,6 +102,13 @@
     $("homeVacationDays").textContent = data.monthEntries.filter(e => e.type === "vacation").length;
     $("homeHours").textContent = (data.normalH + data.extraH).toFixed(2) + " h";
     $("homeCountry").textContent = settings.employerCountry || "LU";
+    if ($("salaryPreviewNet")) {
+      $("salaryPreviewNet").textContent = formatMoney(data.finalNet);
+      $("salaryPreviewGross").textContent = formatMoney(data.totalGross);
+      $("salaryPreviewDeductions").textContent =
+        formatMoney(data.ccssPension + data.ccssHealth + data.ccssDep + data.taxIrs);
+      $("salaryPreviewBonus").textContent = formatMoney(data.bonusGross);
+    }
 
     const bars = [0, 0, 0, 0, 0];
     for (const entry of data.monthEntries) {
