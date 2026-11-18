@@ -8,37 +8,39 @@ on:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Descarregar código do repositório
+      - name: Descarregar código
         uses: actions/checkout@v4
 
-      - name: Instalar Node.js
+      - name: Instalar Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
-      - name: Configurar Java 17 (Correção do Erro)
+      - name: Configurar Java 21
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          distribution: temurin
+          java-version: '21'
 
-      - name: Instalar Capacitor e ferramentas Android
+      - name: Instalar Capacitor
         run: |
           npm init -y
-          npm install @capacitor/core @capacitor/cli @capacitor/android
+          npm install @capacitor/core@^8 @capacitor/cli@^8 @capacitor/android@^8
           mkdir -p www
-          cp index.html manifest.json sw.js icon.svg www/ 2>/dev/null || true
+          cp index.html manifest.json sw.js www/
           npx cap init "WorkTime Pro" "lu.marcio.worktimepro" --web-dir=www
           npx cap add android
+          npx cap sync android
 
-      - name: Compilar APK Debug instalável
+      - name: Compilar APK
         run: |
           cd android
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleDebug --stacktrace
 
-      - name: Disponibilizar APK para download
+      - name: Disponibilizar APK
         uses: actions/upload-artifact@v4
         with:
           name: WorkTime-Pro-Android-APK
