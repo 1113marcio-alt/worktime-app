@@ -33,7 +33,9 @@ public final class WorkTimeWidgetPlugin extends Plugin {
         WidgetStore.setEnabled(appContext(), enabled);
         WorkTimeWidgetProvider.updateAll(appContext());
         WorkTimeNotification.update(appContext());
-        call.resolve();
+        JSObject result = new JSObject();
+        result.put("enabled", WidgetStore.isEnabled(appContext()));
+        call.resolve(result);
     }
 
     @PluginMethod
