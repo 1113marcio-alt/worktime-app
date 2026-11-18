@@ -554,6 +554,6 @@
     init, render, onTabChange, stepMonth, openDate, openSelectedDay, setHistoryFilter,
     primaryClockAction, finishShift, discardActive, applyDraft, discardDraft,
     // Pure helpers exported for automated tests.
-    helpers: { localDateKey, timeWorkedSeconds, timeParts }
+    helpers: { localDateKey, timeWorkedSeconds, timeParts, historyRows }
   };
 }());
