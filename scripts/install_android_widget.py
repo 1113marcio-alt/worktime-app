@@ -54,6 +54,16 @@ if not any(el.get(permission) == "android.permission.POST_NOTIFICATIONS"
     })
 app = manifest.find("application")
 assert app is not None, "AndroidManifest has no application node"
+# Reuse the same WT blue identity across the launcher and widget.
+# Adaptive icons are overridden in mipmap-anydpi-v26; legacy icons remain
+# available as Capacitor fallback on older Android versions.
+app.set(f"{{{NS}}}icon", "@mipmap/ic_launcher")
+app.set(f"{{{NS}}}roundIcon", "@mipmap/ic_launcher_round")
+for asset in ("ic_launcher.xml", "ic_launcher_round.xml"):
+    assert (root / "res/mipmap-anydpi-v26" / asset).is_file(), (
+        "WT adaptive launcher resource missing: " + asset
+    )
+assert (root / "res/drawable/wt_logo_badge.xml").is_file(), "WT widget badge missing"
 name_key = f"{{{NS}}}name"
 if not any(el.get(name_key) == ".WorkTimeWidgetProvider" for el in app.findall("receiver")):
     receiver = ET.SubElement(app, "receiver", {
