@@ -82,7 +82,7 @@
     return Number.isFinite(n) ? Math.min(100,Math.max(0,n))/100 : 0;
   }
   function estimatePayroll({country,month,regularGross,extraBaseGross,extraMajorationGross,totalGross,
-    classId,manualTaxRate,manualSocialRate,cisCredit}) {
+    classId,manualTaxRate,manualSocialRate,cisCredit,forceManual}) {
     const c=String(country||"LU").toUpperCase();
     const total=Math.max(0,Number(totalGross)||0);
     const regular=Math.max(0,Number(regularGross)||0);
@@ -90,7 +90,7 @@
     const extraMajor=Math.max(0,Number(extraMajorationGross)||0);
     const base=regular+extraBase+extraMajor;
     const manualTax=pct(manualTaxRate), manualSocial=pct(manualSocialRate);
-    const override=manualTax>0;
+    const override=Boolean(forceManual)||manualTax>0;
     let pension=0,health=0,dependency=0,socialOther=0,tax=0,effectiveTaxRate=0;
     let taxLabel="",taxStatus="",taxSource="";
     let socialComplete=false;
