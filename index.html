@@ -64,7 +64,7 @@
 
 
     <!-- WORKTIME 2: PAINEL PRINCIPAL -->
-    <section id="tab-home" class="space-y-5">
+    <section id="tab-home" class="space-y-5 hidden">
       <div class="wt-flex pt-1">
         <div><p class="wt-kicker">Vista geral</p><h2 class="wt-h1 mt-1">O teu mês, ao detalhe</h2></div>
         <div class="flex gap-2">
@@ -140,7 +140,7 @@
     </section>
 
     <!-- WORKTIME 2: RELÓGIO DE PONTO -->
-    <section id="tab-ponto" class="space-y-4 hidden">
+    <section id="tab-ponto" class="space-y-4">
       <div class="pt-1"><p class="wt-kicker">Registo em tempo real</p><h2 class="wt-h1 mt-1">Relógio de ponto</h2><p class="wt-note mt-2">Marca a entrada, as pausas, o regresso e a saída.</p></div>
       <div class="wt-card wt-clock-card">
         <span class="wt-pill">● <span id="clockStatus">Pronto para começar</span></span>
@@ -406,6 +406,24 @@
     <!-- ABA 4: CONFIGURAÇÕES (OS 7 BLOCOS DO TEU APP MELHORADOS) -->
     <section id="tab-config" class="space-y-4 hidden">
       <h1 class="text-xl font-bold px-1" data-i18n="settingsTitle">Configurações</h1>
+      <p class="wt-note px-1">Organizadas por assunto. Abre apenas o grupo que precisas de ajustar.</p>
+
+      <!-- Início rápido: não altera dados históricos -->
+      <div class="wt-card wt-settings-launch space-y-3">
+        <div class="wt-flex">
+          <div>
+            <p class="wt-kicker">Personalização</p>
+            <h2 class="wt-section-title mt-1">Ecrã ao abrir a aplicação</h2>
+          </div>
+          <span class="wt-pill">Acesso rápido</span>
+        </div>
+        <p class="wt-note">Por defeito abre no Relógio de ponto para marcares a entrada imediatamente.</p>
+        <select id="cfgStartScreen" onchange="saveSettings()" aria-label="Ecrã inicial" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-sm">
+          <option value="ponto">⏱ Relógio de ponto</option>
+          <option value="home">🏠 Painel principal</option>
+          <option value="calendario">📅 Calendário</option>
+        </select>
+      </div>
 
       <!-- 1. Taxas e Valores -->
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
@@ -577,13 +595,13 @@
   <!-- NAVEGAÇÃO PRINCIPAL — cinco destinos; ecrãs antigos acessíveis por atalhos -->
   <nav class="wt-bottom fixed bottom-0 inset-x-0 backdrop-blur border-t z-40 no-print" aria-label="Navegação principal">
     <div class="wt-bottom-inner">
-      <button id="nav-home" onclick="switchTab('home')" class="wt-nav-item active" aria-label="Painel principal">
+      <button id="nav-home" onclick="switchTab('home')" class="wt-nav-item" aria-label="Painel principal">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 21v-7h6v7"/></svg><span>Início</span>
       </button>
       <button id="nav-calendario" onclick="switchTab('calendario')" class="wt-nav-item" aria-label="Calendário mensal">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18m-13 4h2m4 0h2"/></svg><span>Calendário</span>
       </button>
-      <button id="nav-ponto" onclick="switchTab('ponto')" class="wt-nav-item" aria-label="Relógio de ponto">
+      <button id="nav-ponto" onclick="switchTab('ponto')" class="wt-nav-item active" aria-label="Relógio de ponto">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l4 2"/></svg><span>Ponto</span>
       </button>
       <button id="nav-folha" onclick="switchTab('folha')" class="wt-nav-item" aria-label="Salário e ganhos">
@@ -634,6 +652,7 @@
       manualTaxRate: 0,
       cisCredit: 50,
       lang: "pt",
+      startScreen: "ponto",
       holidayCountry: "LU",
       employerCountry: "LU",
       residenceCountry: "LU",
@@ -656,6 +675,37 @@
     let entries = JSON.parse(localStorage.getItem("wt_entries")) || {};
     let privacyMode = false;
 
+    // Organizar visualmente sem eliminar nem renomear campos da versão anterior.
+    function organizeSettings() {
+      const parent = document.getElementById("tab-config");
+      if (!parent || parent.querySelector(".wt-settings-group")) return;
+      const blocks = [...parent.children].filter(node =>
+        node.tagName === "DIV" && node.querySelector("h3") && node.querySelector("h3").textContent.trim().match(/^(1|2|3|4|4A|4B|5|6|7)\./));
+      const findBlock = prefix => blocks.find(node => node.querySelector("h3").textContent.trim().startsWith(prefix));
+      const groups = [
+        { title: "⏱️ Horários, países e calendário", subtitles: ["4B.", "4A.", "4.", "3."] },
+        { title: "💶 Salário, taxas e impostos", subtitles: ["1.", "2."] },
+        { title: "💾 Dados e segurança", subtitles: ["6.", "7."] },
+        { title: "🎨 Aparência", subtitles: ["5."] }
+      ];
+      groups.forEach(({ title, subtitles }, index) => {
+        const details = document.createElement("details");
+        details.className = "wt-settings-group";
+        details.open = index === 0;
+        const summary = document.createElement("summary");
+        summary.textContent = title;
+        const content = document.createElement("div");
+        content.className = "wt-settings-stack";
+        subtitles.forEach(prefix => {
+          const block = findBlock(prefix);
+          if (block) content.appendChild(block);
+        });
+        if (!content.children.length) return;
+        details.append(summary, content);
+        parent.appendChild(details);
+      });
+    }
+
     function initApp() {
       const today = new Date().toISOString().slice(0, 10);
       document.getElementById("entryDate").value = today;
@@ -667,6 +717,7 @@
       }
 
       loadSettingsToInputs();
+      organizeSettings();
       renderAll();
       if (window.ProUI) window.ProUI.init();
 
@@ -780,6 +831,7 @@
       document.getElementById("cfgManualTaxRate").value = settings.manualTaxRate;
       document.getElementById("cfgCisCredit").value = settings.cisCredit;
       document.getElementById("cfgLang").value = settings.lang;
+      document.getElementById("cfgStartScreen").value = ["ponto", "home", "calendario"].includes(settings.startScreen) ? settings.startScreen : "ponto";
       populateCountrySelects();
       document.getElementById("cfgHolidayCountry").value = settings.holidayCountry;
       document.getElementById("cfgEmployerCountry").value = settings.employerCountry || "LU";
@@ -804,6 +856,7 @@
       settings.manualTaxRate = parseFloat(document.getElementById("cfgManualTaxRate").value) || 0;
       settings.cisCredit = parseFloat(document.getElementById("cfgCisCredit").value) || 0;
       settings.lang = document.getElementById("cfgLang").value;
+      settings.startScreen = document.getElementById("cfgStartScreen").value;
       settings.holidayCountry = document.getElementById("cfgHolidayCountry").value;
       settings.employerCountry = document.getElementById("cfgEmployerCountry").value;
       settings.residenceCountry = document.getElementById("cfgResidenceCountry").value;
