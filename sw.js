@@ -1,5 +1,5 @@
-const CACHE_NAME = 'worktime-pro-v2-country-tax-locale-backup-20261118';
-const ASSETS = ['./', './index.html', './manifest.json', './pro-ui.css', './pro-ui.js', './country-rules.js', './wt-i18n.js'];
+const CACHE_NAME = 'worktime-pro-v2-widget-theme-locale-20261118';
+const ASSETS = ['./', './index.html', './manifest.json', './pro-ui.css', './pro-ui.js', './country-rules.js', './wt-i18n.js', './wt-widget.js'];
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
