@@ -660,3 +660,58 @@ test("ícone do Android e PWA compartilham o mesmo logotipo WT azul da aplicaç�
     .includes("wt-widget.js wt-icon.svg www/"));
   assert.ok(fs.readFileSync("sw.js","utf8").includes("'./wt-icon.svg'"));
 });
+
+
+test("widget compacto mostra cronómetro nativo que corre sem abrir a app", () => {
+  const xml=fs.readFileSync("android-widget/res/layout/widget_worktime.xml","utf8");
+  const provider=fs.readFileSync("android-widget/src/main/java/lu/marcio/worktimepro/preview/WorkTimeWidgetProvider.java","utf8");
+  const store=fs.readFileSync("android-widget/src/main/java/lu/marcio/worktimepro/preview/WidgetStore.java","utf8");
+  const plugin=fs.readFileSync("android-widget/src/main/java/lu/marcio/worktimepro/preview/WorkTimeWidgetPlugin.java","utf8");
+  assert.ok(xml.includes("<Chronometer"));
+  assert.ok(xml.includes('android:id="@+id/widget_elapsed"'));
+  assert.ok(xml.includes('android:orientation="horizontal"'));
+  assert.ok(xml.includes('android:layout_height="wrap_content"'));
+  assert.ok(provider.includes("SystemClock.elapsedRealtime() - elapsedMillis"));
+  assert.ok(provider.includes("view.setChronometer(R.id.widget_elapsed"));
+  assert.ok(provider.includes('"working".equals(state)'));
+  assert.ok(provider.includes("WidgetStore.workedMillis(context)"));
+  for(const field of ["KEY_WORKED_MS","KEY_WORKING_SINCE"]){
+    assert.ok(store.includes(field));
+  }
+  assert.ok(store.includes('if ("pause".equals(action))'));
+  assert.ok(store.includes('edit.putLong(KEY_WORKED_MS, elapsedBeforeAction)'));
+  assert.ok(store.includes('edit.remove(KEY_WORKING_SINCE)'));
+  assert.ok(store.includes('if ("resume".equals(action))'));
+  assert.ok(store.includes('edit.putLong(KEY_WORKING_SINCE, nowMillis)'));
+  assert.ok(store.includes("pending(context).length() > 0"));
+  assert.ok(plugin.includes('call.getInt("workedSeconds", 0)'));
+  assert.ok(fs.readFileSync("wt-widget.js","utf8").includes("timeWorkedSeconds(shift,new Date().toISOString())"));
+});
+
+test("tempo enviado ao widget exclui pausa aberta e pausa concluída", async() => {
+  const app=makeApp({}, {});
+  const now=Date.now();
+  const iso=offset=>new Date(now+offset*1000).toISOString();
+  const active={id:"test-shift",start:iso(-30*60),status:"paused",
+    breaks:[{start:iso(-20*60),end:iso(-15*60)},{start:iso(-5*60),end:null}]};
+  app.values.set("wt_active_shift",JSON.stringify(active));
+  vm.runInContext(proSource,app.ctx);
+  const states=[];
+  app.ctx.window.Capacitor={Plugins:{WorkTimeWidget:{updateState:async state=>states.push(state)}}};
+  vm.runInContext(fs.readFileSync("wt-widget.js","utf8"),app.ctx);
+  await app.ctx.window.WTWidget.publish();
+  assert.equal(states.length,1);
+  assert.equal(states[0].state,"paused");
+  assert.ok(states[0].workedSeconds>=1198&&states[0].workedSeconds<=1201,
+    "30 min de turno menos 5 min pausa anterior e 5 min pausa aberta = 20 min");
+  active.status="working";
+  active.breaks[1].end=iso(0);
+  app.values.set("wt_active_shift",JSON.stringify(active));
+  await app.ctx.window.WTWidget.publish();
+  assert.equal(states[1].state,"working");
+  assert.ok(states[1].workedSeconds>=1198&&states[1].workedSeconds<=1201);
+  app.values.delete("wt_active_shift");
+  await app.ctx.window.WTWidget.publish();
+  assert.equal(states[2].state,"idle");
+  assert.equal(states[2].workedSeconds,0);
+});
