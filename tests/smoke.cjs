@@ -332,10 +332,18 @@ test("país do empregador pode sincronizar feriados sem alterar residência", ()
   assert.equal(app.evaluate("settings.holidayCountry"),"PT");
   assert.equal(app.evaluate("settings.residenceCountry"),"LU");
   refs.cfgHolidayCountry.value="FR";
-  app.evaluate("saveSettings = function(){ settings.holidayCountry=document.getElementById('cfgHolidayCountry').value; localStorage.setItem('wt_settings',JSON.stringify(settings)); }");
+  app.evaluate("saveSettings = function(){ settings.holidayCountry=document.getElementById('cfgHolidayCountry').value; settings.employerCountry=document.getElementById('cfgEmployerCountry').value; settings.annualVacation=Number(document.getElementById('cfgAnnualVacation').value); localStorage.setItem('wt_settings',JSON.stringify(settings)); }");
+  app.ctx.confirm=()=>false;
   app.ctx.changeCalendarCountry();
   assert.equal(app.evaluate("settings.syncCalendarWithEmployer"),false);
   assert.equal(app.evaluate("settings.holidayCountry"),"FR");
+  assert.equal(app.evaluate("settings.employerCountry"),"PT");
+  app.ctx.confirm=()=>true;
+  refs.cfgHolidayCountry.value="LU";
+  app.ctx.changeCalendarCountry();
+  assert.equal(app.evaluate("settings.holidayCountry"),"LU");
+  assert.equal(app.evaluate("settings.employerCountry"),"LU");
+  assert.equal(app.evaluate("settings.annualVacation"),26);
 });
 
 test("tradução aplica prefixos numerados nas definições", () => {
