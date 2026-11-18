@@ -19,7 +19,7 @@ fr:{
 "Não é recibo oficial":"Bulletin non officiel","Bruto":"Brut","Descontos estim.":"Retenues estimées","Bónus":"Prime",
 "Visão mensal":"Vue mensuelle","Registo em tempo real":"Pointage en temps réel",
 "Relógio de ponto":"Pointeuse","Marca a entrada, as pausas, o regresso e a saída.":"Pointez l'arrivée, les pauses, la reprise et le départ.",
-"Pronto para começar":"Prêt à commencer","Entrada":"Arrivée","Pausas":"Pauses","Tempo":"Temps",
+"Pronto para começar":"Prêt à commencer","Em pausa":"En pause","Turno em curso":"Service en cours","Retomar trabalho":"Reprendre le travail","Iniciar pausa":"Commencer une pause","Entrada":"Arrivée","Pausas":"Pauses","Tempo":"Temps",
 "Útil":"Effectif","Iniciar turno":"Démarrer","Terminar turno":"Terminer",
 "Turnos por guardar":"Services à enregistrer","rascunhos":"brouillons",
 "Registar / ajustar horas manualmente":"Saisir / corriger les heures",
@@ -97,7 +97,7 @@ en:{
 "Não é recibo oficial":"Not an official payslip","Bruto":"Gross","Descontos estim.":"Estimated deductions",
 "Bónus":"Bonus","Visão mensal":"Monthly view","Registo em tempo real":"Live time tracking",
 "Relógio de ponto":"Time clock","Marca a entrada, as pausas, o regresso e a saída.":"Track start, break, resume and finish.",
-"Pronto para começar":"Ready to start","Entrada":"Start","Pausas":"Breaks","Tempo":"Time",
+"Pronto para começar":"Ready to start","Em pausa":"On break","Turno em curso":"Shift running","Retomar trabalho":"Resume work","Iniciar pausa":"Start break","Entrada":"Start","Pausas":"Breaks","Tempo":"Time",
 "Útil":"Worked","Iniciar turno":"Start shift","Terminar turno":"Finish shift",
 "Turnos por guardar":"Pending shifts","rascunhos":"drafts",
 "Registar / ajustar horas manualmente":"Log / adjust hours manually",
@@ -223,7 +223,16 @@ const originals = new WeakMap();
 function normalize(code) { return ["fr","en","de","es","lu","pt"].includes(code)?code:"pt"; }
 function tr(text,language) {
  const locale=normalize(language);
- return locale==="pt" ? text : (words[locale]||{})[text] || text;
+ if(locale==="pt")return text;
+ const literal=(words[locale]||{})[text];
+ if(literal)return literal;
+ // Headings such as "4. País dos Feriados e Férias" keep the index.
+ const numbered=/^(\d+[A-Z]?\.\s*)(.+)$/.exec(text);
+ if(numbered){
+   const translated=(words[locale]||{})[numbered[2]];
+   if(translated)return numbered[1]+translated;
+ }
+ return text;
 }
 function apply(language) {
  const locale=normalize(language);
