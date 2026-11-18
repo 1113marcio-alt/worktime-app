@@ -18,6 +18,10 @@ public final class WidgetStore {
     private static final String KEY_STARTED = "shift_started";
     private static final String KEY_ENABLED = "widget_enabled";
     private static final String KEY_NOTIFICATIONS = "notifications_enabled";
+    // Persist effective worked time independently of the WebView process.
+    // The widget clock advances only while state == "working".
+    private static final String KEY_WORKED_MS = "shift_worked_ms";
+    private static final String KEY_WORKING_SINCE = "shift_working_since_ms";
 
     private WidgetStore() {}
 
@@ -45,6 +49,32 @@ public final class WidgetStore {
         return prefs(context).getString(KEY_STARTED, "");
     }
 
+    private static long parseStarted(Context context) {
+        try { return Instant.parse(started(context)).toEpochMilli(); }
+        catch (Exception ignored) { return 0L; }
+    }
+
+    private static long elapsedWorkedMillis(Context context, long now) {
+        SharedPreferences data = prefs(context);
+        long accumulated = data.getLong(KEY_WORKED_MS, -1L);
+        if (accumulated < 0) {
+            // Upgrade from older widget builds: if still working,
+            // assume the old start was continuous until app sync restores pauses.
+            long start = parseStarted(context);
+            return "working".equals(state(context)) && start > 0
+                ? Math.max(0L, now - start) : 0L;
+        }
+        long elapsed = Math.max(0L, accumulated);
+        long since = data.getLong(KEY_WORKING_SINCE, 0L);
+        if ("working".equals(state(context)) && since > 0L && now >= since)
+            elapsed += now - since;
+        return Math.max(0L, elapsed);
+    }
+
+    public static synchronized long workedMillis(Context context) {
+        return elapsedWorkedMillis(context, System.currentTimeMillis());
+    }
+
     public static synchronized void setEnabled(Context context, boolean enabled) {
         prefs(context).edit().putBoolean(KEY_ENABLED, enabled).commit();
     }
@@ -68,7 +98,9 @@ public final class WidgetStore {
         JSONArray events = pending(context);
         // Never discard pending work time events when the queue fills.
         if (events.length() >= 512) return false;
-        String now = Instant.now().toString();
+        long nowMillis = System.currentTimeMillis();
+        String now = Instant.ofEpochMilli(nowMillis).toString();
+        long elapsedBeforeAction = elapsedWorkedMillis(context, nowMillis);
         try {
             JSONObject event = new JSONObject();
             event.put("id", UUID.randomUUID().toString());
@@ -78,8 +110,21 @@ public final class WidgetStore {
             SharedPreferences.Editor edit = prefs(context).edit()
                 .putString(KEY_EVENTS, events.toString())
                 .putString(KEY_STATE, next);
-            if ("start".equals(action)) edit.putString(KEY_STARTED, now);
-            if ("finish".equals(action)) edit.remove(KEY_STARTED);
+            if ("start".equals(action)) {
+                edit.putString(KEY_STARTED, now);
+                edit.putLong(KEY_WORKED_MS, 0L);
+                edit.putLong(KEY_WORKING_SINCE, nowMillis);
+            } else if ("pause".equals(action)) {
+                edit.putLong(KEY_WORKED_MS, elapsedBeforeAction);
+                edit.remove(KEY_WORKING_SINCE);
+            } else if ("resume".equals(action)) {
+                edit.putLong(KEY_WORKED_MS, elapsedBeforeAction);
+                edit.putLong(KEY_WORKING_SINCE, nowMillis);
+            } else if ("finish".equals(action)) {
+                edit.remove(KEY_STARTED);
+                edit.remove(KEY_WORKED_MS);
+                edit.remove(KEY_WORKING_SINCE);
+            }
             boolean saved = edit.commit();
             if (saved) WorkTimeNotification.update(context);
             return saved;
@@ -100,12 +145,23 @@ public final class WidgetStore {
         prefs(context).edit().putString(KEY_EVENTS, rest.toString()).commit();
     }
 
-    public static synchronized void setState(Context context, String state, String started) {
+    public static synchronized void setState(Context context, String state, String started,
+                                              long workedMillis) {
         if (pending(context).length() > 0) return; // Native actions must be replayed first.
         if (!"idle".equals(state) && !"working".equals(state) && !"paused".equals(state)) return;
         SharedPreferences.Editor edit = prefs(context).edit().putString(KEY_STATE, state);
-        if ("idle".equals(state) || started == null || started.isEmpty()) edit.remove(KEY_STARTED);
-        else edit.putString(KEY_STARTED, started);
+        if ("idle".equals(state) || started == null || started.isEmpty()) {
+            edit.remove(KEY_STARTED);
+            edit.remove(KEY_WORKED_MS);
+            edit.remove(KEY_WORKING_SINCE);
+        } else {
+            edit.putString(KEY_STARTED, started);
+            edit.putLong(KEY_WORKED_MS, Math.max(0L, workedMillis));
+            if ("working".equals(state))
+                edit.putLong(KEY_WORKING_SINCE, System.currentTimeMillis());
+            else
+                edit.remove(KEY_WORKING_SINCE);
+        }
         edit.commit();
     }
 }
