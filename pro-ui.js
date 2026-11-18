@@ -391,7 +391,12 @@
     $("clockDate").textContent = displayDate(localDateKey(new Date()));
     switchTab("home");
     render();
-    window.setInterval(renderClock, 1000);
+    // Atualizar apenas o cronómetro a cada segundo, sem reconstruir botões/rascunhos.
+    window.setInterval(() => {
+      const shift = currentShift();
+      if ($("clockTimer")) $("clockTimer").textContent =
+        shift ? timeParts(timeWorkedSeconds(shift)) : "00:00:00";
+    }, 1000);
     window.addEventListener("focus", renderClock);
   }
   function render() {
