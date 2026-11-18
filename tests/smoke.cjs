@@ -203,3 +203,26 @@ test("painel e salário comunicam separadamente o CIS", () => {
   assert.ok(source.includes('id="salaryPreviewWithCredit"'));
   assert.ok(proSource.includes('formatMoney(data.netBeforeCredit)'));
 });
+
+
+test("app abre por defeito no relógio de ponto e a preferência é configurável", () => {
+  const app = makeApp({}, {});
+  assert.equal(app.evaluate("settings.startScreen"), "ponto");
+  const changed = makeApp({startScreen:"home"}, {});
+  assert.equal(changed.evaluate("settings.startScreen"), "home");
+  assert.ok(source.includes('<section id="tab-ponto" class="space-y-4">'));
+  assert.ok(source.includes('<section id="tab-home" class="space-y-5 hidden">'));
+  assert.ok(source.includes('id="cfgStartScreen"'));
+  assert.ok(proSource.includes('switchTab(preferred)'));
+});
+
+test("opções antigas continuam acessíveis após agrupar as configurações", () => {
+  for (const id of ["cfgHourlyRate","cfgHourlyBonus","cfgTaxSystem","cfgTaxClass",
+    "cfgLang","cfgHolidayCountry","cfgEmployerCountry","cfgResidenceCountry",
+    "weeklyScheduleGrid","cfgSecurityPin","cfgStartScreen"]) {
+    assert.ok(source.includes('id="' + id + '"'), "Configuração desapareceu: " + id);
+  }
+  assert.ok(source.includes("function organizeSettings()"));
+  assert.ok(source.includes('details.className = "wt-settings-group"'));
+  assert.ok(fs.readFileSync("pro-ui.css","utf8").includes(".wt-settings-group"));
+});
