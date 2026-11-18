@@ -431,6 +431,25 @@
         </select>
       </div>
 
+      <!-- Widget Android: só habilitado com consentimento explícito -->
+      <div class="wt-card space-y-3" id="wtWidgetSettings">
+        <div class="wt-flex">
+          <div>
+            <p class="wt-kicker">Samsung / Android</p>
+            <h3 class="wt-section-title mt-1">⏱ Widget no ecrã inicial</h3>
+          </div>
+          <span class="wt-pill">NOVO</span>
+        </div>
+        <p class="wt-note">Marca entrada, pausa, regresso e saída diretamente no ecrã inicial, mesmo com a aplicação fechada. Os turnos terminados aparecem como rascunhos quando abres a aplicação.</p>
+        <label class="flex items-center gap-3 text-sm font-semibold">
+          <input id="cfgWidgetEnabled" type="checkbox" onchange="WTWidget.toggle()" class="w-5 h-5 accent-blue-500" />
+          Ativar os botões rápidos do widget
+        </label>
+        <p class="text-xs text-amber-300">Atenção: os botões do widget não pedem o PIN da aplicação. Ativa apenas num telemóvel pessoal protegido.</p>
+        <button type="button" onclick="WTWidget.add()" class="wt-button primary w-full">➕ Adicionar ao ecrã inicial</button>
+        <p class="wt-note" id="widgetStatus" aria-live="polite">Se não aparecer o aviso: mantém premida uma zona vazia do ecrã inicial → Widgets → WorkTime Pro 2 Preview.</p>
+      </div>
+
       <!-- 1. Taxas e Valores -->
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
         <h3 class="font-bold text-sm text-blue-400">1. Taxas e Valores</h3>
@@ -674,6 +693,7 @@
       lang: "pt",
       startScreen: "ponto",
       theme: "dark",
+      widgetEnabled: false,
       holidayCountry: "LU",
       employerCountry: "LU",
       residenceCountry: "LU",
@@ -864,6 +884,7 @@
       document.getElementById("cfgCisCredit").value = settings.cisCredit;
       document.getElementById("cfgLang").value = settings.lang;
       document.getElementById("cfgStartScreen").value = ["ponto", "home", "calendario"].includes(settings.startScreen) ? settings.startScreen : "ponto";
+      document.getElementById("cfgWidgetEnabled").checked = settings.widgetEnabled === true;
       populateCountrySelects();
       document.getElementById("cfgHolidayCountry").value = settings.holidayCountry;
       document.getElementById("cfgEmployerCountry").value = settings.employerCountry || "LU";
@@ -1514,5 +1535,6 @@
     window.addEventListener("DOMContentLoaded", initApp);
   </script>
   <script src="pro-ui.js"></script>
+  <script src="wt-widget.js"></script>
 </body>
 </html>
