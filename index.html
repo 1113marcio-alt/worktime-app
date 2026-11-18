@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>WorkTime Pro</title>
   <link rel="manifest" href="manifest.json" />
+  <link rel="stylesheet" href="pro-ui.css" />
   <meta name="theme-color" content="#0f172a" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <script src="https://cdn.tailwindcss.com"></script>
@@ -28,7 +29,7 @@
     }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen pb-24 transition-colors duration-200">
+<body class="wt-pro bg-slate-950 text-slate-100 min-h-screen pb-24 transition-colors duration-200">
 
   <!-- ECRÃ DE BLOQUEIO PIN -->
   <div id="pinLockModal" class="fixed inset-0 bg-slate-950 z-50 hidden flex-col items-center justify-center p-6">
@@ -43,12 +44,12 @@
   </div>
 
   <!-- CABEÇALHO FIXO -->
-  <header class="sticky top-0 z-30 bg-slate-900/90 backdrop-blur border-b border-slate-800 px-4 py-3 flex items-center justify-between no-print">
+  <header class="wt-main-header sticky top-0 z-30 backdrop-blur border-b px-4 py-3 flex items-center justify-between no-print">
     <div class="flex items-center gap-2">
-      <span class="bg-blue-600 text-white font-bold px-2.5 py-1 rounded-lg text-sm">WT</span>
+      <span class="wt-logo">WT</span>
       <div>
         <h1 class="font-bold text-base leading-tight" id="appTitle">WorkTime Pro</h1>
-        <p class="text-[11px] text-slate-400" id="headerSubtitle">Luxemburgo • Fiscalidade Oficial</p>
+        <p class="text-[11px] text-slate-400" id="headerSubtitle">O teu trabalho, organizado</p>
       </div>
     </div>
     <div class="flex items-center gap-2">
@@ -61,8 +62,107 @@
   <!-- CONTEÚDO PRINCIPAL -->
   <main class="max-w-xl mx-auto p-4 space-y-5">
 
+
+    <!-- WORKTIME 2: PAINEL PRINCIPAL -->
+    <section id="tab-home" class="space-y-5">
+      <div class="wt-flex pt-1">
+        <div><p class="wt-kicker">Vista geral</p><h2 class="wt-h1 mt-1">O teu mês, ao detalhe</h2></div>
+        <button type="button" onclick="switchTab('config')" class="wt-pill" aria-label="Abrir configurações">⚙ Preferências</button>
+      </div>
+
+      <div class="wt-hero">
+        <div class="wt-flex"><span class="text-xs text-blue-100 font-semibold">💶 Líquido estimado</span><span class="wt-pill">Estimativa</span></div>
+        <p id="homeNet" class="wt-hero-amount money-val">0,00 €</p>
+        <p id="homeMonth" class="text-xs text-blue-200">Mês atual</p>
+        <div class="wt-balance-row">
+          <div class="wt-balance-cell"><span>Bruto estimado</span><strong id="homeGross" class="money-val">0,00 €</strong></div>
+          <div class="wt-balance-cell"><span>Horas no mês</span><strong id="homeHours">0 h</strong></div>
+          <div class="wt-balance-cell"><span>País empregador</span><strong id="homeCountry">LU</strong></div>
+        </div>
+      </div>
+
+      <div class="wt-stat-grid">
+        <div class="wt-card wt-stat"><div class="wt-stat-icon">⏱</div><div class="wt-stat-label">Horas normais</div><div class="wt-stat-value" id="homeNormal">0 h</div></div>
+        <div class="wt-card wt-stat"><div class="wt-stat-icon">⚡</div><div class="wt-stat-label">Horas extra</div><div class="wt-stat-value wt-accent-amber" id="homeOvertime">0 h</div></div>
+        <div class="wt-card wt-stat"><div class="wt-stat-icon">🗓</div><div class="wt-stat-label">Dias trabalhados</div><div class="wt-stat-value wt-accent-cyan" id="homeWorkdays">0</div></div>
+        <div class="wt-card wt-stat"><div class="wt-stat-icon">🌤</div><div class="wt-stat-label">Dias de férias</div><div class="wt-stat-value wt-accent-violet" id="homeVacationDays">0</div></div>
+      </div>
+
+      <div class="space-y-3">
+        <div class="wt-flex"><h3 class="wt-section-title">Acesso rápido</h3><span class="wt-kicker">Atalhos</span></div>
+        <div class="wt-actions">
+          <button type="button" onclick="switchTab('ponto')" class="wt-action"><span class="text-2xl">⏱</span><strong>Marcar ponto</strong><span>Entrada, pausa e saída</span></button>
+          <button type="button" onclick="switchTab('calendario')" class="wt-action"><span class="text-2xl">📅</span><strong>Calendário</strong><span>Trabalho, férias e folgas</span></button>
+          <button type="button" onclick="ProUI.openDate(document.getElementById('entryDate').value)" class="wt-action"><span class="text-2xl">✍️</span><strong>Registo manual</strong><span>Adicionar ou corrigir horas</span></button>
+          <button type="button" onclick="switchTab('ferias')" class="wt-action"><span class="text-2xl">🏖️</span><strong>Férias e feriados</strong><span>Saldo e dias registados</span></button>
+        </div>
+      </div>
+
+      <div class="wt-card">
+        <div class="wt-flex"><h3 class="wt-section-title">Horas trabalhadas</h3><span class="text-xs wt-muted">Semanas do mês</span></div>
+        <div id="homeHoursChart" class="wt-chart" aria-label="Gráfico de horas por semana"></div>
+      </div>
+      <div class="wt-card">
+        <div class="wt-flex mb-3"><h3 class="wt-section-title">Atividade recente</h3><button type="button" onclick="switchTab('calendario')" class="text-xs text-blue-300 font-bold">Ver calendário</button></div>
+        <div id="homeRecent"></div>
+      </div>
+      <p class="wt-note">Os valores salariais são estimativas. As regras fiscais e de compensação ainda não foram validadas para todos os países.</p>
+    </section>
+
+    <!-- WORKTIME 2: CALENDÁRIO MENSAL -->
+    <section id="tab-calendario" class="space-y-4 hidden">
+      <div class="pt-1"><p class="wt-kicker">Visão mensal</p><h2 class="wt-h1 mt-1">Calendário</h2><p class="wt-note mt-2">Consulta os dias e abre qualquer registo para o editar.</p></div>
+      <div class="wt-card">
+        <div class="wt-calendar-head">
+          <button type="button" class="wt-cal-nav" onclick="ProUI.stepMonth(-1)" aria-label="Mês anterior">‹</button>
+          <h3 id="calendarTitle" class="text-base font-extrabold">Mês atual</h3>
+          <button type="button" class="wt-cal-nav" onclick="ProUI.stepMonth(1)" aria-label="Mês seguinte">›</button>
+        </div>
+        <div class="wt-cal-weekdays"><span>SEG</span><span>TER</span><span>QUA</span><span>QUI</span><span>SEX</span><span>SÁB</span><span>DOM</span></div>
+        <div id="calendarGrid" class="wt-calendar-grid" aria-label="Dias do mês"></div>
+        <p id="calendarSummary" class="wt-note mt-4"></p>
+        <div class="wt-legend mt-3">
+          <span><i style="background:#61cda5"></i>Trabalho</span><span><i style="background:#f7c86b"></i>Férias</span>
+          <span><i style="background:#ed8b98"></i>Baixa</span><span><i style="background:#a79aff"></i>Feriado</span>
+        </div>
+      </div>
+      <div class="wt-card">
+        <p class="wt-kicker">Dia selecionado</p>
+        <h3 id="selectedDayTitle" class="wt-section-title mt-2">Seleciona um dia</h3>
+        <p id="selectedDayDetail" class="wt-note mt-2 mb-4">Sem registo</p>
+        <button type="button" onclick="ProUI.openSelectedDay()" class="wt-button primary w-full">✏️ Abrir / registar este dia</button>
+      </div>
+      <p class="wt-note">Os feriados automáticos estão disponíveis apenas para o Luxemburgo em 2026 nesta fase. Outros calendários serão adicionados após verificação.</p>
+    </section>
+
+    <!-- WORKTIME 2: RELÓGIO DE PONTO -->
+    <section id="tab-ponto" class="space-y-4 hidden">
+      <div class="pt-1"><p class="wt-kicker">Registo em tempo real</p><h2 class="wt-h1 mt-1">Relógio de ponto</h2><p class="wt-note mt-2">Marca a entrada, as pausas, o regresso e a saída.</p></div>
+      <div class="wt-card wt-clock-card">
+        <span class="wt-pill">● <span id="clockStatus">Pronto para começar</span></span>
+        <div class="wt-timer" id="clockTimer" aria-live="off">00:00:00</div>
+        <p id="clockDate" class="wt-clock-status">Hoje</p>
+        <div class="wt-balance-row text-left mt-5">
+          <div class="wt-balance-cell"><span>Entrada</span><strong id="clockStartTime">--:--</strong></div>
+          <div class="wt-balance-cell"><span>Pausas</span><strong id="clockBreaks">0</strong></div>
+          <div class="wt-balance-cell"><span>Tempo</span><strong>Útil</strong></div>
+        </div>
+        <div class="wt-clock-buttons">
+          <button type="button" id="clockPrimary" onclick="ProUI.primaryClockAction()" class="wt-button primary">▶ Iniciar turno</button>
+          <button type="button" id="clockFinish" onclick="ProUI.finishShift()" class="wt-button" disabled>■ Terminar turno</button>
+        </div>
+        <button type="button" id="clockDiscard" class="text-xs text-rose-300 mt-5 underline" onclick="ProUI.discardActive()" hidden>Anular turno em curso</button>
+      </div>
+      <div class="wt-card">
+        <div class="wt-flex"><h3 class="wt-section-title">Turnos por guardar</h3><span class="wt-pill"><span id="draftCount">0</span> rascunhos</span></div>
+        <div id="clockDraftList" class="mt-2"></div>
+      </div>
+      <button type="button" onclick="ProUI.openDate(document.getElementById('entryDate').value)" class="wt-button w-full">✍️ Registar / ajustar horas manualmente</button>
+      <p class="wt-note">Os turnos terminados ficam como rascunhos antes de serem aplicados ao dia. As horas extraordinárias seguem o horário configurado apenas como sugestão. O suplemento noturno deve ser confirmado manualmente.</p>
+    </section>
+
     <!-- ABA 1: REGISTO DIÁRIO -->
-    <section id="tab-registo" class="space-y-4">
+    <section id="tab-registo" class="space-y-4 hidden">
       <!-- Resumo Rápido do Mês no Topo -->
       <div class="bg-gradient-to-br from-blue-900/50 to-slate-900 border border-blue-800/50 rounded-2xl p-4 shadow-lg">
         <div class="flex justify-between items-center mb-2">
@@ -159,7 +259,7 @@
         <div class="flex justify-between items-center border-b border-slate-800 pb-3">
           <div>
             <h2 class="font-bold text-base text-blue-400" data-i18n="payslipTitle">Simulação Fiche de Salaire</h2>
-            <p class="text-xs text-slate-400" id="payslipSubtitle">Cálculo Oficial Luxemburgo (CCSS + IRS)</p>
+            <p class="text-xs text-slate-400" id="payslipSubtitle">Estimativa salarial — confirmar com o recibo</p>
           </div>
           <button onclick="window.print()" class="no-print bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-1.5 rounded-xl text-xs font-medium">
             🖨️ PDF / Imprimir
@@ -327,7 +427,7 @@
           <div>
             <label class="block text-slate-400 mb-1">Regime Fiscal</label>
             <select id="cfgTaxSystem" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm">
-              <option value="luxembourg">Luxemburgo (Oficial)</option>
+              <option value="luxembourg">Luxemburgo (estimativa)</option>
               <option value="custom">Personalizado</option>
             </select>
           </div>
@@ -456,24 +556,23 @@
 
   </main>
 
-  <!-- BARRA DE NAVEGAÇÃO INFERIOR -->
-  <nav class="fixed bottom-0 inset-x-0 bg-slate-900/95 backdrop-blur border-t border-slate-800 z-40 no-print">
-    <div class="max-w-xl mx-auto grid grid-cols-4 py-2 text-center text-xs">
-      <button onclick="switchTab('registo')" id="nav-registo" class="flex flex-col items-center gap-1 text-blue-400 font-bold">
-        <span class="text-lg">⏱️</span>
-        <span data-i18n="navLog">Registo</span>
+  <!-- NAVEGAÇÃO PRINCIPAL — cinco destinos; ecrãs antigos acessíveis por atalhos -->
+  <nav class="wt-bottom fixed bottom-0 inset-x-0 backdrop-blur border-t z-40 no-print" aria-label="Navegação principal">
+    <div class="wt-bottom-inner">
+      <button id="nav-home" onclick="switchTab('home')" class="wt-nav-item active" aria-label="Painel principal">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M9 21v-7h6v7"/></svg><span>Início</span>
       </button>
-      <button onclick="switchTab('folha')" id="nav-folha" class="flex flex-col items-center gap-1 text-slate-400">
-        <span class="text-lg">💶</span>
-        <span data-i18n="navPayslip">Salário</span>
+      <button id="nav-calendario" onclick="switchTab('calendario')" class="wt-nav-item" aria-label="Calendário mensal">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 10h18m-13 4h2m4 0h2"/></svg><span>Calendário</span>
       </button>
-      <button onclick="switchTab('ferias')" id="nav-ferias" class="flex flex-col items-center gap-1 text-slate-400">
-        <span class="text-lg">🏖️</span>
-        <span data-i18n="navVacation">Férias</span>
+      <button id="nav-ponto" onclick="switchTab('ponto')" class="wt-nav-item" aria-label="Relógio de ponto">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l4 2"/></svg><span>Ponto</span>
       </button>
-      <button onclick="switchTab('config')" id="nav-config" class="flex flex-col items-center gap-1 text-slate-400">
-        <span class="text-lg">⚙️</span>
-        <span data-i18n="navSettings">Configurações</span>
+      <button id="nav-folha" onclick="switchTab('folha')" class="wt-nav-item" aria-label="Salário e ganhos">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="2" y="5" width="20" height="15" rx="3"/><path d="M2 10h20m-15 6h3"/></svg><span>Salário</span>
+      </button>
+      <button id="nav-config" onclick="switchTab('config')" class="wt-nav-item" aria-label="Configurações">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19 13.5a1.8 1.8 0 0 0 .3 2l.2.2-2 2-.2-.2a1.8 1.8 0 0 0-2-.3l-.3.1a1.8 1.8 0 0 0-1 1.7v.3h-3v-.3a1.8 1.8 0 0 0-1-1.7l-.3-.1a1.8 1.8 0 0 0-2 .3l-.2.2-2-2 .2-.2a1.8 1.8 0 0 0 .3-2l-.1-.3a1.8 1.8 0 0 0-1.7-1H4v-3h.3A1.8 1.8 0 0 0 6 9l.1-.3a1.8 1.8 0 0 0-.3-2l-.2-.2 2-2 .2.2a1.8 1.8 0 0 0 2 .3l.3-.1a1.8 1.8 0 0 0 1-1.7V3h3v.3a1.8 1.8 0 0 0 1 1.7l.3.1a1.8 1.8 0 0 0 2-.3l.2-.2 2 2-.2.2a1.8 1.8 0 0 0-.3 2l.1.3a1.8 1.8 0 0 0 1.7 1h.3v3H21a1.8 1.8 0 0 0-1.7 1z"/></svg><span>Opções</span>
       </button>
     </div>
   </nav>
@@ -551,6 +650,7 @@
 
       loadSettingsToInputs();
       renderAll();
+      if (window.ProUI) window.ProUI.init();
 
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('sw.js').catch(() => {});
@@ -719,14 +819,18 @@
     function saveEntry() {
       const date = document.getElementById("entryDate").value;
       if (!date) return;
+      const oldEntry = entries[date];
+      if (oldEntry && !confirm("Este dia já tem um registo. Guardar as alterações e substituir as horas atuais?")) return;
       entries[date] = {
+        ...(oldEntry || {}),
         date,
         type: document.getElementById("entryType").value,
         normal: parseFloat(document.getElementById("entryNormal").value) || 0,
         extra: parseFloat(document.getElementById("entryExtra").value) || 0,
         night: parseFloat(document.getElementById("entryNight").value) || 0,
         includeBonus: document.getElementById("entryIncludeBonus").checked,
-        note: document.getElementById("entryNote").value.trim()
+        note: document.getElementById("entryNote").value.trim(),
+        ...(oldEntry && Array.isArray(oldEntry.shifts) ? { manuallyEdited: true } : {})
       };
       localStorage.setItem("wt_entries", JSON.stringify(entries));
       document.getElementById("entryNote").value = "";
@@ -734,6 +838,7 @@
     }
 
     function deleteEntry(date) {
+      if (!confirm("Apagar o registo de " + date + "? Faça backup antes de eliminar dados importantes.")) return;
       delete entries[date];
       localStorage.setItem("wt_entries", JSON.stringify(entries));
       renderAll();
@@ -862,6 +967,11 @@
       };
     }
 
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, char =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+    }
+
     function renderAll() {
       const monthPrefix = document.getElementById("currentMonthPicker").value || new Date().toISOString().slice(0, 7);
       const d = calculateMonthData(monthPrefix);
@@ -883,7 +993,7 @@
               <div>
                 <span class="font-bold text-white mr-2">${e.date}</span>
                 <span class="text-slate-300">${badge}</span>
-                ${e.note ? `<p class="text-[11px] text-slate-400 mt-0.5">📝 ${e.note}</p>` : ""}
+                ${e.note ? `<p class="text-[11px] text-slate-400 mt-0.5">📝 ${escapeHtml(e.note)}</p>` : ""}
               </div>
               <button onclick="deleteEntry('${e.date}')" class="text-red-400 hover:text-red-300 px-2 py-1">🗑️</button>
             </div>
@@ -939,6 +1049,7 @@
 
       window.lastCalculatedNet = d.finalNet;
       comparePayslip();
+      if (window.ProUI) window.ProUI.render();
     }
 
     function comparePayslip() {
@@ -956,11 +1067,17 @@
     }
 
     function switchTab(tab) {
-      ["registo", "folha", "ferias", "config"].forEach(t => {
+      ["home", "calendario", "ponto", "registo", "folha", "ferias", "config"].forEach(t => {
         document.getElementById("tab-" + t).classList.toggle("hidden", t !== tab);
-        const navBtn = document.getElementById("nav-" + t);
-        navBtn.className = t === tab ? "flex flex-col items-center gap-1 text-blue-400 font-bold" : "flex flex-col items-center gap-1 text-slate-400";
       });
+      const navTarget = tab === "registo" ? "ponto" : (tab === "ferias" ? "calendario" : tab);
+      ["home", "calendario", "ponto", "folha", "config"].forEach(t => {
+        const navBtn = document.getElementById("nav-" + t);
+        navBtn.classList.toggle("active", t === navTarget);
+        navBtn.setAttribute("aria-current", t === navTarget ? "page" : "false");
+      });
+      if (window.ProUI) window.ProUI.onTabChange(tab);
+      if (typeof window.scrollTo === "function") window.scrollTo(0, 0);
     }
 
     // O formato antigo { settings, entries } mantém-se compatível.
@@ -1069,5 +1186,6 @@
 
     window.addEventListener("DOMContentLoaded", initApp);
   </script>
+  <script src="pro-ui.js"></script>
 </body>
 </html>
