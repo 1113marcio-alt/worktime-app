@@ -138,7 +138,7 @@
         <p id="selectedDayDetail" class="wt-note mt-2 mb-4">Sem registo</p>
         <button type="button" onclick="ProUI.openSelectedDay()" class="wt-button primary w-full">✏️ Abrir / registar este dia</button>
       </div>
-      <p class="wt-note">Os feriados automáticos estão disponíveis apenas para o Luxemburgo em 2026 nesta fase. Outros calendários serão adicionados após verificação.</p>
+      <p class="wt-note">Os feriados nacionais são apresentados para LU, PT e FR. Feriados locais e situações especiais exigem confirmação.</p>
     </section>
 
     <!-- WORKTIME 2: RELÓGIO DE PONTO -->
@@ -274,7 +274,7 @@
           <div class="wt-balance-cell"><span>Bónus</span><strong class="money-val" id="salaryPreviewBonus">0,00 €</strong></div>
         </div>
       </div>
-      <p class="wt-note">Este cálculo ainda utiliza os parâmetros salariais legados do Luxemburgo, mesmo que seleciones outro país. Verifica sempre a tua folha salarial real.</p>
+      <p class="wt-note">O Luxemburgo dispõe de uma estimativa por classe; França e Portugal precisam de retenção manual e dados adicionais. Confirma sempre com o recibo.</p>
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-4">
         <div class="flex justify-between items-center border-b border-slate-800 pb-3">
           <div>
@@ -496,7 +496,7 @@
         </div>
         <p id="taxPolicyStatus" class="text-[11px] text-amber-300 bg-slate-800/80 p-2.5 rounded-xl"></p>
         <a id="taxPolicySource" href="#" rel="noopener noreferrer" target="_blank" class="text-[11px] text-sky-300 underline hidden">Ver fonte oficial</a>
-        <p class="text-[11px] text-emerald-400 bg-slate-800/80 p-2.5 rounded-xl">
+        <p id="luxSocialNote" class="text-[11px] text-emerald-400 bg-slate-800/80 p-2.5 rounded-xl">
           ✔️ <strong>Contribuições aproximadas, dependentes do mês.</strong> Em 2026, a pensão tem taxa salarial de 8,50%; saúde 3,05% e dependência 1,40% após abatimento aplicável. A retenção fiscal continua simplificada. Verifique sempre o recibo e os parâmetros oficiais do CCSS.
         </p>
       </div>
@@ -984,6 +984,7 @@
           (employer === "FR" ? " França: 25 dias ouvrés equivalem a 30 jours ouvrables." : "");
       const tax = document.getElementById("taxPolicyStatus");
       const other = employer !== "LU";
+      document.getElementById("luxSocialNote").classList.toggle("hidden", other);
       document.getElementById("cfgTaxClass").disabled = other;
       document.getElementById("cfgTaxClass").parentElement.style.opacity = other ? "0.45" : "1";
       document.getElementById("cfgCisBox").style.opacity = other ? "0.45" : "1";
@@ -1226,13 +1227,17 @@
       document.getElementById("valCisCredit").textContent = "+ " + formatMoney(d.cisCreditApplied);
       document.getElementById("lblPensionRate").textContent =
         d.country === "LU" ? "Pensão (" + (d.socialParameters.pensionRate * 100).toFixed(2).replace(".", ",") + "% - modelo LU)" : "Pensão LU (não aplicável)";
-      document.getElementById("socialHeading").textContent = "2. Contribuições sociais — " + d.country + " (estimativa)";
+      document.getElementById("socialHeading").textContent =
+        "2. Contribuições sociais — " + d.country + " (estimativa parcial)";
       document.getElementById("countryTaxExplanation").textContent = d.taxStatus;
       document.getElementById("valSocialOther").textContent = "- " + formatMoney(d.socialOther);
       document.getElementById("socialOtherLabel").textContent =
         d.country === "PT" ? "Segurança Social (11% geral, estimada)" :
         d.country === "FR" ? "Contribuições sociais (taxa manual)" : "Contribuições sociais adicionais";
       document.getElementById("socialOtherRow").classList.toggle("hidden", d.country === "LU");
+      ["valCcssPension", "valCcssHealth", "valCcssDep", "valCisCredit"].forEach(id => {
+        document.getElementById(id).parentElement.classList.toggle("hidden", d.country !== "LU");
+      });
       document.getElementById("lblTaxClassUsed").title = d.taxStatus;
       document.getElementById("lblDepAllowance").textContent =
         d.country === "LU" ? "Dependência (1,40% após abatimento de " +
