@@ -32,7 +32,7 @@ jobs:
           npm init -y
           npm install @capacitor/core@^8 @capacitor/cli@^8 @capacitor/android@^8 @capacitor/filesystem@^8 @capacitor/share@^8
           mkdir -p www
-          cp index.html manifest.json sw.js pro-ui.css pro-ui.js country-rules.js wt-i18n.js www/
+          cp index.html manifest.json sw.js pro-ui.css pro-ui.js country-rules.js wt-i18n.js wt-widget.js www/
           # A branch de testes usa um identificador diferente para nunca substituir
           # a aplicação principal ou o seu armazenamento Android.
           if [ "$GITHUB_REF_NAME" = "worktime-pro-2" ]; then
@@ -46,6 +46,10 @@ jobs:
           echo "Aplicação Android: $APP_NAME ($APP_ID)"
           npx cap add android
           npx cap sync android
+
+      - name: Integrar widget Android nativo (apenas Preview)
+        if: github.ref_name == 'worktime-pro-2'
+        run: python3 scripts/install_android_widget.py
 
       - name: Compilar APK
         run: |
