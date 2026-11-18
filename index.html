@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="pt" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>WorkTime Pro</title>
+  <link rel="manifest" href="manifest.json" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: '#3b82f6'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body { -webkit-tap-highlight-color: transparent; font-family: system-ui, -apple-system, sans-serif; }
+    @media print {
+      .no-print { display: none !important; }
+      body { background: white !important; color: black !important; }
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen pb-24 transition-colors duration-200">
+
+  <!-- ECRÃ DE BLOQUEIO PIN -->
+  <div id="pinLockModal" class="fixed inset-0 bg-slate-950 z-50 hidden flex-col items-center justify-center p-6">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-xs text-center shadow-2xl">
+      <div class="text-4xl mb-3">🔒</div>
+      <h2 class="text-xl font-bold mb-1">App Bloqueado</h2>
+      <p class="text-xs text-slate-400 mb-4">Introduza o seu PIN de 4 dígitos</p>
+      <input id="pinInputPrompt" type="password" maxlength="4" inputmode="numeric" class="w-full text-center text-2xl tracking-widest bg-slate-800 border border-slate-700 rounded-xl p-3 mb-4 focus:outline-none focus:border-blue-500" placeholder="••••" />
+      <button onclick="unlockApp()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-xl">Desbloquear</button>
+      <p id="pinError" class="text-red-400 text-xs mt-2 hidden">PIN incorreto!</p>
+    </div>
+  </div>
+
+  <!-- CABEÇALHO FIXO -->
+  <header class="sticky top-0 z-30 bg-slate-900/90 backdrop-blur border-b border-slate-800 px-4 py-3 flex items-center justify-between no-print">
+    <div class="flex items-center gap-2">
+      <span class="bg-blue-600 text-white font-bold px-2.5 py-1 rounded-lg text-sm">WT</span>
+      <div>
+        <h1 class="font-bold text-base leading-tight" id="appTitle">WorkTime Pro</h1>
+        <p class="text-[11px] text-slate-400" id="headerSubtitle">Luxemburgo • Fiscalidade Oficial</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2">
+      <button onclick="togglePrivacy()" id="btnPrivacy" class="bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-1.5 rounded-xl text-xs font-medium flex items-center gap-1.5">
+        <span id="privacyIcon">👁️</span> <span id="privacyText">Valores</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- CONTEÚDO PRINCIPAL -->
+  <main class="max-w-xl mx-auto p-4 space-y-5">
+
+    <!-- ABA 1: REGISTO DIÁRIO -->
+    <section id="tab-registo" class="space-y-4">
+      <!-- Resumo Rápido do Mês no Topo -->
+      <div class="bg-gradient-to-br from-blue-900/50 to-slate-900 border border-blue-800/50 rounded-2xl p-4 shadow-lg">
+        <div class="flex justify-between items-center mb-2">
+          <span class="text-xs uppercase tracking-wider text-blue-300 font-semibold" data-i18n="quickSummary">Resumo do Mês Atual</span>
+          <input type="month" id="currentMonthPicker" onchange="renderAll()" class="bg-slate-800 text-xs text-white px-2.5 py-1 rounded-lg border border-slate-700" />
+        </div>
+        <div class="grid grid-cols-3 gap-2 text-center mt-3">
+          <div class="bg-slate-900/70 p-2.5 rounded-xl border border-slate-800">
+            <p class="text-[11px] text-slate-400" data-i18n="totalHours">Horas Totais</p>
+            <p class="text-lg font-bold text-white" id="quickTotalHours">0h</p>
+          </div>
+          <div class="bg-slate-900/70 p-2.5 rounded-xl border border-slate-800">
+            <p class="text-[11px] text-slate-400" data-i18n="overtimeHours">Horas Extras</p>
+            <p class="text-lg font-bold text-amber-400" id="quickExtraHours">0h</p>
+          </div>
+          <div class="bg-slate-900/70 p-2.5 rounded-xl border border-slate-800">
+            <p class="text-[11px] text-slate-400" data-i18n="estimatedNet">Líquido Est.</p>
+            <p class="text-lg font-bold text-emerald-400 money-val" id="quickNetPay">0,00 €</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Botão Preenchimento Rápido -->
+      <div class="flex gap-2">
+        <button onclick="fillStandardWeek()" class="flex-1 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-medium py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 text-blue-400">
+          ⚡ <span data-i18n="fillWeek">Preencher Semana Padrão (Seg-Sex 8h)</span>
+        </button>
+      </div>
+
+      <!-- Formulário de Lançamento do Dia -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-4">
+        <h2 class="font-bold text-sm text-blue-400 uppercase tracking-wider" data-i18n="logDayTitle">Registar Dia de Trabalho</h2>
+        
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1" data-i18n="date">Data</label>
+            <input type="date" id="entryDate" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1" data-i18n="dayType">Tipo de Dia</label>
+            <select id="entryType" onchange="onDayTypeChange()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm">
+              <option value="work" data-i18n="typeWork">Trabalho Normal</option>
+              <option value="vacation" data-i18n="typeVacation">Férias (Média 3M)</option>
+              <option value="holiday" data-i18n="typeHoliday">Feriado Oficial</option>
+              <option value="sick" data-i18n="typeSick">Baixa Médica</option>
+              <option value="off" data-i18n="typeOff">Folga / Descanso</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="hoursInputsContainer" class="grid grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1" data-i18n="normalHours">H. Normais</label>
+            <input type="number" step="0.25" id="entryNormal" value="8" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm font-semibold" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1" data-i18n="extraHours">H. Extras</label>
+            <input type="number" step="0.25" id="entryExtra" value="0" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm font-semibold text-amber-400" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1" data-i18n="nightHours">H. Noturnas</label>
+            <input type="number" step="0.25" id="entryNight" value="0" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm font-semibold text-purple-400" />
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between bg-slate-800/60 p-3 rounded-xl border border-slate-800">
+          <div>
+            <p class="text-xs font-medium" data-i18n="applyBonusPanier">Incluir Bónus Horário + Subsídio Diário</p>
+            <p class="text-[11px] text-slate-400" id="bonusHintLabel">Bónus: 2,60 €/h • Panier: 0,00 €/dia</p>
+          </div>
+          <input type="checkbox" id="entryIncludeBonus" checked class="w-5 h-5 accent-blue-600 rounded" />
+        </div>
+
+        <div>
+          <label class="block text-xs text-slate-400 mb-1" data-i18n="notes">Notas (Rota, camião, observações)</label>
+          <input type="text" id="entryNote" placeholder="Ex: +2h extra descarga / rota sul" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
+        </div>
+
+        <button onclick="saveEntry()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl shadow-lg transition">
+          💾 <span data-i18n="saveDay">Guardar Registo do Dia</span>
+        </button>
+      </div>
+
+      <!-- Lista de Registos do Mês -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+        <h3 class="font-bold text-sm mb-3 text-slate-300" data-i18n="monthEntries">Registos Deste Mês</h3>
+        <div id="entriesList" class="space-y-2 text-xs"></div>
+      </div>
+    </section>
+
+    <!-- ABA 2: FOLHA SALARIAL / RESUMO -->
+    <section id="tab-folha" class="space-y-4 hidden">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-4">
+        <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+          <div>
+            <h2 class="font-bold text-base text-blue-400" data-i18n="payslipTitle">Simulação Fiche de Salaire</h2>
+            <p class="text-xs text-slate-400" id="payslipSubtitle">Cálculo Oficial Luxemburgo (CCSS + IRS)</p>
+          </div>
+          <button onclick="window.print()" class="no-print bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-1.5 rounded-xl text-xs font-medium">
+            🖨️ PDF / Imprimir
+          </button>
+        </div>
+
+        <!-- Rendimentos Brutos -->
+        <div class="space-y-2 text-sm">
+          <h3 class="text-xs font-bold uppercase text-slate-400 tracking-wider">1. Rendimentos Brutos</h3>
+          <div class="flex justify-between py-1 border-b border-slate-800/60">
+            <span id="lblNormalBreakdown">Horas Normais (0h)</span>
+            <span class="font-semibold money-val" id="valNormalGross">0,00 €</span>
+          </div>
+          <div class="flex justify-between py-1 border-b border-slate-800/60 text-amber-300">
+            <span id="lblExtraBreakdown">Horas Extras Isentas IRS (0h)</span>
+            <span class="font-semibold money-val" id="valExtraGross">0,00 €</span>
+          </div>
+          <div class="flex justify-between py-1 border-b border-slate-800/60 text-purple-300">
+            <span id="lblNightBreakdown">Suplemento Noturno (0h)</span>
+            <span class="font-semibold money-val" id="valNightGross">0,00 €</span>
+          </div>
+          <div class="flex justify-between py-1 border-b border-slate-800/60 text-cyan-300">
+            <span id="lblBonusBreakdown">Bónus Horário Fixo</span>
+            <span class="font-semibold money-val" id="valBonusGross">0,00 €</span>
+          </div>
+          <div class="flex justify-between py-1 border-b border-slate-800/60 text-emerald-300">
+            <span id="lblVacationBreakdown">Férias / Feriados ( c/ Média 3M )</span>
+            <span class="font-semibold money-val" id="valVacationGross">0,00 €</span>
+          </div>
+          <div class="flex justify-between py-1 border-b border-slate-800/60 text-slate-300">
+            <span id="lblPanierBreakdown">Subsídio Diário / Panier (Isento)</span>
+            <span class="font-semibold money-val" id="valPanierGross">0,00 €</span>
+          </div>
+          <div class="flex justify-between py-2 bg-slate-800/60 px-3 rounded-xl font-bold text-base">
+            <span>TOTAL BRUTO</span>
+            <span class="money-val text-white" id="valTotalGross">0,00 €</span>
+          </div>
+        </div>
+
+        <!-- Descontos Sociais CCSS Corrigidos -->
+        <div class="space-y-2 text-sm pt-2">
+          <h3 class="text-xs font-bold uppercase text-slate-400 tracking-wider">2. Segurança Social (CCSS: 12,45%)</h3>
+          <div class="flex justify-between py-1 border-b border-slate-800/60 text-red-300">
+            <span>Pensão (8,00% - isento em H. Extras)</span>
+            <span class="money-val" id="valCcssPension">- 0,00 €</span>
+          </div>
+          <div class="flex justify-between py-1 border-b border-slate-800/60 text-red-300">
+            <span>Saúde (3,05% - inclui base H. Extras)</span>
+            <span class="money-val" id="valCcssHealth">- 0,00 €</span>
+          </div>
+          <div class="flex justify-between py-1 border-b border-slate-800/60 text-red-300">
+            <span>Dependência (1,40% c/ abatimento 1/4 SSM)</span>
+            <span class="money-val" id="valCcssDep">- 0,00 €</span>
+          </div>
+          <div class="flex justify-between py-1 text-xs text-slate-400 italic">
+            <span>Seguro Acidente (AAA - Pago 100% pelo Patrão)</span>
+            <span>0,00 €</span>
+          </div>
+        </div>
+
+        <!-- Imposto IRS e Créditos -->
+        <div class="space-y-2 text-sm pt-2">
+          <h3 class="text-xs font-bold uppercase text-slate-400 tracking-wider">3. Imposto (IRS) e Créditos</h3>
+          <div class="flex justify-between py-1 border-b border-slate-800/60 text-red-400">
+            <span id="lblTaxClassUsed">Retenção IRS (Horas Extras = 0% IRS)</span>
+            <span class="money-val" id="valTaxIrs">- 0,00 €</span>
+          </div>
+          <div class="flex justify-between py-1 border-b border-slate-800/60 text-emerald-400">
+            <span>Crédito Fiscal Salariado (CIS)</span>
+            <span class="money-val" id="valCisCredit">+ 0,00 €</span>
+          </div>
+        </div>
+
+        <!-- Salário Líquido Final -->
+        <div class="bg-emerald-950/60 border border-emerald-700/60 p-4 rounded-2xl flex justify-between items-center">
+          <div>
+            <p class="text-xs uppercase text-emerald-300 font-bold">Salário Líquido Estimado</p>
+            <p class="text-[11px] text-slate-400">Valor a receber na conta bancária</p>
+          </div>
+          <p class="text-2xl font-extrabold text-emerald-400 money-val" id="valFinalNet">0,00 €</p>
+        </div>
+
+        <!-- Conferência com a Fiche de Salaire Real -->
+        <div class="bg-slate-800/50 border border-slate-700 rounded-xl p-3 space-y-2 no-print">
+          <p class="text-xs font-bold text-blue-300">🔍 Conferir com a Fiche de Salaire do Patrão</p>
+          <div class="flex gap-2 items-center">
+            <input type="number" step="0.01" id="realPayslipInput" oninput="comparePayslip()" placeholder="Digita o Líquido da folha (€)" class="flex-1 bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs" />
+            <span id="payslipDiffBadge" class="text-xs font-bold px-2.5 py-1.5 rounded-lg bg-slate-900">Diferença: 0,00 €</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ABA 3: FÉRIAS E FERIADOS -->
+    <section id="tab-ferias" class="space-y-4 hidden">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-4">
+        <h2 class="font-bold text-base text-blue-400">🏖️ Saldo de Férias e Média de 3 Meses</h2>
+        <div class="grid grid-cols-3 gap-2 text-center">
+          <div class="bg-slate-800 p-3 rounded-xl">
+            <p class="text-xs text-slate-400">Direito Anual</p>
+            <p class="text-xl font-bold text-white" id="vacTotalAllowed">26 d</p>
+          </div>
+          <div class="bg-slate-800 p-3 rounded-xl">
+            <p class="text-xs text-slate-400">+ Compensatórios</p>
+            <p class="text-xl font-bold text-amber-400" id="vacCompensatory">+0 d</p>
+          </div>
+          <div class="bg-slate-800 p-3 rounded-xl">
+            <p class="text-xs text-slate-400">Saldo Restante</p>
+            <p class="text-xl font-bold text-emerald-400" id="vacRemaining">26 d</p>
+          </div>
+        </div>
+
+        <div class="bg-blue-950/40 border border-blue-800/50 p-3 rounded-xl text-xs space-y-1">
+          <p class="font-bold text-blue-300">💡 Valor Real do teu Dia de Férias (Lei do Luxemburgo):</p>
+          <p class="text-slate-300">Incluindo a média de horas extras e bónus horaires, cada dia de férias teu vale aproximadamente <strong class="text-white money-val" id="vacDailyValue">0,00 €</strong> brutos.</p>
+        </div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+        <h3 class="font-bold text-sm text-slate-200">📅 Feriados Oficiais 2026 (Luxemburgo)</h3>
+        <p class="text-xs text-slate-400">Feriados que calham ao Sábado ou Domingo dão direito a <strong>+1 dia de férias compensatório</strong> (Congé Compensatoire).</p>
+        <div id="holidaysList" class="space-y-2 text-xs"></div>
+      </div>
+    </section>
+
+    <!-- ABA 4: CONFIGURAÇÕES (OS 7 BLOCOS DO TEU APP MELHORADOS) -->
+    <section id="tab-config" class="space-y-4 hidden">
+      <h1 class="text-xl font-bold px-1" data-i18n="settingsTitle">Configurações</h1>
+
+      <!-- 1. Taxas e Valores -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+        <h3 class="font-bold text-sm text-blue-400">1. Taxas e Valores</h3>
+        <div class="grid grid-cols-2 gap-3 text-xs">
+          <div>
+            <label class="block text-slate-400 mb-1">Valor Hora Base (€/h)</label>
+            <input type="number" step="0.01" id="cfgHourlyRate" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm font-bold" />
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">Bónus Horário Fixo (€/h)</label>
+            <input type="number" step="0.01" id="cfgHourlyBonus" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm font-bold text-cyan-400" />
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">Majoração Hora Extra (%)</label>
+            <input type="number" step="1" id="cfgOvertimePct" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">Majoração Noturna (%)</label>
+            <input type="number" step="1" id="cfgNightPct" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">Subsídio Diário / Panier (€/dia)</label>
+            <input type="number" step="0.10" id="cfgDailyPanier" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">Média 3M Extra p/ Férias (€/dia)</label>
+            <input type="number" step="0.10" id="cfgVacAvgSupplement" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. Sistema de Impostos -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+        <h3 class="font-bold text-sm text-blue-400">2. Sistema de Impostos</h3>
+        <div class="grid grid-cols-2 gap-3 text-xs">
+          <div>
+            <label class="block text-slate-400 mb-1">Regime Fiscal</label>
+            <select id="cfgTaxSystem" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm">
+              <option value="luxembourg">Luxemburgo (Oficial)</option>
+              <option value="custom">Personalizado</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">Classe de Imposto</label>
+            <select id="cfgTaxClass" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm font-bold">
+              <option value="1">Classe 1 (Solteiro/Divorciado)</option>
+              <option value="1a">Classe 1a (Monoparental)</option>
+              <option value="2">Classe 2 (Casado / PACS)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">Taxa IRS Manual Opcional (%)</label>
+            <input type="number" step="0.1" id="cfgManualTaxRate" placeholder="Automático se 0" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">Crédito Fiscal CIS (€/mês)</label>
+            <input type="number" step="1" id="cfgCisCredit" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
+          </div>
+        </div>
+        <p class="text-[11px] text-emerald-400 bg-slate-800/80 p-2.5 rounded-xl">
+          ✔️ <strong>CCSS Corrigida: 12,45%</strong> (Pensão 8,00% + Saúde 3,05% + Dependência 1,40% com abatimento de 675,94 €). Seguro de acidente (0%) pago pelo empregador. Horas extras isentas de IRS.
+        </p>
+      </div>
+
+      <!-- 3. Idioma -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
+        <h3 class="font-bold text-sm text-blue-400">3. Idioma</h3>
+        <select id="cfgLang" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm">
+          <option value="pt">🇵🇹 Português</option>
+          <option value="fr">🇫🇷 Français</option>
+          <option value="de">🇩🇪 Deutsch</option>
+          <option value="lu">🇱🇺 Lëtzebuergesch</option>
+          <option value="en">🇬🇧 English</option>
+          <option value="es">🇪🇸 Español</option>
+        </select>
+      </div>
+
+      <!-- 4. País dos Feriados e Férias -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+        <h3 class="font-bold text-sm text-blue-400">4. País dos Feriados e Férias</h3>
+        <div class="grid grid-cols-2 gap-3 text-xs">
+          <div>
+            <label class="block text-slate-400 mb-1">Calendário Oficial</label>
+            <select id="cfgHolidayCountry" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm">
+              <option value="LU">🇱🇺 Luxemburgo (11 Feriados)</option>
+              <option value="PT">🇵🇹 Portugal</option>
+              <option value="FR">🇫🇷 França</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">Dias de Férias Base / Ano</label>
+            <input type="number" id="cfgAnnualVacation" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm font-bold" />
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. Aparência -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center justify-between">
+        <div>
+          <h3 class="font-bold text-sm text-blue-400">5. Aparência</h3>
+          <p class="text-xs text-slate-400">Alternar entre Modo Escuro e Claro</p>
+        </div>
+        <button onclick="toggleTheme()" class="bg-slate-800 border border-slate-700 px-4 py-2 rounded-xl text-xs font-bold">
+          🌗 Alternar Tema
+        </button>
+      </div>
+
+      <!-- 6. Dados e Backup -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+        <h3 class="font-bold text-sm text-blue-400">6. Dados e Backup</h3>
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <button onclick="exportBackupJSON()" class="bg-blue-600/20 border border-blue-500/40 text-blue-300 py-2.5 px-3 rounded-xl font-semibold">
+            ⬇️ Guardar Backup (.json)
+          </button>
+          <button onclick="exportCSV()" class="bg-emerald-600/20 border border-emerald-500/40 text-emerald-300 py-2.5 px-3 rounded-xl font-semibold">
+            📊 Exportar Excel (.csv)
+          </button>
+        </div>
+        <div>
+          <label class="block text-xs text-slate-400 mb-1">Restaurar Backup anterior (.json)</label>
+          <input type="file" accept=".json" onchange="importBackupJSON(event)" class="w-full text-xs bg-slate-800 border border-slate-700 rounded-xl p-2" />
+        </div>
+      </div>
+
+      <!-- 7. Segurança -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+        <h3 class="font-bold text-sm text-blue-400">7. Segurança</h3>
+        <div class="flex items-center gap-2">
+          <input type="password" maxlength="4" inputmode="numeric" id="cfgSecurityPin" placeholder="Definir PIN de 4 dígitos (vazio = sem PIN)" class="flex-1 bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs" />
+          <button onclick="saveSettings()" class="bg-slate-800 border border-slate-700 px-4 py-2.5 rounded-xl text-xs font-bold text-emerald-400">Guardar PIN</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- BARRA DE NAVEGAÇÃO INFERIOR -->
+  <nav class="fixed bottom-0 inset-x-0 bg-slate-900/95 backdrop-blur border-t border-slate-800 z-40 no-print">
+    <div class="max-w-xl mx-auto grid grid-cols-4 py-2 text-center text-xs">
+      <button onclick="switchTab('registo')" id="nav-registo" class="flex flex-col items-center gap-1 text-blue-400 font-bold">
+        <span class="text-lg">⏱️</span>
+        <span data-i18n="navLog">Registo</span>
+      </button>
+      <button onclick="switchTab('folha')" id="nav-folha" class="flex flex-col items-center gap-1 text-slate-400">
+        <span class="text-lg">💶</span>
+        <span data-i18n="navPayslip">Salário</span>
+      </button>
+      <button onclick="switchTab('ferias')" id="nav-ferias" class="flex flex-col items-center gap-1 text-slate-400">
+        <span class="text-lg">🏖️</span>
+        <span data-i18n="navVacation">Férias</span>
+      </button>
+      <button onclick="switchTab('config')" id="nav-config" class="flex flex-col items-center gap-1 text-slate-400">
+        <span class="text-lg">⚙️</span>
+        <span data-i18n="navSettings">Configurações</span>
+      </button>
+    </div>
+  </nav>
+
+  <script>
+    // Dicionário Multi-Idioma (6 línguas)
+    const i18n = {
+      pt: { quickSummary: "Resumo do Mês Atual", totalHours: "Horas Totais", overtimeHours: "Horas Extras", estimatedNet: "Líquido Est.", fillWeek: "Preencher Semana Padrão (Seg-Sex 8h)", logDayTitle: "Registar Dia de Trabalho", date: "Data", dayType: "Tipo de Dia", normalHours: "H. Normais", extraHours: "H. Extras", nightHours: "H. Noturnas", saveDay: "Guardar Registo do Dia", monthEntries: "Registos Deste Mês", navLog: "Registo", navPayslip: "Salário", navVacation: "Férias", navSettings: "Configurações", settingsTitle: "Configurações" },
+      fr: { quickSummary: "Résumé du Mois", totalHours: "Heures Totales", overtimeHours: "Heures Supp.", estimatedNet: "Salaire Net Est.", fillWeek: "Remplir Semaine Standard (Lun-Ven 8h)", logDayTitle: "Enregistrer Journée", date: "Date", dayType: "Type de Jour", normalHours: "H. Normales", extraHours: "H. Supp.", nightHours: "H. Nuit", saveDay: "Enregistrer la Journée", monthEntries: "Entrées du Mois", navLog: "Pointage", navPayslip: "Fiche Paie", navVacation: "Congés", navSettings: "Paramètres", settingsTitle: "Paramètres" },
+      de: { quickSummary: "Monatsübersicht", totalHours: "Gesamtstunden", overtimeHours: "Überstunden", estimatedNet: "Netto Geschätzt", fillWeek: "Standardwoche füllen (Mo-Fr 8h)", logDayTitle: "Arbeitstag erfassen", date: "Datum", dayType: "Tagestyp", normalHours: "Normalstd.", extraHours: "Überstd.", nightHours: "Nachtstd.", saveDay: "Tag speichern", monthEntries: "Monatseinträge", navLog: "Erfassung", navPayslip: "Lohnzettel", navVacation: "Urlaub", navSettings: "Optionen", settingsTitle: "Einstellungen" },
+      lu: { quickSummary: "Mount Iwwerbléck", totalHours: "Total Stonnen", overtimeHours: "Iwwerstonnen", estimatedNet: "Netto Geschätzt", fillWeek: "Standardwoch fëllen (Méi-Fré 8h)", logDayTitle: "Aarbechtsdag späicheren", date: "Datum", dayType: "Dag Typ", normalHours: "Normal St.", extraHours: "Iwwerstonnen", nightHours: "Nuecht St.", saveDay: "Dag späicheren", monthEntries: "Aschreiwungen vum Mount", navLog: "Stonnen", navPayslip: "Paie", navVacation: "Congé", navSettings: "Astellungen", settingsTitle: "Astellungen" },
+      en: { quickSummary: "Current Month Summary", totalHours: "Total Hours", overtimeHours: "Overtime", estimatedNet: "Est. Net Pay", fillWeek: "Fill Standard Week (Mon-Fri 8h)", logDayTitle: "Log Work Day", date: "Date", dayType: "Day Type", normalHours: "Normal Hrs", extraHours: "Overtime", nightHours: "Night Hrs", saveDay: "Save Work Day", monthEntries: "This Month's Logs", navLog: "Log", navPayslip: "Payslip", navVacation: "Holidays", navSettings: "Settings", settingsTitle: "Settings" },
+      es: { quickSummary: "Resumen del Mes", totalHours: "Horas Totales", overtimeHours: "Horas Extra", estimatedNet: "Neto Est.", fillWeek: "Rellenar Semana Estándar (Lun-Vie 8h)", logDayTitle: "Registrar Día", date: "Fecha", dayType: "Tipo de Día", normalHours: "H. Normales", extraHours: "H. Extra", nightHours: "H. Nocturnas", saveDay: "Guardar Día", monthEntries: "Registros del Mes", navLog: "Registro", navPayslip: "Nómina", navVacation: "Vacaciones", navSettings: "Ajustes", settingsTitle: "Configuración" }
+    };
+
+    // Feriados Oficiais Luxemburgo 2026
+    const luxHolidays2026 = [
+      { date: "2026-01-01", name: "Ano Novo (Neijoerschdag)" },
+      { date: "2026-04-06", name: "Segunda-feira de Páscoa (Ouschterméindeg)" },
+      { date: "2026-05-01", name: "Dia do Trabalhador (Dag vun der Aarbecht)" },
+      { date: "2026-05-09", name: "Dia da Europa (Europadag)" },
+      { date: "2026-05-14", name: "Ascensão (Christi Himmelfaart)" },
+      { date: "2026-05-25", name: "Segunda-feira de Pentecostes (Péngschtméindeg)" },
+      { date: "2026-06-23", name: "Dia Nacional do Luxemburgo (Nationalfeierdag)" },
+      { date: "2026-08-15", name: "Assunção (Mariä Himmelfaart)" },
+      { date: "2026-11-01", name: "Todos os Santos (Allerhellgen)" },
+      { date: "2026-12-25", name: "Natal (Chrëschtdag)" },
+      { date: "2026-12-26", name: "Santo Estêvão (Stiefesdag)" }
+    ];
+
+    // Configurações Padrão
+    const defaultSettings = {
+      hourlyRate: 18.50,
+      hourlyBonus: 2.60,
+      overtimePct: 40,
+      nightPct: 15,
+      dailyPanier: 0.00,
+      vacAvgSupplement: 24.00,
+      taxSystem: "luxembourg",
+      taxClass: "2",
+      manualTaxRate: 0,
+      cisCredit: 50,
+      lang: "pt",
+      holidayCountry: "LU",
+      annualVacation: 26,
+      securityPin: ""
+    };
+
+    let settings = JSON.parse(localStorage.getItem("wt_settings")) || defaultSettings;
+    let entries = JSON.parse(localStorage.getItem("wt_entries")) || {};
+    let privacyMode = false;
+
+    function initApp() {
+      const today = new Date().toISOString().slice(0, 10);
+      document.getElementById("entryDate").value = today;
+      document.getElementById("currentMonthPicker").value = today.slice(0, 7);
+
+      if (settings.securityPin && settings.securityPin.length === 4) {
+        document.getElementById("pinLockModal").classList.remove("hidden");
+        document.getElementById("pinLockModal").classList.add("flex");
+      }
+
+      loadSettingsToInputs();
+      renderAll();
+
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js').catch(() => {});
+      }
+    }
+
+    function unlockApp() {
+      const val = document.getElementById("pinInputPrompt").value;
+      if (val === settings.securityPin) {
+        document.getElementById("pinLockModal").classList.add("hidden");
+      } else {
+        document.getElementById("pinError").classList.remove("hidden");
+      }
+    }
+
+    function loadSettingsToInputs() {
+      document.getElementById("cfgHourlyRate").value = settings.hourlyRate;
+      document.getElementById("cfgHourlyBonus").value = settings.hourlyBonus;
+      document.getElementById("cfgOvertimePct").value = settings.overtimePct;
+      document.getElementById("cfgNightPct").value = settings.nightPct;
+      document.getElementById("cfgDailyPanier").value = settings.dailyPanier;
+      document.getElementById("cfgVacAvgSupplement").value = settings.vacAvgSupplement;
+      document.getElementById("cfgTaxSystem").value = settings.taxSystem;
+      document.getElementById("cfgTaxClass").value = settings.taxClass;
+      document.getElementById("cfgManualTaxRate").value = settings.manualTaxRate;
+      document.getElementById("cfgCisCredit").value = settings.cisCredit;
+      document.getElementById("cfgLang").value = settings.lang;
+      document.getElementById("cfgHolidayCountry").value = settings.holidayCountry;
+      document.getElementById("cfgAnnualVacation").value = settings.annualVacation;
+      document.getElementById("cfgSecurityPin").value = settings.securityPin || "";
+      document.getElementById("bonusHintLabel").textContent = `Bónus: ${Number(settings.hourlyBonus).toFixed(2)} €/h • Panier: ${Number(settings.dailyPanier).toFixed(2)} €/dia`;
+      applyTranslations();
+    }
+
+    function saveSettings() {
+      settings.hourlyRate = parseFloat(document.getElementById("cfgHourlyRate").value) || 0;
+      settings.hourlyBonus = parseFloat(document.getElementById("cfgHourlyBonus").value) || 0;
+      settings.overtimePct = parseFloat(document.getElementById("cfgOvertimePct").value) || 40;
+      settings.nightPct = parseFloat(document.getElementById("cfgNightPct").value) || 15;
+      settings.dailyPanier = parseFloat(document.getElementById("cfgDailyPanier").value) || 0;
+      settings.vacAvgSupplement = parseFloat(document.getElementById("cfgVacAvgSupplement").value) || 0;
+      settings.taxSystem = document.getElementById("cfgTaxSystem").value;
+      settings.taxClass = document.getElementById("cfgTaxClass").value;
+      settings.manualTaxRate = parseFloat(document.getElementById("cfgManualTaxRate").value) || 0;
+      settings.cisCredit = parseFloat(document.getElementById("cfgCisCredit").value) || 0;
+      settings.lang = document.getElementById("cfgLang").value;
+      settings.holidayCountry = document.getElementById("cfgHolidayCountry").value;
+      settings.annualVacation = parseInt(document.getElementById("cfgAnnualVacation").value) || 26;
+      settings.securityPin = document.getElementById("cfgSecurityPin").value.trim();
+
+      localStorage.setItem("wt_settings", JSON.stringify(settings));
+      loadSettingsToInputs();
+      renderAll();
+    }
+
+    function applyTranslations() {
+      const dict = i18n[settings.lang] || i18n.pt;
+      document.querySelectorAll("[data-i18n]").forEach(el => {
+        const key = el.getAttribute("data-i18n");
+        if (dict[key]) el.textContent = dict[key];
+      });
+    }
+
+    function onDayTypeChange() {
+      const type = document.getElementById("entryType").value;
+      if (type === "off") {
+        document.getElementById("entryNormal").value = 0;
+        document.getElementById("entryExtra").value = 0;
+      } else {
+        document.getElementById("entryNormal").value = 8;
+      }
+    }
+
+    function saveEntry() {
+      const date = document.getElementById("entryDate").value;
+      if (!date) return;
+      entries[date] = {
+        date,
+        type: document.getElementById("entryType").value,
+        normal: parseFloat(document.getElementById("entryNormal").value) || 0,
+        extra: parseFloat(document.getElementById("entryExtra").value) || 0,
+        night: parseFloat(document.getElementById("entryNight").value) || 0,
+        includeBonus: document.getElementById("entryIncludeBonus").checked,
+        note: document.getElementById("entryNote").value.trim()
+      };
+      localStorage.setItem("wt_entries", JSON.stringify(entries));
+      document.getElementById("entryNote").value = "";
+      renderAll();
+    }
+
+    function deleteEntry(date) {
+      delete entries[date];
+      localStorage.setItem("wt_entries", JSON.stringify(entries));
+      renderAll();
+    }
+
+    function fillStandardWeek() {
+      const baseDate = new Date(document.getElementById("entryDate").value || new Date());
+      const day = baseDate.getDay();
+      const diffToMonday = baseDate.getDate() - day + (day === 0 ? -6 : 1);
+      const monday = new Date(baseDate.setDate(diffToMonday));
+
+      for (let i = 0; i < 5; i++) {
+        const d = new Date(monday);
+        d.setDate(monday.getDate() + i);
+        const iso = d.toISOString().slice(0, 10);
+        if (!entries[iso]) {
+          entries[iso] = { date: iso, type: "work", normal: 8, extra: 0, night: 0, includeBonus: true, note: "Semana padrão" };
+        }
+      }
+      localStorage.setItem("wt_entries", JSON.stringify(entries));
+      renderAll();
+    }
+
+    function formatMoney(val) {
+      if (privacyMode) return "€ ••••,••";
+      return val.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + " €";
+    }
+
+    function togglePrivacy() {
+      privacyMode = !privacyMode;
+      document.getElementById("privacyIcon").textContent = privacyMode ? "🙈" : "👁️";
+      renderAll();
+    }
+
+    function toggleTheme() {
+      document.documentElement.classList.toggle("dark");
+      document.body.classList.toggle("bg-slate-950");
+      document.body.classList.toggle("bg-slate-100");
+      document.body.classList.toggle("text-slate-100");
+      document.body.classList.toggle("text-slate-900");
+    }
+
+    function calculateMonthData(monthPrefix) {
+      let normalH = 0, extraH = 0, nightH = 0, bonusH = 0, workDays = 0, vacDays = 0;
+      const monthEntries = Object.values(entries)
+        .filter(e => e.date.startsWith(monthPrefix))
+        .sort((a, b) => b.date.localeCompare(a.date));
+
+      monthEntries.forEach(e => {
+        if (e.type === "work") {
+          normalH += e.normal;
+          extraH += e.extra;
+          nightH += e.night;
+          if (e.includeBonus) {
+            bonusH += (e.normal + e.extra);
+            workDays += 1;
+          }
+        } else if (e.type === "vacation" || e.type === "holiday") {
+          vacDays += 1;
+        } else if (e.type === "sick") {
+          normalH += e.normal;
+        }
+      });
+
+      const rate = settings.hourlyRate;
+      const normalGross = normalH * rate;
+      const extraBaseGross = extraH * rate;
+      const extraMajorationGross = extraBaseGross * (settings.overtimePct / 100);
+      const extraTotalGross = extraBaseGross + extraMajorationGross;
+      const nightGross = nightH * rate * (settings.nightPct / 100);
+      const bonusGross = bonusH * settings.hourlyBonus;
+      const vacDailyBase = (8 * rate) + (8 * settings.hourlyBonus) + settings.vacAvgSupplement;
+      const vacationGross = vacDays * vacDailyBase;
+      const panierGross = workDays * settings.dailyPanier;
+
+      const totalGross = normalGross + extraTotalGross + nightGross + bonusGross + vacationGross + panierGross;
+
+      // Base tributável normal (exclui Horas Extras e Panier)
+      const regularContributoryGross = normalGross + nightGross + bonusGross + vacationGross;
+
+      // CCSS Oficial Luxemburgo:
+      // 1. Pensão (8% apenas sobre salário normal/bónus/férias — Horas extras são isentas de pensão)
+      const ccssPension = regularContributoryGross * 0.08;
+      // 2. Saúde (3.05% sobre base normal + parte base das horas extras; majoração é isenta)
+      const ccssHealth = (regularContributoryGross + extraBaseGross) * 0.0305;
+      // 3. Dependência (1.40% após abatimento de 1/4 SSM = 675.94 €)
+      const depBase = Math.max(0, (regularContributoryGross + extraBaseGross) - 675.94);
+      const ccssDep = depBase * 0.014;
+
+      // Base de IRS (Horas extras são 100% isentas de IRS no Luxemburgo; deduz Pensão e Saúde)
+      const taxableIrsBase = Math.max(0, regularContributoryGross - ccssPension - ccssHealth);
+
+      let effectiveTaxRate = 0;
+      if (settings.manualTaxRate > 0) {
+        effectiveTaxRate = settings.manualTaxRate / 100;
+      } else {
+        // Estimativa progressiva realista Luxemburgo por Classe
+        if (settings.taxClass === "2") {
+          effectiveTaxRate = taxableIrsBase > 4500 ? 0.11 : (taxableIrsBase > 3200 ? 0.065 : 0.02);
+        } else if (settings.taxClass === "1a") {
+          effectiveTaxRate = taxableIrsBase > 4000 ? 0.14 : 0.07;
+        } else {
+          effectiveTaxRate = taxableIrsBase > 4000 ? 0.19 : (taxableIrsBase > 3000 ? 0.13 : 0.08);
+        }
+      }
+
+      const taxIrs = taxableIrsBase * effectiveTaxRate;
+      const totalDeductions = ccssPension + ccssHealth + ccssDep + taxIrs;
+      const finalNet = totalGross - totalDeductions + settings.cisCredit;
+
+      return {
+        monthEntries, normalH, extraH, nightH, vacDays,
+        normalGross, extraTotalGross, nightGross, bonusGross, vacationGross, panierGross,
+        totalGross, ccssPension, ccssHealth, ccssDep, taxIrs, effectiveTaxRate, finalNet, vacDailyBase
+      };
+    }
+
+    function renderAll() {
+      const monthPrefix = document.getElementById("currentMonthPicker").value || new Date().toISOString().slice(0, 7);
+      const d = calculateMonthData(monthPrefix);
+
+      // Resumo Rápido
+      document.getElementById("quickTotalHours").textContent = (d.normalH + d.extraH) + "h";
+      document.getElementById("quickExtraHours").textContent = "+" + d.extraH + "h";
+      document.getElementById("quickNetPay").textContent = formatMoney(d.finalNet);
+
+      // Lista de Registos do Mês
+      const listEl = document.getElementById("entriesList");
+      if (d.monthEntries.length === 0) {
+        listEl.innerHTML = `<p class="text-slate-500 py-3 text-center">Nenhum registo neste mês. Usa o botão acima para preencher.</p>`;
+      } else {
+        listEl.innerHTML = d.monthEntries.map(e => {
+          const badge = e.type === "work" ? `${e.normal}h normais ${e.extra > 0 ? `<span class="text-amber-400 font-bold">+${e.extra}h extra</span>` : ""}` : e.type.toUpperCase();
+          return `
+            <div class="flex items-center justify-between bg-slate-800/70 p-2.5 rounded-xl border border-slate-800">
+              <div>
+                <span class="font-bold text-white mr-2">${e.date}</span>
+                <span class="text-slate-300">${badge}</span>
+                ${e.note ? `<p class="text-[11px] text-slate-400 mt-0.5">📝 ${e.note}</p>` : ""}
+              </div>
+              <button onclick="deleteEntry('${e.date}')" class="text-red-400 hover:text-red-300 px-2 py-1">🗑️</button>
+            </div>
+          `;
+        }).join("");
+      }
+
+      // Aba Folha de Salário
+      document.getElementById("lblNormalBreakdown").textContent = `Horas Normais (${d.normalH}h × ${settings.hourlyRate.toFixed(2)} €)`;
+      document.getElementById("valNormalGross").textContent = formatMoney(d.normalGross);
+      document.getElementById("lblExtraBreakdown").textContent = `Horas Extras +${settings.overtimePct}% (${d.extraH}h - Isento IRS)`;
+      document.getElementById("valExtraGross").textContent = formatMoney(d.extraTotalGross);
+      document.getElementById("lblNightBreakdown").textContent = `Suplemento Noturno +${settings.nightPct}% (${d.nightH}h)`;
+      document.getElementById("valNightGross").textContent = formatMoney(d.nightGross);
+      document.getElementById("lblBonusBreakdown").textContent = `Bónus Horário (${settings.hourlyBonus.toFixed(2)} €/h)`;
+      document.getElementById("valBonusGross").textContent = formatMoney(d.bonusGross);
+      document.getElementById("lblVacationBreakdown").textContent = `Férias / Feriados (${d.vacDays} dias c/ Média 3M)`;
+      document.getElementById("valVacationGross").textContent = formatMoney(d.vacationGross);
+      document.getElementById("valPanierGross").textContent = formatMoney(d.panierGross);
+      document.getElementById("valTotalGross").textContent = formatMoney(d.totalGross);
+
+      document.getElementById("valCcssPension").textContent = "- " + formatMoney(d.ccssPension);
+      document.getElementById("valCcssHealth").textContent = "- " + formatMoney(d.ccssHealth);
+      document.getElementById("valCcssDep").textContent = "- " + formatMoney(d.ccssDep);
+      document.getElementById("lblTaxClassUsed").textContent = `Retenção IRS (Classe ${settings.taxClass} • ${(d.effectiveTaxRate * 100).toFixed(1)}%)`;
+      document.getElementById("valTaxIrs").textContent = "- " + formatMoney(d.taxIrs);
+      document.getElementById("valCisCredit").textContent = "+ " + formatMoney(settings.cisCredit);
+      document.getElementById("valFinalNet").textContent = formatMoney(d.finalNet);
+
+      // Aba Férias e Feriados Compensatórios
+      const allVacUsed = Object.values(entries).filter(e => e.type === "vacation").length;
+      let compDays = 0;
+      const holHtml = luxHolidays2026.map(h => {
+        const dayOfWeek = new Date(h.date).getDay();
+        const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+        if (isWeekend) compDays++;
+        return `
+          <div class="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl border border-slate-800">
+            <div>
+              <span class="font-bold text-white mr-2">${h.date}</span>
+              <span>${h.name}</span>
+            </div>
+            ${isWeekend ? `<span class="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-lg text-[10px] font-bold">+1 Dia Compensatório</span>` : `<span class="text-slate-400 text-[10px]">Dia Útil</span>`}
+          </div>
+        `;
+      }).join("");
+
+      document.getElementById("holidaysList").innerHTML = holHtml;
+      document.getElementById("vacTotalAllowed").textContent = settings.annualVacation + " d";
+      document.getElementById("vacCompensatory").textContent = "+" + compDays + " d";
+      document.getElementById("vacRemaining").textContent = (settings.annualVacation + compDays - allVacUsed) + " d";
+      document.getElementById("vacDailyValue").textContent = formatMoney(d.vacDailyBase);
+
+      window.lastCalculatedNet = d.finalNet;
+      comparePayslip();
+    }
+
+    function comparePayslip() {
+      const realVal = parseFloat(document.getElementById("realPayslipInput").value);
+      const badge = document.getElementById("payslipDiffBadge");
+      if (isNaN(realVal)) {
+        badge.textContent = "Diferença: 0,00 €";
+        badge.className = "text-xs font-bold px-2.5 py-1.5 rounded-lg bg-slate-900 text-slate-300";
+        return;
+      }
+      const diff = realVal - (window.lastCalculatedNet || 0);
+      const sign = diff >= 0 ? "+" : "";
+      badge.textContent = `Diferença: ${sign}${diff.toFixed(2)} €`;
+      badge.className = `text-xs font-bold px-2.5 py-1.5 rounded-lg ${Math.abs(diff) < 5 ? "bg-emerald-900/60 text-emerald-300" : "bg-amber-900/60 text-amber-300"}`;
+    }
+
+    function switchTab(tab) {
+      ["registo", "folha", "ferias", "config"].forEach(t => {
+        document.getElementById("tab-" + t).classList.toggle("hidden", t !== tab);
+        const navBtn = document.getElementById("nav-" + t);
+        navBtn.className = t === tab ? "flex flex-col items-center gap-1 text-blue-400 font-bold" : "flex flex-col items-center gap-1 text-slate-400";
+      });
+    }
+
+    function exportBackupJSON() {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify({ settings, entries }, null, 2));
+      const a = document.createElement("a");
+      a.href = dataStr;
+      a.download = "worktime_backup.json";
+      a.click();
+    }
+
+    function importBackupJSON(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = e => {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          if (parsed.settings) settings = parsed.settings;
+          if (parsed.entries) entries = parsed.entries;
+          localStorage.setItem("wt_settings", JSON.stringify(settings));
+          localStorage.setItem("wt_entries", JSON.stringify(entries));
+          loadSettingsToInputs();
+          renderAll();
+          alert("Backup restaurado com sucesso!");
+        } catch (err) {
+          alert("Ficheiro inválido.");
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function exportCSV() {
+      let csv = "Data,Tipo,Horas Normais,Horas Extras,Horas Noturnas,Notas\n";
+      Object.values(entries).sort((a,b) => a.date.localeCompare(b.date)).forEach(e => {
+        csv += `${e.date},${e.type},${e.normal},${e.extra},${e.night},"${e.note || ""}"\n`;
+      });
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "horas_trabalho.csv";
+      a.click();
+    }
+
+    window.addEventListener("DOMContentLoaded", initApp);
+  </script>
+</body>
+</html>
