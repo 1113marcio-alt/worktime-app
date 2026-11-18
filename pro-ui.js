@@ -383,8 +383,8 @@
         start:draft.start,end:draft.end,seconds:draft.seconds,breaks:draft.breaks,
         id:draft.id || null,source:draft.source || "app"});
     }
-    rows.sort((a,b)=>(String(b.end || b.start || b.date))
-      .localeCompare(String(a.end || a.start || a.date))));
+    rows.sort((a,b)=>String(b.end || b.start || b.date)
+      .localeCompare(String(a.end || a.start || a.date)));
     return rows;
   }
 
