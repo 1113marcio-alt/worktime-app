@@ -74,9 +74,10 @@
       </div>
 
       <div class="wt-hero">
-        <div class="wt-flex"><span class="text-xs text-blue-100 font-semibold">💶 Líquido estimado</span><span class="wt-pill">Estimativa</span></div>
+        <div class="wt-flex"><span class="text-xs text-blue-100 font-semibold">💶 Líquido parcial, sem CIS</span><span class="wt-pill">Estimativa</span></div>
         <p id="homeNet" class="wt-hero-amount money-val">0,00 €</p>
         <p id="homeMonth" class="text-xs text-blue-200">Mês atual</p>
+        <p id="homeCreditNotice" class="text-xs text-blue-200 mt-2 leading-relaxed">Os créditos fiscais são apresentados à parte.</p>
         <div class="wt-balance-row">
           <div class="wt-balance-cell"><span>Bruto estimado</span><strong id="homeGross" class="money-val">0,00 €</strong></div>
           <div class="wt-balance-cell"><span>Horas no mês</span><strong id="homeHours">0 h</strong></div>
@@ -260,9 +261,11 @@
     <section id="tab-folha" class="space-y-4 hidden">
       <div class="pt-1"><p class="wt-kicker">Ganhos e descontos</p><h2 class="wt-h1 mt-1">Salário e remuneração</h2></div>
       <div class="wt-hero">
-        <div class="wt-flex"><span class="text-xs text-blue-100 font-semibold">💳 Líquido estimado</span><span class="wt-pill">Não é recibo oficial</span></div>
+        <div class="wt-flex"><span class="text-xs text-blue-100 font-semibold">💳 Líquido parcial, sem CIS</span><span class="wt-pill">Não é recibo oficial</span></div>
         <p id="salaryPreviewNet" class="wt-hero-amount money-val">0,00 €</p>
-        <p class="text-xs text-blue-200">Remuneração mensal projetada a partir dos registos</p>
+        <p class="text-xs text-blue-200">Montante acumulado dos registos, antes do crédito CIS configurado.</p>
+        <p id="salaryPreviewCredit" class="text-xs text-blue-200 mt-3">CIS configurado: 0,00 € — sujeito a confirmação.</p>
+        <p id="salaryPreviewWithCredit" class="text-xs text-blue-200">Simulação incluindo CIS: 0,00 €</p>
         <div class="wt-balance-row">
           <div class="wt-balance-cell"><span>Bruto</span><strong class="money-val" id="salaryPreviewGross">0,00 €</strong></div>
           <div class="wt-balance-cell"><span>Descontos estim.</span><strong class="money-val" id="salaryPreviewDeductions">0,00 €</strong></div>
@@ -316,9 +319,9 @@
 
         <!-- Descontos Sociais CCSS Corrigidos -->
         <div class="space-y-2 text-sm pt-2">
-          <h3 class="text-xs font-bold uppercase text-slate-400 tracking-wider">2. Segurança Social (CCSS: 12,45%)</h3>
+          <h3 class="text-xs font-bold uppercase text-slate-400 tracking-wider">2. Contribuições sociais — estimativa LU</h3>
           <div class="flex justify-between py-1 border-b border-slate-800/60 text-red-300">
-            <span>Pensão (8,00% - isento em H. Extras)</span>
+            <span id="lblPensionRate">Pensão (modelo LU)</span>
             <span class="money-val" id="valCcssPension">- 0,00 €</span>
           </div>
           <div class="flex justify-between py-1 border-b border-slate-800/60 text-red-300">
@@ -326,7 +329,7 @@
             <span class="money-val" id="valCcssHealth">- 0,00 €</span>
           </div>
           <div class="flex justify-between py-1 border-b border-slate-800/60 text-red-300">
-            <span>Dependência (1,40% c/ abatimento 1/4 SSM)</span>
+            <span id="lblDepAllowance">Dependência (abatimento 1/4 SSM)</span>
             <span class="money-val" id="valCcssDep">- 0,00 €</span>
           </div>
           <div class="flex justify-between py-1 text-xs text-slate-400 italic">
@@ -464,7 +467,7 @@
           </div>
         </div>
         <p class="text-[11px] text-emerald-400 bg-slate-800/80 p-2.5 rounded-xl">
-          ✔️ <strong>CCSS Corrigida: 12,45%</strong> (Pensão 8,00% + Saúde 3,05% + Dependência 1,40% com abatimento de 675,94 €). Seguro de acidente (0%) pago pelo empregador. Horas extras isentas de IRS.
+          ✔️ <strong>Contribuições aproximadas, dependentes do mês.</strong> Em 2026, a pensão tem taxa salarial de 8,50%; saúde 3,05% e dependência 1,40% após abatimento aplicável. A retenção fiscal continua simplificada. Verifique sempre o recibo e os parâmetros oficiais do CCSS.
         </p>
       </div>
 
@@ -907,6 +910,17 @@
       document.body.classList.toggle("text-slate-900");
     }
 
+    // Parâmetros sociais LU: 2025/2026 com data de referência.
+    // Fonte: https://ccss.public.lu/fr/parametres-sociaux.html
+    // Fora destes períodos, o modelo legado continua aproximativo.
+    function getLuxSocialParameters(monthPrefix) {
+      if (monthPrefix >= "2026-01" && monthPrefix <= "2026-12")
+        return { pensionRate: 0.085, depAllowance: monthPrefix >= "2026-06" ? 692.83 : 675.94 };
+      if (monthPrefix >= "2025-01" && monthPrefix <= "2025-12")
+        return { pensionRate: 0.08, depAllowance: monthPrefix >= "2025-05" ? 675.94 : 659.45 };
+      return { pensionRate: 0.08, depAllowance: 675.94 };
+    }
+
     function calculateMonthData(monthPrefix) {
       let normalH = 0, extraH = 0, nightH = 0, bonusH = 0, workDays = 0, vacDays = 0;
       const monthEntries = Object.values(entries)
@@ -947,11 +961,12 @@
 
       // CCSS Oficial Luxemburgo:
       // 1. Pensão (8% apenas sobre salário normal/bónus/férias — Horas extras são isentas de pensão)
-      const ccssPension = regularContributoryGross * 0.08;
+      const socialParameters = getLuxSocialParameters(monthPrefix);
+      const ccssPension = regularContributoryGross * socialParameters.pensionRate;
       // 2. Saúde (3.05% sobre base normal + parte base das horas extras; majoração é isenta)
       const ccssHealth = (regularContributoryGross + extraBaseGross) * 0.0305;
       // 3. Dependência (1.40% após abatimento de 1/4 SSM = 675.94 €)
-      const depBase = Math.max(0, (regularContributoryGross + extraBaseGross) - 675.94);
+      const depBase = Math.max(0, (regularContributoryGross + extraBaseGross) - socialParameters.depAllowance);
       const ccssDep = depBase * 0.014;
 
       // Base de IRS (Horas extras são 100% isentas de IRS no Luxemburgo; deduz Pensão e Saúde)
@@ -973,12 +988,17 @@
 
       const taxIrs = taxableIrsBase * effectiveTaxRate;
       const totalDeductions = ccssPension + ccssHealth + ccssDep + taxIrs;
-      const finalNet = totalGross - totalDeductions + settings.cisCredit;
+      const netBeforeCredit = totalGross - totalDeductions;
+      // CIS é configurável, e a elegibilidade real não é verificada nesta simulação.
+      // Sem qualquer remuneração no mês, não gerar crédito fictício.
+      const cisCreditApplied = totalGross > 0 ? Math.max(0, Number(settings.cisCredit) || 0) : 0;
+      const finalNet = netBeforeCredit + cisCreditApplied;
 
       return {
         monthEntries, normalH, extraH, nightH, vacDays,
         normalGross, extraTotalGross, nightGross, bonusGross, vacationGross, panierGross,
-        totalGross, ccssPension, ccssHealth, ccssDep, taxIrs, effectiveTaxRate, finalNet, vacDailyBase
+        totalGross, ccssPension, ccssHealth, ccssDep, taxIrs, effectiveTaxRate,
+        netBeforeCredit, cisCreditApplied, socialParameters, finalNet, vacDailyBase
       };
     }
 
@@ -1035,7 +1055,12 @@
       document.getElementById("valCcssDep").textContent = "- " + formatMoney(d.ccssDep);
       document.getElementById("lblTaxClassUsed").textContent = `Retenção IRS (Classe ${settings.taxClass} • ${(d.effectiveTaxRate * 100).toFixed(1)}%)`;
       document.getElementById("valTaxIrs").textContent = "- " + formatMoney(d.taxIrs);
-      document.getElementById("valCisCredit").textContent = "+ " + formatMoney(settings.cisCredit);
+      document.getElementById("valCisCredit").textContent = "+ " + formatMoney(d.cisCreditApplied);
+      document.getElementById("lblPensionRate").textContent =
+        "Pensão (" + (d.socialParameters.pensionRate * 100).toFixed(2).replace(".", ",") + "% - modelo LU)";
+      document.getElementById("lblDepAllowance").textContent =
+        "Dependência (1,40% após abatimento de " +
+        d.socialParameters.depAllowance.toFixed(2).replace(".", ",") + " €)";
       document.getElementById("valFinalNet").textContent = formatMoney(d.finalNet);
 
       // Aba Férias e Feriados Compensatórios
