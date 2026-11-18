@@ -1080,9 +1080,19 @@
       if (typeof window.scrollTo === "function") window.scrollTo(0, 0);
     }
 
-    // O formato antigo { settings, entries } mantém-se compatível.
+    // O formato original { settings, entries } continua a ser aceite na importação.
+    // Campos adicionais guardam turnos em curso/rascunhos da versão 2.
+    function snapshotAllData() {
+      let activeShift = null, shiftDrafts = [];
+      try { activeShift = JSON.parse(localStorage.getItem("wt_active_shift") || "null"); }
+      catch (_) {}
+      try { shiftDrafts = JSON.parse(localStorage.getItem("wt_shift_drafts") || "[]"); }
+      catch (_) {}
+      return { settings, entries, activeShift, shiftDrafts };
+    }
+
     function exportBackupJSON() {
-      const backup = { settings, entries, exportedAt: new Date().toISOString(), schemaVersion: 1 };
+      const backup = { ...snapshotAllData(), exportedAt: new Date().toISOString(), schemaVersion: 2 };
       const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backup, null, 2));
       const a = document.createElement("a");
       a.href = dataStr;
@@ -1096,16 +1106,44 @@
 
     function isValidWorkTimeBackup(value) {
       if (!isPlainRecord(value) || !isPlainRecord(value.settings) || !isPlainRecord(value.entries)) return false;
-      return Object.entries(value.entries).every(([key, entry]) =>
+      const validEntries = Object.entries(value.entries).every(([key, entry]) =>
         /^\d{4}-\d{2}-\d{2}$/.test(key) &&
         isPlainRecord(entry) &&
         entry.date === key &&
         typeof entry.type === "string" &&
-        ["normal", "extra", "night"].every(field => entry[field] === undefined || (typeof entry[field] === "number" && Number.isFinite(entry[field])))
+        ["normal", "extra", "night"].every(field =>
+          entry[field] === undefined || (typeof entry[field] === "number" && Number.isFinite(entry[field])))
       );
+      if (!validEntries) return false;
+      const validShift = shift => isPlainRecord(shift) &&
+        typeof shift.start === "string" && !Number.isNaN(Date.parse(shift.start)) &&
+        Array.isArray(shift.breaks);
+      if ("shiftDrafts" in value && (!Array.isArray(value.shiftDrafts) ||
+        !value.shiftDrafts.every(d => validShift(d) && typeof d.id === "string" &&
+          typeof d.date === "string" && Number.isFinite(d.seconds) && d.seconds >= 0))) return false;
+      if ("activeShift" in value && value.activeShift !== null &&
+        !validShift(value.activeShift)) return false;
+      return true;
     }
 
-    // Guarda a cópia anterior localmente antes de qualquer restauro; não altera ficheiros antigos.
+    function writeBackupState(parsed) {
+      localStorage.setItem("wt_settings", JSON.stringify(parsed.settings));
+      localStorage.setItem("wt_entries", JSON.stringify(parsed.entries));
+      // Backups da versão 1 não tinham turnos. Não apagar os turnos da Preview
+      // se o backup importado não mencionar estes campos.
+      if (Object.prototype.hasOwnProperty.call(parsed, "shiftDrafts"))
+        localStorage.setItem("wt_shift_drafts", JSON.stringify(parsed.shiftDrafts));
+      if (Object.prototype.hasOwnProperty.call(parsed, "activeShift")) {
+        if (parsed.activeShift === null) localStorage.removeItem("wt_active_shift");
+        else localStorage.setItem("wt_active_shift", JSON.stringify(parsed.activeShift));
+      }
+      settings = { ...defaultSettings, ...parsed.settings };
+      entries = parsed.entries;
+      loadSettingsToInputs();
+      renderAll();
+    }
+
+    // Cópia antes da importação; permite recuperar os dados originais.
     function restorePreviousState() {
       const saved = localStorage.getItem("wt_pre_import_backup");
       if (!saved) { alert("Ainda não existe uma cópia de recuperação de importação."); return; }
@@ -1114,12 +1152,7 @@
       if (!isValidWorkTimeBackup(parsed)) { alert("Cópia de recuperação inválida."); return; }
       if (!confirm("Repor os dados anteriores à última importação? Exporte um backup dos dados atuais antes de continuar.")) return;
       try {
-        localStorage.setItem("wt_settings", JSON.stringify(parsed.settings));
-        localStorage.setItem("wt_entries", JSON.stringify(parsed.entries));
-        settings = { ...defaultSettings, ...parsed.settings };
-        entries = parsed.entries;
-        loadSettingsToInputs();
-        renderAll();
+        writeBackupState(parsed);
         alert("Estado anterior à importação recuperado.");
       } catch (_) {
         alert("Não foi possível recuperar automaticamente. Utilize o backup JSON guardado.");
@@ -1132,36 +1165,27 @@
       const reader = new FileReader();
       reader.onload = e => {
         let parsed;
-        try {
-          parsed = JSON.parse(e.target.result);
-        } catch (_) {
-          alert("O ficheiro não contém JSON válido.");
-          return;
-        }
+        try { parsed = JSON.parse(e.target.result); }
+        catch (_) { alert("O ficheiro não contém JSON válido."); return; }
         if (!isValidWorkTimeBackup(parsed)) {
           alert("Backup inválido: é necessário conter configurações e registos compatíveis.");
           return;
         }
         if (!confirm("Importar este backup vai substituir os registos e configurações atuais. Já guardou uma cópia JSON do estado atual?")) return;
-        const beforeSettings = localStorage.getItem("wt_settings");
-        const beforeEntries = localStorage.getItem("wt_entries");
-        const snapshot = { settings, entries };
+        const keys = ["wt_settings", "wt_entries", "wt_shift_drafts", "wt_active_shift"];
+        const before = Object.fromEntries(keys.map(key => [key, localStorage.getItem(key)]));
+        const snapshot = snapshotAllData();
         try {
-          // Se o armazenamento estiver cheio, abortar antes de substituir os dados.
+          // Gravar a cópia anterior primeiro, antes de substituir quaisquer dados.
           localStorage.setItem("wt_pre_import_backup", JSON.stringify(snapshot));
-          localStorage.setItem("wt_settings", JSON.stringify(parsed.settings));
-          localStorage.setItem("wt_entries", JSON.stringify(parsed.entries));
-          settings = { ...defaultSettings, ...parsed.settings };
-          entries = parsed.entries;
-          loadSettingsToInputs();
-          renderAll();
+          writeBackupState(parsed);
           alert("Backup restaurado com sucesso. O estado anterior ficou guardado para recuperação.");
-        } catch (err) {
+        } catch (_) {
           try {
-            if (beforeSettings === null) localStorage.removeItem("wt_settings");
-            else localStorage.setItem("wt_settings", beforeSettings);
-            if (beforeEntries === null) localStorage.removeItem("wt_entries");
-            else localStorage.setItem("wt_entries", beforeEntries);
+            keys.forEach(key => {
+              if (before[key] === null) localStorage.removeItem(key);
+              else localStorage.setItem(key, before[key]);
+            });
           } catch (_) {}
           settings = snapshot.settings;
           entries = snapshot.entries;
