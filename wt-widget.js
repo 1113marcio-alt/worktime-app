@@ -31,7 +31,16 @@
    const shift=readJson("wt_active_shift",null);
    const state=shift && shift.start ?
      (shift.status==="paused"?"paused":"working") : "idle";
-   return {state,started:state!=="idle" ? shift.start : ""};
+   const helpers=root.ProUI&&root.ProUI.helpers;
+   // Reuse the same calculation as the app clock, which subtracts open
+   // and completed breaks. The native widget will keep counting afterwards.
+   const workedSeconds=shift && helpers && typeof helpers.timeWorkedSeconds==="function"
+     ? helpers.timeWorkedSeconds(shift,new Date().toISOString()) : 0;
+   return {
+     state,
+     started:state!=="idle" ? shift.start : "",
+     workedSeconds:Number.isFinite(workedSeconds)?Math.max(0,workedSeconds):0
+   };
  }
  async function publish(){
    const p=plugin();
