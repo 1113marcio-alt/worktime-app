@@ -6,6 +6,7 @@ import android.appwidget.AppWidgetProvider;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.os.SystemClock;
 import android.view.View;
 import android.widget.RemoteViews;
 import java.time.Instant;
@@ -80,6 +81,17 @@ public final class WorkTimeWidgetProvider extends AppWidgetProvider {
 
         view.setTextViewText(R.id.widget_status, label);
         view.setTextViewText(R.id.widget_primary, primary);
+        // OS-owned Chronometer ticks autonomously with the app closed.
+        // The worked duration excludes completed and active unpaid breaks.
+        boolean shiftVisible = enabled && !"idle".equals(state);
+        view.setViewVisibility(R.id.widget_elapsed,
+            shiftVisible ? View.VISIBLE : View.GONE);
+        if (shiftVisible) {
+            long elapsedMillis = WidgetStore.workedMillis(context);
+            long base = SystemClock.elapsedRealtime() - elapsedMillis;
+            view.setChronometer(R.id.widget_elapsed, base, "%s",
+                "working".equals(state));
+        }
         view.setViewVisibility(R.id.widget_finish,
             enabled && !"idle".equals(state) ? View.VISIBLE : View.GONE);
         if (!action.isEmpty()) {
