@@ -230,3 +230,87 @@ test("opções antigas continuam acessíveis após agrupar as configurações", 
   assert.ok(source.includes('details.className = "wt-settings-group"'));
   assert.ok(fs.readFileSync("pro-ui.css","utf8").includes(".wt-settings-group"));
 });
+
+
+test("LU PT FR apresentam dias de férias mínimos legais por país do empregador", () => {
+  const app = makeApp();
+  const { legalLeave, holidays } = app.ctx.WTCountryRules;
+  assert.equal(legalLeave("LU"),26);
+  assert.equal(legalLeave("PT"),22);
+  assert.equal(legalLeave("FR"),25);
+  assert.equal(legalLeave("DE"),null);
+  assert.equal(holidays(2026,"LU").items.length,11);
+  assert.equal(holidays(2026,"PT").items.length,13);
+  assert.equal(holidays(2026,"FR").items.length,11);
+  assert.equal(holidays(2026,"DE").verified,false);
+  assert.ok(holidays(2026,"PT").items.some(x=>x.date==="2026-06-10"));
+  assert.ok(holidays(2026,"FR").items.some(x=>x.date==="2026-07-14"));
+  assert.ok(holidays(2026,"LU").items.some(x=>x.date==="2026-06-23"));
+});
+
+test("classes fiscais 1, 1a e 2 alteram as estimativas apenas no LU", () => {
+  const app = makeApp();
+  const params={country:"LU",month:"2026-11",regularGross:3000,extraBaseGross:0,
+    extraMajorationGross:0,totalGross:3000,manualTaxRate:0,manualSocialRate:0,cisCredit:0};
+  const engine=app.ctx.WTCountryRules.estimatePayroll;
+  const one=engine({...params,classId:"1"});
+  const oneA=engine({...params,classId:"1a"});
+  const two=engine({...params,classId:"2"});
+  assert.ok(one.taxIrs>oneA.taxIrs);
+  assert.ok(oneA.taxIrs>two.taxIrs);
+  const fixed=engine({...params,classId:"1",manualTaxRate:9});
+  const fixed2=engine({...params,classId:"2",manualTaxRate:9});
+  assert.equal(fixed.taxIrs,fixed2.taxIrs,"taxa manual deve sobrepor classe");
+  const zero=engine({...params,classId:"1",manualTaxRate:0,forceManual:true});
+  assert.equal(zero.taxIrs,0);
+});
+
+test("Portugal e França não apresentam a retenção LU como se fosse oficial", () => {
+  const app=makeApp();
+  const args={month:"2026-11",regularGross:2000,extraBaseGross:0,extraMajorationGross:0,
+    totalGross:2000,classId:"2",manualTaxRate:10,manualSocialRate:12,cisCredit:50};
+  const pt=app.ctx.WTCountryRules.estimatePayroll({...args,country:"PT"});
+  const fr=app.ctx.WTCountryRules.estimatePayroll({...args,country:"FR"});
+  assert.equal(pt.socialOther,220);
+  assert.equal(fr.socialOther,240);
+  assert.equal(pt.cisCreditApplied,0);
+  assert.equal(fr.cisCreditApplied,0);
+  assert.equal(pt.taxClassApplicable,false);
+  assert.equal(fr.taxClassApplicable,false);
+  assert.ok(pt.taxStatus.includes("tabelas"));
+});
+
+test("mudança de empregador atualiza férias automáticas e mantém valores manuais", () => {
+  const app=makeApp();
+  app.ctx.document.getElementById=() => ({value:"PT"});
+  app.evaluate("saveSettings = function(){ localStorage.setItem('wt_settings',JSON.stringify(settings)); }");
+  app.ctx.changeEmployerCountry();
+  assert.equal(app.evaluate("settings.employerCountry"),"PT");
+  assert.equal(app.evaluate("settings.annualVacation"),22);
+  app.evaluate("settings.vacationAuto=false; settings.annualVacation=29;");
+  app.ctx.document.getElementById=() => ({value:"FR"});
+  app.ctx.changeEmployerCountry();
+  assert.equal(app.evaluate("settings.annualVacation"),29);
+});
+
+test("o PIN é guardado separadamente de países e outros campos", () => {
+  const app=makeApp({}, {});
+  const status={textContent:"",className:""};
+  const pin={value:"1234"};
+  app.ctx.document.getElementById=id=>id==="cfgSecurityPin"?pin:id==="pinSaveStatus"?status:null;
+  app.ctx.savePin();
+  assert.equal(JSON.parse(app.values.get("wt_settings")).securityPin,"1234");
+  assert.ok(status.textContent.includes("guardado"));
+  pin.value="12";
+  app.ctx.savePin();
+  assert.equal(JSON.parse(app.values.get("wt_settings")).securityPin,"1234");
+});
+
+test("a tradução de francês altera labels no dicionário e tem fallback seguro", () => {
+  const app=makeApp();
+  vm.runInContext(fs.readFileSync("wt-i18n.js","utf8"),app.ctx);
+  assert.equal(app.ctx.window.WTLocale.tr("Relógio de ponto","fr"),"Pointeuse");
+  assert.equal(app.ctx.window.WTLocale.tr("Dados e segurança","fr"),"Données et sécurité");
+  assert.equal(app.ctx.window.WTLocale.tr("Relógio de ponto","en"),"Time clock");
+  assert.equal(app.ctx.window.WTLocale.tr("Relógio de ponto","pt"),"Relógio de ponto");
+});
