@@ -88,3 +88,15 @@ body.wt-pro::before {content:"";position:fixed;inset:0;z-index:-1;pointer-events
  .wt-card{padding:15px;}
 }
 @media print {.wt-bottom,.wt-action,.wt-no-print{display:none!important}body.wt-pro{background:white!important;color:black!important}}
+
+
+/* Configurações progressivas: as opções continuam no DOM sem perder estado. */
+.wt-settings-group {border:1px solid rgba(145,177,237,.15);border-radius:19px;background:linear-gradient(150deg,#14203a,#101a2f);overflow:hidden;}
+.wt-settings-group > summary {list-style:none;cursor:pointer;padding:17px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px;font-weight:760;color:#e6efff;outline-offset:-2px;}
+.wt-settings-group > summary::-webkit-details-marker {display:none;}
+.wt-settings-group > summary::after {content:"⌄";font-size:20px;color:#91b9ff;transition:transform .15s;}
+.wt-settings-group[open] > summary::after {transform:rotate(180deg);}
+.wt-settings-stack {display:grid;gap:12px;padding:0 12px 12px;}
+.wt-settings-stack > div {border:1px solid rgba(132,166,222,.13);background:rgba(17,29,52,.76);border-radius:15px;box-shadow:none;}
+.wt-settings-launch {border-color:rgba(95,159,255,.35);background:linear-gradient(135deg,#1b3159,#15233d);}
+.wt-settings-group button:focus-visible,.wt-settings-group summary:focus-visible {outline:2px solid #79aeff;outline-offset:2px;}
