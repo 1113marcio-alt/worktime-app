@@ -314,3 +314,35 @@ test("a tradução de francês altera labels no dicionário e tem fallback segur
   assert.equal(app.ctx.window.WTLocale.tr("Relógio de ponto","en"),"Time clock");
   assert.equal(app.ctx.window.WTLocale.tr("Relógio de ponto","pt"),"Relógio de ponto");
 });
+
+
+test("país do empregador pode sincronizar feriados sem alterar residência", () => {
+  const app=makeApp({residenceCountry:"LU",holidayCountry:"LU",syncCalendarWithEmployer:true}, {});
+  const refs={
+    cfgEmployerCountry:{value:"PT"},
+    cfgHolidayCountry:{value:"LU"},
+    cfgAnnualVacation:{value:26},
+    cfgSyncCalendarWithEmployer:{checked:true}
+  };
+  app.ctx.document.getElementById=id=>refs[id] || {value:""};
+  app.evaluate("saveSettings = function(){ settings.annualVacation=Number(document.getElementById('cfgAnnualVacation').value); settings.holidayCountry=document.getElementById('cfgHolidayCountry').value; localStorage.setItem('wt_settings',JSON.stringify(settings)); }");
+  app.ctx.changeEmployerCountry();
+  assert.equal(app.evaluate("settings.employerCountry"),"PT");
+  assert.equal(app.evaluate("settings.annualVacation"),22);
+  assert.equal(app.evaluate("settings.holidayCountry"),"PT");
+  assert.equal(app.evaluate("settings.residenceCountry"),"LU");
+  refs.cfgHolidayCountry.value="FR";
+  app.evaluate("saveSettings = function(){ settings.holidayCountry=document.getElementById('cfgHolidayCountry').value; localStorage.setItem('wt_settings',JSON.stringify(settings)); }");
+  app.ctx.changeCalendarCountry();
+  assert.equal(app.evaluate("settings.syncCalendarWithEmployer"),false);
+  assert.equal(app.evaluate("settings.holidayCountry"),"FR");
+});
+
+test("tradução aplica prefixos numerados nas definições", () => {
+  const app=makeApp();
+  vm.runInContext(fs.readFileSync("wt-i18n.js","utf8"),app.ctx);
+  const tr=app.ctx.window.WTLocale.tr;
+  assert.equal(tr("3. Idioma","fr"),"3. Langue");
+  assert.equal(tr("4. País dos Feriados e Férias","fr"),"4. Pays des jours fériés et congés");
+  assert.equal(tr("4B. Horário semanal personalizado","fr"),"4B. Horaires hebdomadaires personnalisés");
+});
