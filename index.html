@@ -6,6 +6,8 @@
   <title>WorkTime Pro</title>
   <link rel="manifest" href="manifest.json" />
   <link rel="stylesheet" href="pro-ui.css" />
+  <script defer src="country-rules.js"></script>
+  <script defer src="wt-i18n.js"></script>
   <meta name="theme-color" content="#0f172a" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <script src="https://cdn.tailwindcss.com"></script>
@@ -319,7 +321,8 @@
 
         <!-- Descontos Sociais CCSS Corrigidos -->
         <div class="space-y-2 text-sm pt-2">
-          <h3 class="text-xs font-bold uppercase text-slate-400 tracking-wider">2. Contribuições sociais — estimativa LU</h3>
+          <h3 class="text-xs font-bold uppercase text-slate-400 tracking-wider" id="socialHeading">2. Contribuições sociais — estimativa LU</h3>
+          <p id="countryTaxExplanation" class="text-[11px] text-amber-300"></p>
           <div class="flex justify-between py-1 border-b border-slate-800/60 text-red-300">
             <span id="lblPensionRate">Pensão (modelo LU)</span>
             <span class="money-val" id="valCcssPension">- 0,00 €</span>
@@ -331,6 +334,9 @@
           <div class="flex justify-between py-1 border-b border-slate-800/60 text-red-300">
             <span id="lblDepAllowance">Dependência (abatimento 1/4 SSM)</span>
             <span class="money-val" id="valCcssDep">- 0,00 €</span>
+          </div>
+          <div class="flex justify-between py-1 text-red-300" id="socialOtherRow">
+            <span id="socialOtherLabel">Outras contribuições sociais estimadas</span><span id="valSocialOther" class="money-val">- 0,00 €</span>
           </div>
           <div class="flex justify-between py-1 text-xs text-slate-400 italic">
             <span>Seguro Acidente (AAA - Pago 100% pelo Patrão)</span>
@@ -463,8 +469,8 @@
           <div>
             <label class="block text-slate-400 mb-1">Regime Fiscal</label>
             <select id="cfgTaxSystem" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm">
-              <option value="luxembourg">Luxemburgo (estimativa)</option>
-              <option value="custom">Personalizado</option>
+              <option value="luxembourg">Automático (apenas LU, aproximado)</option>
+              <option value="custom">Taxas manuais (outros países)</option>
             </select>
           </div>
           <div>
@@ -476,14 +482,20 @@
             </select>
           </div>
           <div>
-            <label class="block text-slate-400 mb-1">Taxa IRS Manual Opcional (%)</label>
+            <label class="block text-slate-400 mb-1">Retenção manual (%)</label>
             <input type="number" step="0.1" id="cfgManualTaxRate" placeholder="Automático se 0" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
           </div>
           <div>
+            <label class="block text-slate-400 mb-1">Taxa social manual (%)</label>
+            <input type="number" step="0.1" min="0" max="100" id="cfgManualSocialRate" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
+          </div>
+          <div id="cfgCisBox">
             <label class="block text-slate-400 mb-1">Crédito Fiscal CIS (€/mês)</label>
             <input type="number" step="1" id="cfgCisCredit" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
           </div>
         </div>
+        <p id="taxPolicyStatus" class="text-[11px] text-amber-300 bg-slate-800/80 p-2.5 rounded-xl"></p>
+        <a id="taxPolicySource" href="#" rel="noopener noreferrer" target="_blank" class="text-[11px] text-sky-300 underline hidden">Ver fonte oficial</a>
         <p class="text-[11px] text-emerald-400 bg-slate-800/80 p-2.5 rounded-xl">
           ✔️ <strong>Contribuições aproximadas, dependentes do mês.</strong> Em 2026, a pensão tem taxa salarial de 8,50%; saúde 3,05% e dependência 1,40% após abatimento aplicável. A retenção fiscal continua simplificada. Verifique sempre o recibo e os parâmetros oficiais do CCSS.
         </p>
@@ -516,18 +528,20 @@
           </div>
           <div>
             <label class="block text-slate-400 mb-1">Dias de Férias Base / Ano</label>
-            <input type="number" id="cfgAnnualVacation" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm font-bold" />
+            <input type="number" id="cfgAnnualVacation" min="0" max="365" onchange="saveVacationOverride()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm font-bold" />
+            <button type="button" onclick="resetVacationEntitlement()" class="text-xs text-blue-300 underline mt-2">Usar mínimo legal</button>
           </div>
         </div>
       </div>
 
+      <p id="vacationPolicyNotice" class="text-xs text-sky-300"></p>
       <!-- 4A. Preferências internacionais: independentes do regime fiscal existente -->
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
         <h3 class="font-bold text-sm text-blue-400">4A. País da empresa e residência</h3>
         <div class="grid grid-cols-2 gap-3 text-xs">
           <div>
             <label class="block text-slate-400 mb-1">País do empregador</label>
-            <select id="cfgEmployerCountry" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm"></select>
+            <select id="cfgEmployerCountry" onchange="changeEmployerCountry()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm"></select>
           </div>
           <div>
             <label class="block text-slate-400 mb-1">País de residência</label>
@@ -538,7 +552,7 @@
             <input id="cfgCalendarRegion" type="text" maxlength="100" onchange="saveSettings()" placeholder="Ex.: Lisboa, Grand Est" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
           </div>
         </div>
-        <p class="text-[11px] text-amber-300">Os países são guardados separadamente, mas o cálculo de salário continua a ser uma estimativa baseada no modelo atual do Luxemburgo. Selecionar outro país não ativa automaticamente a fiscalidade ou os feriados desse país.</p>
+        <p id="countryPolicyNotice" class="text-[11px] text-amber-300">O país do empregador define o modelo fiscal e os mínimos de férias. O país do calendário define os feriados, independentemente. Só LU, PT e FR têm regras básicas verificadas nesta versão; os restantes usam modo manual.</p>
       </div>
 
       <!-- 4B. Horário semanal, sem modificar os registos já guardados -->
@@ -585,8 +599,9 @@
         <h3 class="font-bold text-sm text-blue-400">7. Segurança</h3>
         <div class="flex items-center gap-2">
           <input type="password" maxlength="4" inputmode="numeric" id="cfgSecurityPin" placeholder="Definir PIN de 4 dígitos (vazio = sem PIN)" class="flex-1 bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs" />
-          <button onclick="saveSettings()" class="bg-slate-800 border border-slate-700 px-4 py-2.5 rounded-xl text-xs font-bold text-emerald-400">Guardar PIN</button>
+          <button onclick="savePin()" class="bg-slate-800 border border-slate-700 px-4 py-2.5 rounded-xl text-xs font-bold text-emerald-400">Guardar PIN</button>
         </div>
+        <p id="pinSaveStatus" class="text-xs text-slate-400" aria-live="polite">O PIN protege apenas a interface, não encripta os dados. Guarda-o num local seguro.</p>
       </div>
     </section>
 
@@ -657,6 +672,8 @@
       employerCountry: "LU",
       residenceCountry: "LU",
       calendarRegion: "",
+      vacationAuto: true,
+      manualSocialRate: 0,
       weeklySchedule: {
         0: { enabled: false, start: "08:00", end: "16:30", breakMinutes: 30 },
         1: { enabled: true, start: "08:00", end: "16:30", breakMinutes: 30 },
@@ -826,7 +843,8 @@
       document.getElementById("cfgNightPct").value = settings.nightPct;
       document.getElementById("cfgDailyPanier").value = settings.dailyPanier;
       document.getElementById("cfgVacAvgSupplement").value = settings.vacAvgSupplement;
-      document.getElementById("cfgTaxSystem").value = settings.taxSystem;
+      document.getElementById("cfgTaxSystem").value = settings.taxSystem || "luxembourg";
+      document.getElementById("cfgManualSocialRate").value = Number(settings.manualSocialRate) || 0;
       document.getElementById("cfgTaxClass").value = settings.taxClass;
       document.getElementById("cfgManualTaxRate").value = settings.manualTaxRate;
       document.getElementById("cfgCisCredit").value = settings.cisCredit;
@@ -840,6 +858,7 @@
       renderWeeklySchedule();
       document.getElementById("cfgAnnualVacation").value = settings.annualVacation;
       document.getElementById("cfgSecurityPin").value = settings.securityPin || "";
+      refreshCountryPreferences();
       document.getElementById("bonusHintLabel").textContent = `Bónus: ${Number(settings.hourlyBonus).toFixed(2)} €/h • Panier: ${Number(settings.dailyPanier).toFixed(2)} €/dia`;
       applyTranslations();
     }
@@ -861,12 +880,100 @@
       settings.employerCountry = document.getElementById("cfgEmployerCountry").value;
       settings.residenceCountry = document.getElementById("cfgResidenceCountry").value;
       settings.calendarRegion = document.getElementById("cfgCalendarRegion").value.trim();
-      settings.annualVacation = parseInt(document.getElementById("cfgAnnualVacation").value) || 26;
-      settings.securityPin = document.getElementById("cfgSecurityPin").value.trim();
+      // Dias de férias alteram-se pelo país empregador (exceto contrato personalizado).
+      settings.annualVacation = Number(document.getElementById("cfgAnnualVacation").value);
+      settings.manualSocialRate = Number(document.getElementById("cfgManualSocialRate").value) || 0;
+      // O PIN só é alterado ao pressionar Guardar PIN, nunca noutras configurações.
 
       localStorage.setItem("wt_settings", JSON.stringify(settings));
       loadSettingsToInputs();
       renderAll();
+    }
+
+    function changeEmployerCountry() {
+      const country = document.getElementById("cfgEmployerCountry").value;
+      const baseline = window.WTCountryRules && WTCountryRules.legalLeave(country);
+      settings.employerCountry = country;
+      if (settings.vacationAuto !== false && baseline !== null) {
+        settings.annualVacation = baseline;
+      }
+      // País do calendário e país de residência continuam independentes.
+      saveSettings();
+    }
+
+    function saveVacationOverride() {
+      const number = Number(document.getElementById("cfgAnnualVacation").value);
+      if (!Number.isFinite(number) || number < 0 || number > 365) {
+        alert("Introduz um número de dias válido.");
+        return;
+      }
+      settings.vacationAuto = false;
+      saveSettings();
+    }
+
+    function resetVacationEntitlement() {
+      const baseline = window.WTCountryRules && WTCountryRules.legalLeave(settings.employerCountry || "LU");
+      if (baseline === null || baseline === undefined) {
+        alert("Ainda não foi verificado o mínimo legal deste país. Introduz o valor do contrato.");
+        return;
+      }
+      settings.vacationAuto = true;
+      settings.annualVacation = baseline;
+      localStorage.setItem("wt_settings", JSON.stringify(settings));
+      loadSettingsToInputs();
+      renderAll();
+    }
+
+    function savePin() {
+      const pin = document.getElementById("cfgSecurityPin").value.trim();
+      const status = document.getElementById("pinSaveStatus");
+      if (pin && !/^\d{4}$/.test(pin)) {
+        status.textContent = "O PIN deve ter exatamente 4 algarismos.";
+        status.className = "text-xs text-rose-400";
+        return;
+      }
+      try {
+        settings.securityPin = pin;
+        localStorage.setItem("wt_settings", JSON.stringify(settings));
+        status.textContent = pin ? "PIN guardado neste dispositivo. Será pedido ao voltar a abrir a aplicação." : "PIN desativado e alteração guardada.";
+        status.className = "text-xs text-emerald-400";
+      } catch (_) {
+        status.textContent = "Não foi possível guardar o PIN. Verifica o armazenamento do dispositivo.";
+        status.className = "text-xs text-rose-400";
+      }
+    }
+
+    function refreshCountryPreferences() {
+      const employer = settings.employerCountry || "LU";
+      const calendar = settings.holidayCountry || "LU";
+      const rules = window.WTCountryRules;
+      const minimum = rules && rules.legalLeave(employer);
+      const leave = document.getElementById("vacationPolicyNotice");
+      leave.textContent = minimum === null || minimum === undefined
+        ? "Férias: mínimo legal ainda não verificado para " + employer + ". Usa o número previsto no contrato."
+        : "Mínimo legal geral " + employer + ": " + minimum + " dias. " +
+          (settings.vacationAuto === false ? "Valor personalizado do contrato." : "Atualização automática ativa.") +
+          (employer === "FR" ? " França: 25 dias ouvrés equivalem a 30 jours ouvrables." : "");
+      const tax = document.getElementById("taxPolicyStatus");
+      const other = employer !== "LU";
+      document.getElementById("cfgTaxClass").disabled = other;
+      document.getElementById("cfgTaxClass").parentElement.style.opacity = other ? "0.45" : "1";
+      document.getElementById("cfgCisBox").style.opacity = other ? "0.45" : "1";
+      document.getElementById("cfgTaxSystem").disabled = other;
+      tax.textContent = employer === "LU"
+        ? "Luxemburgo: estimativa por classe fiscal 1/1a/2; não é o barème oficial. " +
+          ((Number(settings.manualTaxRate) || 0) > 0 ? "A taxa manual substitui a classe." : "A classe selecionada altera a estimativa.")
+        : employer === "PT" ? "Portugal: Segurança Social geral estimada a 11%; IRS manual até implementar as tabelas adequadas à situação familiar."
+        : employer === "FR" ? "França: retenção PAS e contribuições sociais requerem taxas individuais do recibo; modo manual."
+        : "País sem motor fiscal verificado: somente taxas manuais, sem cálculo oficial.";
+      const source = document.getElementById("taxPolicySource");
+      const policy = rules && rules.policies[employer];
+      source.classList.toggle("hidden", !policy || !policy.taxSource);
+      if (policy && policy.taxSource) source.href = policy.taxSource;
+      const notice = document.getElementById("countryPolicyNotice");
+      notice.textContent = "Empregador: " + employer + " (salário e férias). Calendário: " +
+        calendar + " (feriados). " + (rules && rules.policies[calendar] ? "Feriados nacionais disponíveis." :
+          "Feriados ainda sem base verificada para este país.");
     }
 
     function applyTranslations() {
@@ -875,6 +982,7 @@
         const key = el.getAttribute("data-i18n");
         if (dict[key]) el.textContent = dict[key];
       });
+      if (window.WTLocale) window.WTLocale.apply(settings.lang);
     }
 
     function onDayTypeChange() {
@@ -1143,6 +1251,7 @@
       window.lastCalculatedNet = d.finalNet;
       comparePayslip();
       if (window.ProUI) window.ProUI.render();
+      if (window.WTLocale) window.WTLocale.apply(settings.lang);
     }
 
     function comparePayslip() {
