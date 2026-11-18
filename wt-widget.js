@@ -162,7 +162,7 @@
    const p=plugin();
    if(!p || !p.setShiftNotifications) {
      notificationStatus("As notificações de turno estão disponíveis na Preview Android atualizada.",false);
-     return;
+     return false;
    }
    try {
      const result=await p.setShiftNotifications({enabled:!!enabled});
@@ -173,9 +173,33 @@
      } else {
        notificationStatus("Notificações do turno desativadas.",true);
      }
+     return true;
    } catch (_) {
      notificationStatus("Não foi possível alterar a preferência das notificações.",false);
+     return false;
    }
+ }
+ async function refreshNotificationStatus(){
+   const p=plugin();
+   if(!p || !p.getShiftNotificationStatus)return;
+   try{
+     // O Android é a fonte de verdade. Nunca regravar as preferências nativas
+     // com dados de um backup antigo ao abrir a aplicação.
+     const native=await p.getShiftNotificationStatus();
+     if(!native || typeof native.enabled!=="boolean")return;
+     const old=!!settings.shiftNotifications;
+     settings.shiftNotifications=native.enabled;
+     const input=$("cfgShiftNotifications");
+     if(input)input.checked=native.enabled;
+     if(old!==native.enabled){
+       try{localStorage.setItem("wt_settings",JSON.stringify(settings));}catch(_){}
+     }
+     if(native.enabled&&!native.systemAllowed)notificationStatus(
+       "As notificações estão ativadas na app, mas bloqueadas no Samsung. Abre Permissões de notificações.",false);
+     else if(native.enabled)notificationStatus(
+       "Notificações de turno autorizadas e sincronizadas com o Android.",true);
+     else notificationStatus("Notificações de turno desativadas.",true);
+   }catch(_){notificationStatus("Não foi possível confirmar o estado das notificações Android.",false);}
  }
  async function toggleNotifications(){
    const checked=!!($("cfgShiftNotifications") && $("cfgShiftNotifications").checked);
@@ -184,10 +208,15 @@
      notificationStatus("Ativa primeiro o widget. Os botões da notificação usam o mesmo registo seguro.",false);
      return;
    }
+   const old=!!settings.shiftNotifications;
+   const applied=await configureNotifications(checked);
+   if(!applied){
+     if($("cfgShiftNotifications"))$("cfgShiftNotifications").checked=old;
+     return;
+   }
    try {
      settings.shiftNotifications=checked;
      localStorage.setItem("wt_settings",JSON.stringify(settings));
-     await configureNotifications(checked);
    }catch(_){notificationStatus("Não foi possível guardar a preferência das notificações.",false);}
  }
  async function openNotificationSettings(){
@@ -248,9 +277,11 @@
      await configure(!!settings.widgetEnabled);
    }
    if($("cfgShiftNotifications"))$("cfgShiftNotifications").checked=!!settings.shiftNotifications;
-   await configureNotifications(!!settings.shiftNotifications);
-   document.addEventListener("visibilitychange",()=>{if(!document.hidden)sync();});
-   root.addEventListener("focus",()=>sync());
+   await refreshNotificationStatus();
+   document.addEventListener("visibilitychange",()=>{
+     if(!document.hidden){sync();refreshNotificationStatus();}
+   });
+   root.addEventListener("focus",()=>{sync();refreshNotificationStatus();});
  }
- root.WTWidget={init,sync,publish,toggle,reactivate,add,configure,toggleNotifications,openNotificationSettings,configureNotifications};
+ root.WTWidget={init,sync,publish,toggle,reactivate,add,configure,toggleNotifications,openNotificationSettings,configureNotifications,refreshNotificationStatus};
 }(window));
