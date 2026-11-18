@@ -24,6 +24,9 @@ jobs:
           distribution: temurin
           java-version: '21'
 
+      - name: Verificar JavaScript e compatibilidade dos dados antigos
+        run: node --test tests/smoke.cjs
+
       - name: Instalar Capacitor
         run: |
           npm init -y
