@@ -232,6 +232,11 @@ function tr(text,language) {
    const translated=(words[locale]||{})[numbered[2]];
    if(translated)return numbered[1]+translated;
  }
+ const withIcon=/^([^\p{L}\p{N}]+)([\p{L}\p{N}].*)$/u.exec(text);
+ if(withIcon){
+   const translated=(words[locale]||{})[withIcon[2]];
+   if(translated)return withIcon[1]+translated;
+ }
  return text;
 }
 function apply(language) {
