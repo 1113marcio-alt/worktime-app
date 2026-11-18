@@ -120,7 +120,7 @@ test("o novo relógio e o calendário têm JavaScript válido e todos os ecrãs 
   assert.ok(source.includes('src="pro-ui.js"'));
   assert.ok(source.includes('href="pro-ui.css"'));
   assert.ok(fs.readFileSync("sw.js", "utf8").includes("./pro-ui.js"));
-  assert.ok(fs.readFileSync(".github/workflows/apk.yml", "utf8").includes("pro-ui.css pro-ui.js country-rules.js wt-i18n.js www/"));
+  assert.ok(fs.readFileSync(".github/workflows/apk.yml", "utf8").includes("pro-ui.css pro-ui.js country-rules.js wt-i18n.js wt-widget.js www/"));
 });
 
 test("o relógio contabiliza pausas e turnos que passam da meia-noite", () => {
@@ -353,4 +353,95 @@ test("tradução aplica prefixos numerados nas definições", () => {
   assert.equal(tr("3. Idioma","fr"),"3. Langue");
   assert.equal(tr("4. País dos Feriados e Férias","fr"),"4. Pays des jours fériés et congés");
   assert.equal(tr("4B. Horário semanal personalizado","fr"),"4B. Horaires hebdomadaires personnalisés");
+});
+
+
+test("escolha de tema escuro/claro fica guardada sem perder configurações", () => {
+  const app=makeApp({theme:"dark", hourlyRate:28}, {});
+  const dom={classList:{toggle(){}},style:{},setAttribute(name,value){this[name]=value;}};
+  const button={textContent:""};
+  app.ctx.document.documentElement=dom;
+  app.ctx.document.getElementById=id=>id==="cfgThemeButton"?button:null;
+  app.ctx.document.querySelectorAll=()=>[];
+  app.ctx.toggleTheme();
+  assert.equal(JSON.parse(app.values.get("wt_settings")).theme,"light");
+  assert.equal(JSON.parse(app.values.get("wt_settings")).hourlyRate,28);
+  assert.equal(dom["data-wt-theme"],"light");
+  assert.ok(button.textContent.includes("escuro"));
+  app.ctx.toggleTheme();
+  assert.equal(dom["data-wt-theme"],"dark");
+  assert.equal(JSON.parse(app.values.get("wt_settings")).theme,"dark");
+  assert.ok(fs.readFileSync("pro-ui.css","utf8").includes('html[data-wt-theme="light"] .wt-card'));
+});
+
+test("o inglês traduz textos antes misturados e os avisos dinâmicos dos países", () => {
+  const app=makeApp();
+  vm.runInContext(fs.readFileSync("wt-i18n.js","utf8"),app.ctx);
+  const tr=app.ctx.window.WTLocale.tr;
+  assert.equal(tr("Usar também o calendário de feriados do país empregador","en"),
+    "Use the employer country's holiday calendar too");
+  assert.equal(tr("Modo claro","en"),"Light mode");
+  assert.equal(tr("Ativar modo claro","fr"),"Activer le thème clair");
+  assert.ok(tr("Empregador: LU (salário e férias). Calendário: FR (feriados). Feriados nacionais disponíveis.","en")
+    .startsWith("Employer: LU"));
+  assert.ok(tr("Mínimo legal geral PT: 22 dias. Atualização automática ativa.","fr")
+    .startsWith("Minimum légal général PT"));
+});
+
+test("o widget tem manifesto nativo, pedido opcional, filas de ações e controlo de PIN", () => {
+  const files=[
+    "android-widget/src/main/java/lu/marcio/worktimepro/preview/WidgetStore.java",
+    "android-widget/src/main/java/lu/marcio/worktimepro/preview/WorkTimeWidgetProvider.java",
+    "android-widget/src/main/java/lu/marcio/worktimepro/preview/WorkTimeWidgetPlugin.java",
+    "android-widget/res/xml/worktime_widget_info.xml",
+    "android-widget/res/layout/widget_worktime.xml",
+    "scripts/install_android_widget.py","wt-widget.js"
+  ];
+  files.forEach(path=>assert.ok(fs.existsSync(path),"Ficheiro widget em falta: "+path));
+  const provider=fs.readFileSync(files[1],"utf8");
+  const store=fs.readFileSync(files[0],"utf8");
+  const plugin=fs.readFileSync(files[2],"utf8");
+  assert.ok(store.includes("pending_events"));
+  assert.ok(store.includes("events.length() >= 512"));
+  assert.ok(provider.includes("AppWidgetProvider"));
+  assert.ok(plugin.includes('requestPinAppWidget'));
+  assert.ok(plugin.includes('getPendingActions'));
+  assert.ok(fs.readFileSync("index.html","utf8").includes('id="cfgWidgetEnabled"'));
+  assert.ok(fs.readFileSync(".github/workflows/apk.yml","utf8").includes("install_android_widget.py"));
+  new vm.Script(fs.readFileSync("wt-widget.js","utf8"));
+});
+
+test("marcações de widget fechado são reaplicadas como rascunho sem duplicar horas", async () => {
+  const app=makeApp({}, {});
+  let queue=[
+    {id:"widget-start",at:"2026-11-18T08:00:00.000Z",action:"start"},
+    {id:"widget-pause",at:"2026-11-18T10:00:00.000Z",action:"pause"},
+    {id:"widget-resume",at:"2026-11-18T10:30:00.000Z",action:"resume"},
+    {id:"widget-finish",at:"2026-11-18T16:30:00.000Z",action:"finish"}
+  ];
+  const displayed=[];
+  app.ctx.window.Capacitor={Plugins:{WorkTimeWidget:{
+    getPendingActions:async()=>({events:[...queue]}),
+    acknowledgeActions:async({throughId})=>{
+      const i=queue.findIndex(e=>e.id===throughId);
+      if(i>=0)queue=queue.slice(i+1);
+    },
+    updateState:async(state)=>{displayed.push(state);},
+    setEnabled:async()=>{}
+  }}};
+  vm.runInContext(proSource,app.ctx);
+  vm.runInContext(fs.readFileSync("wt-widget.js","utf8"),app.ctx);
+  await app.ctx.window.WTWidget.sync();
+  assert.equal(queue.length,0);
+  assert.equal(app.values.get("wt_active_shift"),undefined);
+  const drafts=JSON.parse(app.values.get("wt_shift_drafts"));
+  assert.equal(drafts.length,1);
+  assert.equal(drafts[0].seconds,8*3600);
+  assert.equal(drafts[0].source,"android-widget");
+  assert.equal(displayed.at(-1).state,"idle");
+  // A native retry must not create a second draft.
+  queue=[{id:"widget-finish",at:"2026-11-18T16:30:00.000Z",action:"finish"}];
+  await app.ctx.window.WTWidget.sync();
+  assert.equal(JSON.parse(app.values.get("wt_shift_drafts")).length,1);
+  assert.equal(app.values.get("wt_entries"),"{}","O widget nunca escreve diretamente no histórico salarial");
 });
