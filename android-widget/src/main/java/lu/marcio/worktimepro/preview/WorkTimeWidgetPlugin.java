@@ -15,6 +15,18 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 public final class WorkTimeWidgetPlugin extends Plugin {
     private Context appContext() { return getContext().getApplicationContext(); }
 
+    // Native preferences are the authority on whether home-screen actions
+    // were explicitly enabled. Reinstalling the Preview can clear this state.
+    @PluginMethod
+    public void getStatus(PluginCall call) {
+        JSObject result = new JSObject();
+        result.put("enabled", WidgetStore.isEnabled(appContext()));
+        result.put("notificationsEnabled", WidgetStore.notificationsEnabled(appContext()));
+        result.put("state", WidgetStore.state(appContext()));
+        result.put("hasPendingEvents", WidgetStore.pending(appContext()).length() > 0);
+        call.resolve(result);
+    }
+
     @PluginMethod
     public void setEnabled(PluginCall call) {
         boolean enabled = Boolean.TRUE.equals(call.getBoolean("enabled", false));
