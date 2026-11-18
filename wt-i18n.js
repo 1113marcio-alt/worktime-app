@@ -421,6 +421,132 @@ lu:{employer:"Patron",salaryLeave:"Pai a Congé",calendar:"Kalenner",holidays:"F
   custom:"Vertraglech festgeluechte Wäert.",verify:"Minimum nach net iwwerpréift fir",enter:"Wäert vum Kontrakt aginn."}
 };
 
+
+// User-facing clock history, widget and notification strings (source text is PT).
+const expanded={
+en:{
+"Mês atual":"Current month","Arquivo de horas":"Time records","Histórico de turnos":"Shift history",
+"registos":"entries","Consulta os turnos e as pausas, incluindo os confirmados e os rascunhos. Os registos antigos sem marcações continuam visíveis.":"Review shifts and breaks, including saved entries and drafts. Old records without clock times remain visible.",
+"Mostrar":"Show","Todos os registos":"All records","Confirmados":"Saved","Por confirmar":"Pending",
+"O histórico é consultivo. Para corrigir horas confirmadas, abre o respetivo dia no calendário.":"History is read-only. To correct saved hours, open that day in the calendar.",
+"Anular turno em curso":"Cancel current shift","Registar / ajustar horas manualmente":"Log / adjust hours manually",
+"Rendimentos Brutos":"Gross earnings","Contribuições sociais — estimativa LU":"Social contributions — LU estimate",
+"Imposto (IRS) e Créditos":"Income tax and credits",
+"Direito Anual":"Annual entitlement","+ Compensatórios":"+ Compensatory",
+"Saldo Restante":"Remaining balance","Férias (Média 3M)":"Leave (3-month average)",
+"Incluir Bónus Horário + Subsídio Diário":"Include hourly bonus and daily allowance",
+"Simulação Fiche de Salaire":"Payslip simulation",
+"Taxas e Valores":"Rates and amounts","Sistema de Impostos":"Tax system",
+"Widget no ecrã inicial":"Home screen widget",
+"Marca entrada, pausa, regresso e saída diretamente no ecrã inicial, mesmo com a aplicação fechada. Os turnos terminados aparecem como rascunhos quando abres a aplicação.":"Clock in, pause, resume and finish from the home screen, even when the app is closed. Finished shifts appear as drafts when you open the app.",
+"Ativar os botões rápidos do widget":"Enable quick widget actions",
+"Reativar widget (se só aparece «Abrir aplicação»)":"Reactivate widget (if it only shows Open app)",
+"Atenção: os botões do widget não pedem o PIN da aplicação. Ativa apenas num telemóvel pessoal protegido.":"Warning: widget actions do not require the app PIN. Enable them only on your protected personal phone.",
+"Adicionar ao ecrã inicial":"Add to home screen",
+"Mostrar notificação durante o turno":"Show notification during a shift",
+"Notificação opcional com estado do turno e botões Pausa/Retomar e Terminar. No Android, permite notificações da Preview nas definições do sistema.":"Optional shift status notification with Pause/Resume and Finish controls. Allow Preview notifications in Android settings.",
+"Permissões de notificações do Samsung":"Samsung notification permissions",
+"Tal como o widget, os botões da notificação não pedem o PIN da aplicação.":"Like widget buttons, notification actions do not ask for the app PIN.",
+"Se não aparecer o aviso: mantém premida uma zona vazia do ecrã inicial → Widgets → WorkTime Pro 2 Preview.":"If no prompt appears: long-press a blank area of your home screen → Widgets → WorkTime Pro 2 Preview.",
+"O país do empregador define o modelo fiscal e os mínimos de férias. O país do calendário define os feriados, independentemente. Só LU, PT e FR têm regras básicas verificadas nesta versão; os restantes usam modo manual.":"Employer country determines the tax estimate and minimum leave. Calendar country determines holidays independently. Basic rules are available for LU, PT and FR; other countries use manual mode.",
+"Contribuições aproximadas, dependentes do mês.":"Approximate contributions, depending on the month.",
+"Em 2026, a pensão tem taxa salarial de 8,50%; saúde 3,05% e dependência 1,40% após abatimento aplicável. A retenção fiscal continua simplificada. Verifique sempre o recibo e os parâmetros oficiais do CCSS.":"In 2026, the employee pension rate is 8.50%, health 3.05% and care 1.40% after applicable allowance. Withholding is simplified. Always check your payslip and official CCSS parameters.",
+"Exportar Excel (.csv)":"Export CSV (.csv)",
+"Aparência":"Appearance","Alternar Tema":"Switch theme",
+"Valor Real do teu Dia de Férias (Lei do Luxemburgo):":"Estimated leave-day value (Luxembourg):",
+"Incluindo a média de horas extras e bónus horaires, cada dia de férias teu vale aproximadamente":"Including average overtime and hourly bonuses, each leave day is approximately worth",
+"brutos.":"gross.",
+"Terminar turno":"Finish shift","Iniciar turno":"Start shift",
+"Abrir / registar este dia":"Open / log this day","Trabalho confirmado":"Saved work",
+"Sem pausas registadas":"No breaks recorded",
+"Ainda não existem turnos nesta categoria.":"No shifts in this category.",
+"Histórico":"History","Turno em curso":"Shift in progress","Em pausa":"On break",
+"Notificações do turno desativadas.":"Shift notifications disabled.",
+"Notificações ativadas. O estado do turno aparece na barra de notificações.":"Notifications enabled. Shift status appears in notifications.",
+"Ativa o widget nas Opções":"Enable the widget in Options",
+"Abrir aplicação":"Open app",
+"Semana":"Week",
+"Segurança":"Security"
+},
+fr:{
+"Arquivo de horas":"Archives horaires","Histórico de turnos":"Historique des services",
+"registos":"saisies","Consulta os turnos e as pausas, incluindo os confirmados e os rascunhos. Os registos antigos sem marcações continuam visíveis.":"Consultez les services et les pauses, y compris les saisies confirmées et les brouillons. Les anciens relevés sans heures de pointage restent visibles.",
+"Mostrar":"Afficher","Todos os registos":"Toutes les saisies","Confirmados":"Confirmés","Por confirmar":"À confirmer",
+"O histórico é consultivo. Para corrigir horas confirmadas, abre o respetivo dia no calendário.":"L'historique est en lecture seule. Pour corriger les heures confirmées, ouvrez la journée dans le calendrier.",
+"Anular turno em curso":"Annuler le service en cours","Registar / ajustar horas manualmente":"Saisir / corriger les heures manuellement",
+"Rendimentos Brutos":"Revenus bruts","Contribuições sociais — estimativa LU":"Cotisations sociales — estimation LU",
+"Imposto (IRS) e Créditos":"Impôt et crédits","Direito Anual":"Droit annuel",
+"+ Compensatórios":"+ Compensation","Saldo Restante":"Solde restant",
+"Incluir Bónus Horário + Subsídio Diário":"Inclure prime horaire et indemnité journalière",
+"Simulação Fiche de Salaire":"Simulation du bulletin de salaire",
+"Taxas e Valores":"Taux et montants","Sistema de Impostos":"Système fiscal",
+"Widget no ecrã inicial":"Widget sur l'écran d'accueil",
+"Marca entrada, pausa, regresso e saída diretamente no ecrã inicial, mesmo com a aplicação fechada. Os turnos terminados aparecem como rascunhos quando abres a aplicação.":"Pointez l'arrivée, la pause, la reprise et le départ depuis l'accueil, même lorsque l'application est fermée. Les services terminés sont placés dans les brouillons.",
+"Ativar os botões rápidos do widget":"Activer les boutons rapides du widget",
+"Reativar widget (se só aparece «Abrir aplicação»)":"Réactiver le widget (s'il n'affiche que Ouvrir)",
+"Atenção: os botões do widget não pedem o PIN da aplicação. Ativa apenas num telemóvel pessoal protegido.":"Attention : les boutons du widget ne demandent pas le code PIN. Activez-les uniquement sur un téléphone personnel protégé.",
+"Adicionar ao ecrã inicial":"Ajouter à l'écran d'accueil",
+"Mostrar notificação durante o turno":"Afficher une notification pendant le service",
+"Notificação opcional com estado do turno e botões Pausa/Retomar e Terminar. No Android, permite notificações da Preview nas definições do sistema.":"Notification facultative avec état du service et boutons Pause/Reprise et Terminer. Autorisez les notifications de la Preview dans les paramètres Android.",
+"Permissões de notificações do Samsung":"Autorisations des notifications Samsung",
+"Tal como o widget, os botões da notificação não pedem o PIN da aplicação.":"Comme les boutons du widget, les actions de notification ne demandent pas le code PIN.",
+"Se não aparecer o aviso: mantém premida uma zona vazia do ecrã inicial → Widgets → WorkTime Pro 2 Preview.":"Si aucune invite n'apparaît : appuyez longuement sur l'écran d'accueil → Widgets → WorkTime Pro 2 Preview.",
+"O país do empregador define o modelo fiscal e os mínimos de férias. O país do calendário define os feriados, independentemente. Só LU, PT e FR têm regras básicas verificadas nesta versão; os restantes usam modo manual.":"Le pays de l'employeur définit le modèle fiscal et le minimum de congés. Le calendrier détermine les jours fériés séparément. Les règles de base sont disponibles pour LU, PT et FR ; autres pays en mode manuel.",
+"Contribuições aproximadas, dependentes do mês.":"Cotisations approximatives, selon le mois.",
+"Em 2026, a pensão tem taxa salarial de 8,50%; saúde 3,05% e dependência 1,40% após abatimento aplicável. A retenção fiscal continua simplificada. Verifique sempre o recibo e os parâmetros oficiais do CCSS.":"En 2026, pension salariale à 8,50 %, maladie à 3,05 % et dépendance à 1,40 % après abattement applicable. La retenue reste simplifiée. Vérifiez toujours la fiche de paie et les paramètres CCSS.",
+"Alternar Tema":"Changer de thème",
+"Histórico":"Historique","Trabalho confirmado":"Travail confirmé",
+"Sem pausas registadas":"Aucune pause enregistrée",
+"Ainda não existem turnos nesta categoria.":"Aucun service dans cette catégorie.",
+"Notificações do turno desativadas.":"Notifications de service désactivées.",
+"Notificações ativadas. O estado do turno aparece na barra de notificações.":"Notifications activées. L'état du service apparaît dans les notifications.",
+"Ativa o widget nas Opções":"Activez le widget dans les Options",
+"Abrir aplicação":"Ouvrir l'application",
+"Semana":"Semaine","Segurança":"Sécurité"
+},
+de:{
+"Arquivo de horas":"Stundenarchiv","Histórico de turnos":"Schichtverlauf",
+"registos":"Einträge","Mostrar":"Anzeigen","Todos os registos":"Alle Einträge",
+"Confirmados":"Gespeichert","Por confirmar":"Noch nicht bestätigt",
+"Consulta os turnos e as pausas, incluindo os confirmados e os rascunhos. Os registos antigos sem marcações continuam visíveis.":"Schichten und Pausen einschließlich bestätigter Einträge und Entwürfe anzeigen. Ältere Einträge bleiben sichtbar.",
+"Widget no ecrã inicial":"Startbildschirm-Widget",
+"Ativar os botões rápidos do widget":"Widget-Schnellaktionen aktivieren",
+"Reativar widget (se só aparece «Abrir aplicação»)":"Widget reaktivieren (wenn nur App öffnen angezeigt wird)",
+"Adicionar ao ecrã inicial":"Zum Startbildschirm hinzufügen",
+"Mostrar notificação durante o turno":"Benachrichtigung während der Schicht anzeigen",
+"Permissões de notificações do Samsung":"Samsung-Benachrichtigungsberechtigungen",
+"Ativa o widget nas Opções":"Widget in den Optionen aktivieren",
+"Abrir aplicação":"App öffnen"
+},
+es:{
+"Arquivo de horas":"Archivo de horas","Histórico de turnos":"Historial de turnos",
+"registos":"registros","Mostrar":"Mostrar","Todos os registos":"Todos los registros",
+"Confirmados":"Confirmados","Por confirmar":"Pendientes de confirmar",
+"Widget no ecrã inicial":"Widget en la pantalla de inicio",
+"Ativar os botões rápidos do widget":"Activar botones rápidos del widget",
+"Reativar widget (se só aparece «Abrir aplicação»)":"Reactivar widget (si solo aparece Abrir aplicación)",
+"Adicionar ao ecrã inicial":"Añadir a la pantalla de inicio",
+"Mostrar notificação durante o turno":"Mostrar notificación durante el turno",
+"Permissões de notificações do Samsung":"Permisos de notificaciones de Samsung",
+"Ativa o widget nas Opções":"Activa el widget en Opciones",
+"Abrir aplicação":"Abrir aplicación"
+},
+lu:{
+"Arquivo de horas":"Stonnenarchiv","Histórico de turnos":"Schichtverlaf",
+"registos":"Aschreiwungen","Mostrar":"Weisen","Todos os registos":"All Aschreiwungen",
+"Confirmados":"Confirméiert","Por confirmar":"Nach net confirméiert",
+"Widget no ecrã inicial":"Widget um Startbildschierm",
+"Ativar os botões rápidos do widget":"Widget-Schnellaktiounen aktivéieren",
+"Reativar widget (se só aparece «Abrir aplicação»)":"Widget nees aktivéieren (wann nëmmen App opmaachen do steet)",
+"Adicionar ao ecrã inicial":"Op de Startbildschierm setzen",
+"Mostrar notificação durante o turno":"Notifikatioun während der Schicht weisen",
+"Permissões de notificações do Samsung":"Samsung-Notifikatiounsrechter",
+"Ativa o widget nas Opções":"Aktivéier de Widget an den Astellungen",
+"Abrir aplicação":"App opmaachen"
+}
+};
+for(const [locale,dict] of Object.entries(expanded))Object.assign(words[locale],dict);
+
 const originals = new WeakMap();
 function normalize(code) { return ["fr","en","de","es","lu","pt"].includes(code)?code:"pt"; }
 function tr(text,language) {
@@ -470,6 +596,15 @@ function apply(language) {
    if(translated!==trimmed)node.nodeValue=content.replace(trimmed,translated);
    record.last=translated;
  }
+ document.querySelectorAll("[title],[aria-label]").forEach(el=>{
+   for(const name of ["title","aria-label"]){
+     if(!el.hasAttribute(name))continue;
+     const origKey="wtBase"+(name==="title"?"Title":"Aria");
+     const base=el.dataset[origKey]||el.getAttribute(name);
+     if(!el.dataset[origKey])el.dataset[origKey]=base;
+     el.setAttribute(name,tr(base,locale));
+   }
+ });
  document.querySelectorAll("input[placeholder], textarea[placeholder]").forEach(input=>{
    const original=input.dataset.wtOrigPlaceholder || input.getAttribute("placeholder");
    if(!input.dataset.wtOrigPlaceholder)input.dataset.wtOrigPlaceholder=original;
