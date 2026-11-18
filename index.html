@@ -88,7 +88,7 @@
       <!-- Botão Preenchimento Rápido -->
       <div class="flex gap-2">
         <button onclick="fillStandardWeek()" class="flex-1 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-xs font-medium py-2.5 px-3 rounded-xl flex items-center justify-center gap-1.5 text-blue-400">
-          ⚡ <span data-i18n="fillWeek">Preencher Semana Padrão (Seg-Sex 8h)</span>
+          ⚡ <span data-i18n="fillWeek">Preencher semana (horário configurado)</span>
         </button>
       </div>
 
@@ -385,6 +385,33 @@
         </div>
       </div>
 
+      <!-- 4A. Preferências internacionais: independentes do regime fiscal existente -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+        <h3 class="font-bold text-sm text-blue-400">4A. País da empresa e residência</h3>
+        <div class="grid grid-cols-2 gap-3 text-xs">
+          <div>
+            <label class="block text-slate-400 mb-1">País do empregador</label>
+            <select id="cfgEmployerCountry" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm"></select>
+          </div>
+          <div>
+            <label class="block text-slate-400 mb-1">País de residência</label>
+            <select id="cfgResidenceCountry" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm"></select>
+          </div>
+          <div class="col-span-2">
+            <label class="block text-slate-400 mb-1">Região do calendário (opcional)</label>
+            <input id="cfgCalendarRegion" type="text" maxlength="100" onchange="saveSettings()" placeholder="Ex.: Lisboa, Grand Est" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
+          </div>
+        </div>
+        <p class="text-[11px] text-amber-300">Os países são guardados separadamente, mas o cálculo de salário continua a ser uma estimativa baseada no modelo atual do Luxemburgo. Selecionar outro país não ativa automaticamente a fiscalidade ou os feriados desse país.</p>
+      </div>
+
+      <!-- 4B. Horário semanal, sem modificar os registos já guardados -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+        <h3 class="font-bold text-sm text-blue-400">4B. Horário semanal personalizado</h3>
+        <p class="text-[11px] text-slate-400">Ativa os dias de trabalho e define entrada, saída e pausa não remunerada. A opção «Preencher Semana» usa estas horas apenas para novos dias; nunca substitui registos existentes.</p>
+        <div id="weeklyScheduleGrid" class="space-y-2"></div>
+      </div>
+
       <!-- 5. Aparência -->
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center justify-between">
         <div>
@@ -454,12 +481,12 @@
   <script>
     // Dicionário Multi-Idioma (6 línguas)
     const i18n = {
-      pt: { quickSummary: "Resumo do Mês Atual", totalHours: "Horas Totais", overtimeHours: "Horas Extras", estimatedNet: "Líquido Est.", fillWeek: "Preencher Semana Padrão (Seg-Sex 8h)", logDayTitle: "Registar Dia de Trabalho", date: "Data", dayType: "Tipo de Dia", normalHours: "H. Normais", extraHours: "H. Extras", nightHours: "H. Noturnas", saveDay: "Guardar Registo do Dia", monthEntries: "Registos Deste Mês", navLog: "Registo", navPayslip: "Salário", navVacation: "Férias", navSettings: "Configurações", settingsTitle: "Configurações" },
-      fr: { quickSummary: "Résumé du Mois", totalHours: "Heures Totales", overtimeHours: "Heures Supp.", estimatedNet: "Salaire Net Est.", fillWeek: "Remplir Semaine Standard (Lun-Ven 8h)", logDayTitle: "Enregistrer Journée", date: "Date", dayType: "Type de Jour", normalHours: "H. Normales", extraHours: "H. Supp.", nightHours: "H. Nuit", saveDay: "Enregistrer la Journée", monthEntries: "Entrées du Mois", navLog: "Pointage", navPayslip: "Fiche Paie", navVacation: "Congés", navSettings: "Paramètres", settingsTitle: "Paramètres" },
-      de: { quickSummary: "Monatsübersicht", totalHours: "Gesamtstunden", overtimeHours: "Überstunden", estimatedNet: "Netto Geschätzt", fillWeek: "Standardwoche füllen (Mo-Fr 8h)", logDayTitle: "Arbeitstag erfassen", date: "Datum", dayType: "Tagestyp", normalHours: "Normalstd.", extraHours: "Überstd.", nightHours: "Nachtstd.", saveDay: "Tag speichern", monthEntries: "Monatseinträge", navLog: "Erfassung", navPayslip: "Lohnzettel", navVacation: "Urlaub", navSettings: "Optionen", settingsTitle: "Einstellungen" },
-      lu: { quickSummary: "Mount Iwwerbléck", totalHours: "Total Stonnen", overtimeHours: "Iwwerstonnen", estimatedNet: "Netto Geschätzt", fillWeek: "Standardwoch fëllen (Méi-Fré 8h)", logDayTitle: "Aarbechtsdag späicheren", date: "Datum", dayType: "Dag Typ", normalHours: "Normal St.", extraHours: "Iwwerstonnen", nightHours: "Nuecht St.", saveDay: "Dag späicheren", monthEntries: "Aschreiwungen vum Mount", navLog: "Stonnen", navPayslip: "Paie", navVacation: "Congé", navSettings: "Astellungen", settingsTitle: "Astellungen" },
-      en: { quickSummary: "Current Month Summary", totalHours: "Total Hours", overtimeHours: "Overtime", estimatedNet: "Est. Net Pay", fillWeek: "Fill Standard Week (Mon-Fri 8h)", logDayTitle: "Log Work Day", date: "Date", dayType: "Day Type", normalHours: "Normal Hrs", extraHours: "Overtime", nightHours: "Night Hrs", saveDay: "Save Work Day", monthEntries: "This Month's Logs", navLog: "Log", navPayslip: "Payslip", navVacation: "Holidays", navSettings: "Settings", settingsTitle: "Settings" },
-      es: { quickSummary: "Resumen del Mes", totalHours: "Horas Totales", overtimeHours: "Horas Extra", estimatedNet: "Neto Est.", fillWeek: "Rellenar Semana Estándar (Lun-Vie 8h)", logDayTitle: "Registrar Día", date: "Fecha", dayType: "Tipo de Día", normalHours: "H. Normales", extraHours: "H. Extra", nightHours: "H. Nocturnas", saveDay: "Guardar Día", monthEntries: "Registros del Mes", navLog: "Registro", navPayslip: "Nómina", navVacation: "Vacaciones", navSettings: "Ajustes", settingsTitle: "Configuración" }
+      pt: { quickSummary: "Resumo do Mês Atual", totalHours: "Horas Totais", overtimeHours: "Horas Extras", estimatedNet: "Líquido Est.", fillWeek: "Preencher semana (horário configurado)", logDayTitle: "Registar Dia de Trabalho", date: "Data", dayType: "Tipo de Dia", normalHours: "H. Normais", extraHours: "H. Extras", nightHours: "H. Noturnas", saveDay: "Guardar Registo do Dia", monthEntries: "Registos Deste Mês", navLog: "Registo", navPayslip: "Salário", navVacation: "Férias", navSettings: "Configurações", settingsTitle: "Configurações" },
+      fr: { quickSummary: "Résumé du Mois", totalHours: "Heures Totales", overtimeHours: "Heures Supp.", estimatedNet: "Salaire Net Est.", fillWeek: "Remplir la semaine (horaires configurés)", logDayTitle: "Enregistrer Journée", date: "Date", dayType: "Type de Jour", normalHours: "H. Normales", extraHours: "H. Supp.", nightHours: "H. Nuit", saveDay: "Enregistrer la Journée", monthEntries: "Entrées du Mois", navLog: "Pointage", navPayslip: "Fiche Paie", navVacation: "Congés", navSettings: "Paramètres", settingsTitle: "Paramètres" },
+      de: { quickSummary: "Monatsübersicht", totalHours: "Gesamtstunden", overtimeHours: "Überstunden", estimatedNet: "Netto Geschätzt", fillWeek: "Woche nach Zeitplan füllen", logDayTitle: "Arbeitstag erfassen", date: "Datum", dayType: "Tagestyp", normalHours: "Normalstd.", extraHours: "Überstd.", nightHours: "Nachtstd.", saveDay: "Tag speichern", monthEntries: "Monatseinträge", navLog: "Erfassung", navPayslip: "Lohnzettel", navVacation: "Urlaub", navSettings: "Optionen", settingsTitle: "Einstellungen" },
+      lu: { quickSummary: "Mount Iwwerbléck", totalHours: "Total Stonnen", overtimeHours: "Iwwerstonnen", estimatedNet: "Netto Geschätzt", fillWeek: "Woch nom Zäitplang ausfëllen", logDayTitle: "Aarbechtsdag späicheren", date: "Datum", dayType: "Dag Typ", normalHours: "Normal St.", extraHours: "Iwwerstonnen", nightHours: "Nuecht St.", saveDay: "Dag späicheren", monthEntries: "Aschreiwungen vum Mount", navLog: "Stonnen", navPayslip: "Paie", navVacation: "Congé", navSettings: "Astellungen", settingsTitle: "Astellungen" },
+      en: { quickSummary: "Current Month Summary", totalHours: "Total Hours", overtimeHours: "Overtime", estimatedNet: "Est. Net Pay", fillWeek: "Fill week from schedule", logDayTitle: "Log Work Day", date: "Date", dayType: "Day Type", normalHours: "Normal Hrs", extraHours: "Overtime", nightHours: "Night Hrs", saveDay: "Save Work Day", monthEntries: "This Month's Logs", navLog: "Log", navPayslip: "Payslip", navVacation: "Holidays", navSettings: "Settings", settingsTitle: "Settings" },
+      es: { quickSummary: "Resumen del Mes", totalHours: "Horas Totales", overtimeHours: "Horas Extra", estimatedNet: "Neto Est.", fillWeek: "Rellenar semana según horario", logDayTitle: "Registrar Día", date: "Fecha", dayType: "Tipo de Día", normalHours: "H. Normales", extraHours: "H. Extra", nightHours: "H. Nocturnas", saveDay: "Guardar Día", monthEntries: "Registros del Mes", navLog: "Registro", navPayslip: "Nómina", navVacation: "Vacaciones", navSettings: "Ajustes", settingsTitle: "Configuración" }
     };
 
     // Feriados Oficiais Luxemburgo 2026
@@ -491,6 +518,18 @@
       cisCredit: 50,
       lang: "pt",
       holidayCountry: "LU",
+      employerCountry: "LU",
+      residenceCountry: "LU",
+      calendarRegion: "",
+      weeklySchedule: {
+        0: { enabled: false, start: "08:00", end: "16:30", breakMinutes: 30 },
+        1: { enabled: true, start: "08:00", end: "16:30", breakMinutes: 30 },
+        2: { enabled: true, start: "08:00", end: "16:30", breakMinutes: 30 },
+        3: { enabled: true, start: "08:00", end: "16:30", breakMinutes: 30 },
+        4: { enabled: true, start: "08:00", end: "16:30", breakMinutes: 30 },
+        5: { enabled: true, start: "08:00", end: "16:30", breakMinutes: 30 },
+        6: { enabled: false, start: "08:00", end: "16:30", breakMinutes: 30 }
+      },
       annualVacation: 26,
       securityPin: ""
     };
@@ -527,6 +566,90 @@
       }
     }
 
+    const COUNTRY_CODES = ("AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW").split(" ");
+
+    const WEEKDAYS = [
+      { day: 1, name: "Segunda" }, { day: 2, name: "Terça" },
+      { day: 3, name: "Quarta" }, { day: 4, name: "Quinta" },
+      { day: 5, name: "Sexta" }, { day: 6, name: "Sábado" },
+      { day: 0, name: "Domingo" }
+    ];
+
+    function populateCountrySelects() {
+      const lang = settings.lang === "lu" ? "lb" : (settings.lang || "pt");
+      let names;
+      try { names = new Intl.DisplayNames([lang], { type: "region" }); }
+      catch (_) { names = { of: code => code }; }
+      const countries = COUNTRY_CODES.map(code => ({ code, label: names.of(code) || code }))
+        .sort((a, b) => a.label.localeCompare(b.label, lang));
+      ["cfgEmployerCountry", "cfgResidenceCountry", "cfgHolidayCountry"].forEach(id => {
+        const select = document.getElementById(id);
+        if (!select) return;
+        // Recriar os nomes quando o idioma muda; não altera o valor selecionado.
+        select.replaceChildren();
+        countries.forEach(({ code, label }) => {
+          const option = document.createElement("option");
+          option.value = code;
+          option.textContent = label + " (" + code + ")";
+          select.appendChild(option);
+        });
+      });
+    }
+
+    function parseClockMinutes(clock) {
+      if (!/^\\d{2}:\\d{2}$/.test(clock || "")) return null;
+      const [h, m] = clock.split(":").map(Number);
+      return h >= 0 && h <= 23 && m >= 0 && m <= 59 ? h * 60 + m : null;
+    }
+
+    function hoursForSchedule(slot) {
+      if (!slot || typeof slot !== "object") return null;
+      const start = parseClockMinutes(slot.start);
+      const end = parseClockMinutes(slot.end);
+      const pause = Number(slot.breakMinutes);
+      if (start === null || end === null || !Number.isFinite(pause) || pause < 0 || pause > 1440) return null;
+      let minutes = end - start;
+      if (minutes < 0) minutes += 1440; // turno que atravessa a meia-noite
+      if (minutes === 0 || pause >= minutes) return null;
+      return Math.round((minutes - pause) / 60 * 100) / 100;
+    }
+
+    function renderWeeklySchedule() {
+      const container = document.getElementById("weeklyScheduleGrid");
+      const schedule = settings.weeklySchedule || defaultSettings.weeklySchedule;
+      container.replaceChildren();
+      WEEKDAYS.forEach(({ day, name }) => {
+        const slot = schedule[day] || defaultSettings.weeklySchedule[day];
+        const row = document.createElement("div");
+        row.className = "bg-slate-800/70 p-2 rounded-xl";
+        row.innerHTML = '<div class="flex items-center justify-between mb-2"><label class="text-xs font-semibold">' + name + '</label><label class="text-[11px] flex items-center gap-2"><span>Trabalha</span><input type="checkbox" id="weekEnabled' + day + '" onchange="saveWeeklySchedule()" /></label></div><div class="grid grid-cols-3 gap-2 text-[11px]"><label>Entrada<input type="time" id="weekStart' + day + '" onchange="saveWeeklySchedule()" class="mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg p-1.5" /></label><label>Saída<input type="time" id="weekEnd' + day + '" onchange="saveWeeklySchedule()" class="mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg p-1.5" /></label><label>Pausa (min)<input type="number" min="0" max="1439" step="1" id="weekBreak' + day + '" onchange="saveWeeklySchedule()" class="mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg p-1.5" /></label></div>';
+        container.appendChild(row);
+        document.getElementById("weekEnabled" + day).checked = Boolean(slot.enabled);
+        document.getElementById("weekStart" + day).value = slot.start || "08:00";
+        document.getElementById("weekEnd" + day).value = slot.end || "16:30";
+        document.getElementById("weekBreak" + day).value = Number.isFinite(Number(slot.breakMinutes)) ? Number(slot.breakMinutes) : 30;
+      });
+    }
+
+    function saveWeeklySchedule() {
+      const weeklySchedule = {};
+      for (const { day } of WEEKDAYS) {
+        const slot = {
+          enabled: document.getElementById("weekEnabled" + day).checked,
+          start: document.getElementById("weekStart" + day).value,
+          end: document.getElementById("weekEnd" + day).value,
+          breakMinutes: Number(document.getElementById("weekBreak" + day).value)
+        };
+        if (slot.enabled && hoursForSchedule(slot) === null) {
+          alert("Verifique a entrada, saída e pausa do horário selecionado.");
+          return;
+        }
+        weeklySchedule[day] = slot;
+      }
+      settings.weeklySchedule = weeklySchedule;
+      localStorage.setItem("wt_settings", JSON.stringify(settings));
+    }
+
     function loadSettingsToInputs() {
       document.getElementById("cfgHourlyRate").value = settings.hourlyRate;
       document.getElementById("cfgHourlyBonus").value = settings.hourlyBonus;
@@ -539,7 +662,12 @@
       document.getElementById("cfgManualTaxRate").value = settings.manualTaxRate;
       document.getElementById("cfgCisCredit").value = settings.cisCredit;
       document.getElementById("cfgLang").value = settings.lang;
+      populateCountrySelects();
       document.getElementById("cfgHolidayCountry").value = settings.holidayCountry;
+      document.getElementById("cfgEmployerCountry").value = settings.employerCountry || "LU";
+      document.getElementById("cfgResidenceCountry").value = settings.residenceCountry || "LU";
+      document.getElementById("cfgCalendarRegion").value = settings.calendarRegion || "";
+      renderWeeklySchedule();
       document.getElementById("cfgAnnualVacation").value = settings.annualVacation;
       document.getElementById("cfgSecurityPin").value = settings.securityPin || "";
       document.getElementById("bonusHintLabel").textContent = `Bónus: ${Number(settings.hourlyBonus).toFixed(2)} €/h • Panier: ${Number(settings.dailyPanier).toFixed(2)} €/dia`;
@@ -559,6 +687,9 @@
       settings.cisCredit = parseFloat(document.getElementById("cfgCisCredit").value) || 0;
       settings.lang = document.getElementById("cfgLang").value;
       settings.holidayCountry = document.getElementById("cfgHolidayCountry").value;
+      settings.employerCountry = document.getElementById("cfgEmployerCountry").value;
+      settings.residenceCountry = document.getElementById("cfgResidenceCountry").value;
+      settings.calendarRegion = document.getElementById("cfgCalendarRegion").value.trim();
       settings.annualVacation = parseInt(document.getElementById("cfgAnnualVacation").value) || 26;
       settings.securityPin = document.getElementById("cfgSecurityPin").value.trim();
 
@@ -609,17 +740,28 @@
     }
 
     function fillStandardWeek() {
-      const baseDate = new Date(document.getElementById("entryDate").value || new Date());
-      const day = baseDate.getDay();
-      const diffToMonday = baseDate.getDate() - day + (day === 0 ? -6 : 1);
-      const monday = new Date(baseDate.setDate(diffToMonday));
+      const selected = document.getElementById("entryDate").value;
+      if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(selected)) return;
+      const monday = new Date(selected + "T12:00:00");
+      const weekday = monday.getDay();
+      monday.setDate(monday.getDate() - ((weekday + 6) % 7));
+      const schedule = settings.weeklySchedule || defaultSettings.weeklySchedule;
 
-      for (let i = 0; i < 5; i++) {
+      for (let i = 0; i < 7; i++) {
         const d = new Date(monday);
         d.setDate(monday.getDate() + i);
-        const iso = d.toISOString().slice(0, 10);
+        const dayNumber = d.getDay();
+        const slot = schedule[dayNumber] || defaultSettings.weeklySchedule[dayNumber];
+        if (!slot.enabled) continue;
+        const hours = hoursForSchedule(slot);
+        if (hours === null) continue;
+        const iso = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
         if (!entries[iso]) {
-          entries[iso] = { date: iso, type: "work", normal: 8, extra: 0, night: 0, includeBonus: true, note: "Semana padrão" };
+          entries[iso] = {
+            date: iso, type: "work", normal: hours, extra: 0, night: 0,
+            includeBonus: true, note: "Semana — horário configurado",
+            scheduledStart: slot.start, scheduledEnd: slot.end, scheduledBreakMinutes: Number(slot.breakMinutes)
+          };
         }
       }
       localStorage.setItem("wt_entries", JSON.stringify(entries));
