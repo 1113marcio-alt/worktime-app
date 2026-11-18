@@ -94,8 +94,12 @@
     const month = getMonth();
     const data = calculateMonthData(month);
     $("homeMonth").textContent = monthLabel(month);
-    $("homeNet").textContent = formatMoney(data.finalNet);
+    $("homeNet").textContent = formatMoney(data.netBeforeCredit);
     $("homeGross").textContent = formatMoney(data.totalGross);
+    $("homeCreditNotice").textContent = data.cisCreditApplied > 0
+      ? "CIS configurado: +" + formatMoney(data.cisCreditApplied) +
+        " (não incluído neste saldo; depende da situação fiscal e do período remunerado)."
+      : "Valores acumulados apenas dos dias registados; não representam necessariamente o salário mensal.";
     $("homeNormal").textContent = data.normalH.toFixed(2) + " h";
     $("homeOvertime").textContent = data.extraH.toFixed(2) + " h";
     $("homeWorkdays").textContent = data.monthEntries.filter(e => e.type === "work").length;
@@ -103,8 +107,12 @@
     $("homeHours").textContent = (data.normalH + data.extraH).toFixed(2) + " h";
     $("homeCountry").textContent = settings.employerCountry || "LU";
     if ($("salaryPreviewNet")) {
-      $("salaryPreviewNet").textContent = formatMoney(data.finalNet);
+      $("salaryPreviewNet").textContent = formatMoney(data.netBeforeCredit);
       $("salaryPreviewGross").textContent = formatMoney(data.totalGross);
+      $("salaryPreviewCredit").textContent = "CIS configurado (a confirmar): +" +
+        formatMoney(data.cisCreditApplied);
+      $("salaryPreviewWithCredit").textContent = "Simulação com CIS: " +
+        formatMoney(data.finalNet) + " — sujeito a elegibilidade.";
       $("salaryPreviewDeductions").textContent =
         formatMoney(data.ccssPension + data.ccssHealth + data.ccssDep + data.taxIrs);
       $("salaryPreviewBonus").textContent = formatMoney(data.bonusGross);
