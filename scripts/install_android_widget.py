@@ -44,6 +44,14 @@ NS = "http://schemas.android.com/apk/res/android"
 ET.register_namespace("android", NS)
 tree = ET.parse(manifest_file)
 manifest = tree.getroot()
+# Android 13+: notifications are only displayed after the user grants permission
+# through the system settings. Keep the preference disabled by default.
+permission = f"{{{NS}}}name"
+if not any(el.get(permission) == "android.permission.POST_NOTIFICATIONS"
+           for el in manifest.findall("uses-permission")):
+    ET.SubElement(manifest, "uses-permission", {
+        permission: "android.permission.POST_NOTIFICATIONS"
+    })
 app = manifest.find("application")
 assert app is not None, "AndroidManifest has no application node"
 name_key = f"{{{NS}}}name"
