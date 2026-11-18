@@ -61,20 +61,20 @@ public final class WorkTimeWidgetProvider extends AppWidgetProvider {
         String primary;
         String action;
         if (!enabled) {
-            label = "Ativa o widget nas Opções";
-            primary = "Abrir aplicação";
+            label = "Ativa nas Opções";
+            primary = "Abrir app";
             action = "";
         } else if ("paused".equals(state)) {
-            label = "Em pausa" + startLabel;
+            label = "Pausa" + startLabel;
             primary = "▶ Retomar";
             action = ACTION_RESUME;
         } else if ("working".equals(state)) {
-            label = "Turno em curso" + startLabel;
+            label = "Trabalho" + startLabel;
             primary = "Ⅱ Pausa";
             action = ACTION_PAUSE;
         } else {
-            label = "Pronto para começar";
-            primary = "▶ Iniciar turno";
+            label = "Pronto";
+            primary = "▶ Iniciar";
             action = ACTION_START;
         }
 
@@ -90,6 +90,7 @@ public final class WorkTimeWidgetProvider extends AppWidgetProvider {
         }
         view.setOnClickPendingIntent(R.id.widget_finish,pending(context,id,ACTION_FINISH,4));
         view.setOnClickPendingIntent(R.id.widget_title,launch(context,id));
+        view.setOnClickPendingIntent(R.id.widget_logo,launch(context,id));
         return view;
     }
 
