@@ -19,6 +19,11 @@
     try { localStorage.setItem(key, JSON.stringify(value)); return true; }
     catch (_) { alert("Sem espaço para guardar os dados. Exporte um backup e liberte espaço."); return false; }
   }
+  function localeCode() {
+    const codes = {pt:"pt-PT",fr:"fr-FR",de:"de-DE",es:"es-ES",en:"en-GB",lu:"lb-LU"};
+    return codes[settings.lang] || "pt-PT";
+  }
+  function tr(text) { return window.WTLocale ? window.WTLocale.tr(text, settings.lang) : text; }
   function localDateKey(value) {
     const d = value instanceof Date ? value : new Date(value);
     return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") +
@@ -27,18 +32,18 @@
   function monthLabel(value) {
     const date = new Date(value + "-01T12:00:00");
     if (Number.isNaN(date.getTime())) return value;
-    const text = new Intl.DateTimeFormat("pt-PT", { month: "long", year: "numeric" }).format(date);
+    const text = new Intl.DateTimeFormat(localeCode(), { month: "long", year: "numeric" }).format(date);
     return text.charAt(0).toUpperCase() + text.slice(1);
   }
   function displayDate(date) {
     if (!date) return "";
     const dt = new Date(date + "T12:00:00");
-    return new Intl.DateTimeFormat("pt-PT", { day: "numeric", month: "long", year: "numeric" }).format(dt);
+    return new Intl.DateTimeFormat(localeCode(), { day: "numeric", month: "long", year: "numeric" }).format(dt);
   }
   function clockTime(value) {
     const dt = new Date(value);
     return Number.isNaN(dt.getTime()) ? "--:--" :
-      new Intl.DateTimeFormat("pt-PT", { hour: "2-digit", minute: "2-digit" }).format(dt);
+      new Intl.DateTimeFormat(localeCode(), { hour: "2-digit", minute: "2-digit" }).format(dt);
   }
   function timeParts(totalSeconds) {
     const sec = Math.max(0, Math.floor(totalSeconds || 0));
@@ -180,9 +185,12 @@
   }
 
   function holidayForDay(iso) {
-    if ((settings.holidayCountry || "LU") !== "LU" || !iso.startsWith("2026-")) return null;
-    if (typeof luxHolidays2026 === "undefined") return null;
-    return luxHolidays2026.find(h => h.date === iso) || null;
+    const policy = window.WTCountryRules;
+    if (!policy) return null;
+    const year = Number(iso.slice(0,4));
+    const country = settings.holidayCountry || "LU";
+    const data = policy.holidays(year,country,settings.calendarRegion);
+    return data.items.find(h => h.date === iso) || null;
   }
   function renderCalendar() {
     if (!$("calendarGrid")) return;
@@ -200,6 +208,13 @@
     }
     const grid = $("calendarGrid");
     grid.replaceChildren();
+    const weekdays = document.querySelectorAll(".wt-cal-weekdays span");
+    const mon = new Date(2026,10,16); // second-feira 16 Nov 2026
+    weekdays.forEach((node,index) => {
+      const dt = new Date(mon);
+      dt.setDate(mon.getDate()+index);
+      node.textContent = new Intl.DateTimeFormat(localeCode(), {weekday:"short"}).format(dt).replace(".","").toUpperCase();
+    });
     for (let index = 0; index < size; index++) {
       const dateNumber = index - offset + 1;
       if (dateNumber < 1 || dateNumber > monthDays) {
@@ -230,7 +245,9 @@
     const legend = $("calendarSummary");
     const currentEntries = Object.values(entries).filter(e => e.date && e.date.startsWith(month));
     legend.textContent = currentEntries.length + " dias com registos" +
-      ((settings.holidayCountry || "LU") === "LU" && month.startsWith("2026-") ? " • feriados LU 2026 assinalados" : "");
+      (window.WTCountryRules && window.WTCountryRules.holidays(Number(month.slice(0,4)),
+        settings.holidayCountry || "LU", settings.calendarRegion).verified
+        ? " • " + (settings.holidayCountry || "LU") + " " + month.slice(0,4) : "");
     const selected = entries[calendarSelected];
     const holiday = holidayForDay(calendarSelected);
     $("selectedDayTitle").textContent = displayDate(calendarSelected);
@@ -261,14 +278,14 @@
     if (!$("clockTimer")) return;
     const shift = currentShift();
     const date = localDateKey(new Date());
-    const state = shift ? (shift.status === "paused" ? "Em pausa" : "Turno em curso") : "Pronto para começar";
+    const state = shift ? (shift.status === "paused" ? tr("Em pausa") : tr("Turno em curso")) : tr("Pronto para começar");
     $("clockTimer").textContent = shift ? timeParts(timeWorkedSeconds(shift)) : "00:00:00";
     $("clockStatus").textContent = state;
     $("clockDate").textContent = displayDate(shift ? localDateKey(shift.start) : date);
     $("clockStartTime").textContent = shift ? clockTime(shift.start) : "--:--";
     $("clockBreaks").textContent = shift ? String(shift.breaks.length) : "0";
-    $("clockPrimary").textContent = !shift ? "▶ Iniciar turno" :
-      (shift.status === "paused" ? "▶ Retomar trabalho" : "Ⅱ Iniciar pausa");
+    $("clockPrimary").textContent = !shift ? "▶ " + tr("Iniciar turno") :
+      (shift.status === "paused" ? "▶ " + tr("Retomar trabalho") : "Ⅱ " + tr("Iniciar pausa"));
     $("clockPrimary").className = "wt-button " + (!shift ? "primary" : "cyan");
     $("clockFinish").disabled = !shift;
     $("clockDiscard").hidden = !shift;
