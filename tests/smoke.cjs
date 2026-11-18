@@ -551,3 +551,55 @@ test("se o Android desativou o widget, exige reativação explícita sem perder 
   assert.ok(plugin.includes("void getStatus(PluginCall call)"));
   assert.ok(source.includes("WTWidget.reactivate()"));
 });
+
+
+test("assinatura permanente usa apenas segredos privados e distingue APK debug de assinado", () => {
+  const workflow=fs.readFileSync(".github/workflows/apk.yml","utf8");
+  const signer=fs.readFileSync("scripts/configure_android_release_signing.py","utf8");
+  for(const secret of ["WORKTIME_PREVIEW_KEYSTORE_B64",
+    "WORKTIME_PREVIEW_STORE_PASSWORD","WORKTIME_PREVIEW_KEY_ALIAS",
+    "WORKTIME_PREVIEW_KEY_PASSWORD"]) {
+    assert.ok(workflow.includes("secrets."+secret));
+  }
+  assert.ok(workflow.includes("base64 --decode"));
+  assert.ok(workflow.includes("WORKTIME_SIGNED=true"));
+  assert.ok(workflow.includes("./gradlew assembleRelease"));
+  assert.ok(workflow.includes("./gradlew assembleDebug"));
+  assert.ok(workflow.includes("WorkTime-Pro-2-PREVIEW-SIGNED.apk"));
+  assert.ok(workflow.includes("WorkTime-Pro-2-PREVIEW-DEBUG.apk"));
+  assert.ok(workflow.includes("dist/*.apk"));
+  assert.ok(signer.includes("System.getenv('WORKTIME_KEYSTORE_PATH')"));
+  assert.ok(!signer.includes("BEGIN PRIVATE KEY"));
+  assert.ok(fs.readFileSync("docs/ANDROID-SIGNING.md","utf8").includes("não poderá atualizar diretamente"));
+});
+
+test("idiomas traduzem histórico e configurações de widget e notificações",()=>{
+  const app=makeApp();
+  vm.runInContext(fs.readFileSync("wt-i18n.js","utf8"),app.ctx);
+  const tr=app.ctx.window.WTLocale.tr;
+  assert.equal(tr("Histórico de turnos","en"),"Shift history");
+  assert.equal(tr("Histórico de turnos","fr"),"Historique des services");
+  assert.equal(tr("Widget no ecrã inicial","en"),"Home screen widget");
+  assert.equal(tr("Mostrar notificação durante o turno","fr"),
+    "Afficher une notification pendant le service");
+  assert.equal(tr("Arquivo de horas","de"),"Stundenarchiv");
+  assert.equal(tr("Arquivo de horas","es"),"Archivo de horas");
+  assert.equal(tr("Arquivo de horas","lu"),"Stonnenarchiv");
+});
+
+test("notificações nativas autorizadas não são desativadas automaticamente ao abrir a app",async()=>{
+  const x=prepareWidgetActivationTest(true,true);
+  let setNativeCalls=0;
+  const plugin=x.app.ctx.window.Capacitor.Plugins.WorkTimeWidget;
+  plugin.getShiftNotificationStatus=async()=>({enabled:true,systemAllowed:true});
+  plugin.setShiftNotifications=async()=>{setNativeCalls++;return {systemAllowed:true};};
+  const notificationCheckbox={checked:false};
+  const oldGet=x.app.ctx.document.getElementById;
+  x.app.ctx.document.getElementById=id=>id==="cfgShiftNotifications"?notificationCheckbox:oldGet(id);
+  await x.app.ctx.window.WTWidget.init();
+  assert.equal(setNativeCalls,0);
+  assert.equal(notificationCheckbox.checked,true);
+  assert.equal(JSON.parse(x.app.values.get("wt_settings")).shiftNotifications,true);
+  assert.equal(x.getNative(),true);
+  assert.deepEqual(x.enabledCalls,[]);
+});
