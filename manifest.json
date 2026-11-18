@@ -1,6 +1,6 @@
 {
-  "name": "WorkTime Pro Luxembourg",
-  "short_name": "WorkTime Pro",
+  "name": "WorkTime Pro 2 Preview",
+  "short_name": "WorkTime Pro 2",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#020617",
@@ -8,9 +8,9 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "https://cdn-icons-png.flaticon.com/512/2693/2693507.png",
-      "sizes": "512x512",
-      "type": "image/png",
+      "src": "./wt-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
       "purpose": "any maskable"
     }
   ]
