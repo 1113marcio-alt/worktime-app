@@ -14,10 +14,10 @@ import java.time.format.DateTimeFormatter;
 
 public final class WorkTimeWidgetProvider extends AppWidgetProvider {
     private static final String PREFIX = "lu.marcio.worktimepro.preview.WIDGET_";
-    private static final String ACTION_START = PREFIX + "START";
-    private static final String ACTION_PAUSE = PREFIX + "PAUSE";
-    private static final String ACTION_RESUME = PREFIX + "RESUME";
-    private static final String ACTION_FINISH = PREFIX + "FINISH";
+    static final String ACTION_START = PREFIX + "START";
+    static final String ACTION_PAUSE = PREFIX + "PAUSE";
+    static final String ACTION_RESUME = PREFIX + "RESUME";
+    static final String ACTION_FINISH = PREFIX + "FINISH";
 
     @Override
     public void onReceive(Context context, Intent intent) {
