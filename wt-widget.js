@@ -151,6 +151,11 @@
  }
  async function toggleNotifications(){
    const checked=!!($("cfgShiftNotifications") && $("cfgShiftNotifications").checked);
+   if (checked && !settings.widgetEnabled) {
+     $("cfgShiftNotifications").checked=false;
+     status("Ativa primeiro o widget. Os botões da notificação usam o mesmo registo seguro.",false);
+     return;
+   }
    try {
      settings.shiftNotifications=checked;
      localStorage.setItem("wt_settings",JSON.stringify(settings));
