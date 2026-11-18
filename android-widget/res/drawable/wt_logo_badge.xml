@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+  <item>
+    <shape android:shape="rectangle">
+      <gradient android:angle="315" android:startColor="#2F6AF0"
+        android:endColor="#54C8D9" />
+      <corners android:radius="11dp" />
+    </shape>
+  </item>
+  <item android:drawable="@drawable/wt_launcher_foreground" />
+</layer-list>
