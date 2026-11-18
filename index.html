@@ -403,8 +403,8 @@
       </div>
 
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
-        <h3 class="font-bold text-sm text-slate-200">📅 Feriados Oficiais 2026 (Luxemburgo)</h3>
-        <p class="text-xs text-slate-400">Feriados que calham ao Sábado ou Domingo dão direito a <strong>+1 dia de férias compensatório</strong> (Congé Compensatoire).</p>
+        <h3 id="holidayCountryHeading" class="font-bold text-sm text-slate-200">📅 Feriados</h3>
+        <p id="holidayScopeNotice" class="text-xs text-slate-400">As compensações dependem das regras e do horário aplicável.</p>
         <div id="holidaysList" class="space-y-2 text-xs"></div>
       </div>
     </section>
@@ -1120,46 +1120,25 @@
       // Base tributável normal (exclui Horas Extras e Panier)
       const regularContributoryGross = normalGross + nightGross + bonusGross + vacationGross;
 
-      // CCSS Oficial Luxemburgo:
-      // 1. Pensão (8% apenas sobre salário normal/bónus/férias — Horas extras são isentas de pensão)
-      const socialParameters = getLuxSocialParameters(monthPrefix);
-      const ccssPension = regularContributoryGross * socialParameters.pensionRate;
-      // 2. Saúde (3.05% sobre base normal + parte base das horas extras; majoração é isenta)
-      const ccssHealth = (regularContributoryGross + extraBaseGross) * 0.0305;
-      // 3. Dependência (1.40% após abatimento de 1/4 SSM = 675.94 €)
-      const depBase = Math.max(0, (regularContributoryGross + extraBaseGross) - socialParameters.depAllowance);
-      const ccssDep = depBase * 0.014;
-
-      // Base de IRS (Horas extras são 100% isentas de IRS no Luxemburgo; deduz Pensão e Saúde)
-      const taxableIrsBase = Math.max(0, regularContributoryGross - ccssPension - ccssHealth);
-
-      let effectiveTaxRate = 0;
-      if (settings.manualTaxRate > 0) {
-        effectiveTaxRate = settings.manualTaxRate / 100;
-      } else {
-        // Estimativa progressiva realista Luxemburgo por Classe
-        if (settings.taxClass === "2") {
-          effectiveTaxRate = taxableIrsBase > 4500 ? 0.11 : (taxableIrsBase > 3200 ? 0.065 : 0.02);
-        } else if (settings.taxClass === "1a") {
-          effectiveTaxRate = taxableIrsBase > 4000 ? 0.14 : 0.07;
-        } else {
-          effectiveTaxRate = taxableIrsBase > 4000 ? 0.19 : (taxableIrsBase > 3000 ? 0.13 : 0.08);
-        }
-      }
-
-      const taxIrs = taxableIrsBase * effectiveTaxRate;
-      const totalDeductions = ccssPension + ccssHealth + ccssDep + taxIrs;
-      const netBeforeCredit = totalGross - totalDeductions;
-      // CIS é configurável, e a elegibilidade real não é verificada nesta simulação.
-      // Sem qualquer remuneração no mês, não gerar crédito fictício.
-      const cisCreditApplied = totalGross > 0 ? Math.max(0, Number(settings.cisCredit) || 0) : 0;
-      const finalNet = netBeforeCredit + cisCreditApplied;
-
+      // O país do empregador escolhe o contexto fiscal.
+      // Portugal/França têm retenção MANUAL até existirem todos os dados oficiais
+      // (tabelas regionais e situação familiar do trabalhador).
+      const taxData = window.WTCountryRules.estimatePayroll({
+        country: settings.employerCountry || "LU", month: monthPrefix,
+        regularGross: normalGross + nightGross + bonusGross + vacationGross,
+        extraBaseGross, extraMajorationGross,
+        totalGross,
+        classId: settings.taxClass,
+        manualTaxRate: settings.manualTaxRate,
+        manualSocialRate: settings.manualSocialRate,
+        cisCredit: settings.cisCredit,
+        forceManual: settings.taxSystem === "custom"
+      });
       return {
         monthEntries, normalH, extraH, nightH, vacDays,
         normalGross, extraTotalGross, nightGross, bonusGross, vacationGross, panierGross,
-        totalGross, ccssPension, ccssHealth, ccssDep, taxIrs, effectiveTaxRate,
-        netBeforeCredit, cisCreditApplied, socialParameters, finalNet, vacDailyBase
+        totalGross, vacDailyBase, ...taxData,
+        socialParameters: {pensionRate:taxData.pensionRate,depAllowance:taxData.depAllowance}
       };
     }
 
@@ -1200,7 +1179,7 @@
       // Aba Folha de Salário
       document.getElementById("lblNormalBreakdown").textContent = `Horas Normais (${d.normalH}h × ${settings.hourlyRate.toFixed(2)} €)`;
       document.getElementById("valNormalGross").textContent = formatMoney(d.normalGross);
-      document.getElementById("lblExtraBreakdown").textContent = `Horas Extras +${settings.overtimePct}% (${d.extraH}h - Isento IRS)`;
+      document.getElementById("lblExtraBreakdown").textContent = `Horas Extras +${settings.overtimePct}% (${d.extraH}h • regras fiscais ${d.country})`;
       document.getElementById("valExtraGross").textContent = formatMoney(d.extraTotalGross);
       document.getElementById("lblNightBreakdown").textContent = `Suplemento Noturno +${settings.nightPct}% (${d.nightH}h)`;
       document.getElementById("valNightGross").textContent = formatMoney(d.nightGross);
@@ -1214,38 +1193,55 @@
       document.getElementById("valCcssPension").textContent = "- " + formatMoney(d.ccssPension);
       document.getElementById("valCcssHealth").textContent = "- " + formatMoney(d.ccssHealth);
       document.getElementById("valCcssDep").textContent = "- " + formatMoney(d.ccssDep);
-      document.getElementById("lblTaxClassUsed").textContent = `Retenção IRS (Classe ${settings.taxClass} • ${(d.effectiveTaxRate * 100).toFixed(1)}%)`;
+      document.getElementById("lblTaxClassUsed").textContent = `${d.taxLabel} • ${(d.effectiveTaxRate * 100).toFixed(1)}%`;
       document.getElementById("valTaxIrs").textContent = "- " + formatMoney(d.taxIrs);
       document.getElementById("valCisCredit").textContent = "+ " + formatMoney(d.cisCreditApplied);
       document.getElementById("lblPensionRate").textContent =
-        "Pensão (" + (d.socialParameters.pensionRate * 100).toFixed(2).replace(".", ",") + "% - modelo LU)";
+        d.country === "LU" ? "Pensão (" + (d.socialParameters.pensionRate * 100).toFixed(2).replace(".", ",") + "% - modelo LU)" : "Pensão LU (não aplicável)";
+      document.getElementById("socialHeading").textContent = "2. Contribuições sociais — " + d.country + " (estimativa)";
+      document.getElementById("countryTaxExplanation").textContent = d.taxStatus;
+      document.getElementById("valSocialOther").textContent = "- " + formatMoney(d.socialOther);
+      document.getElementById("socialOtherLabel").textContent =
+        d.country === "PT" ? "Segurança Social (11% geral, estimada)" :
+        d.country === "FR" ? "Contribuições sociais (taxa manual)" : "Contribuições sociais adicionais";
+      document.getElementById("socialOtherRow").classList.toggle("hidden", d.country === "LU");
+      document.getElementById("lblTaxClassUsed").title = d.taxStatus;
       document.getElementById("lblDepAllowance").textContent =
-        "Dependência (1,40% após abatimento de " +
-        d.socialParameters.depAllowance.toFixed(2).replace(".", ",") + " €)";
+        d.country === "LU" ? "Dependência (1,40% após abatimento de " +
+          d.socialParameters.depAllowance.toFixed(2).replace(".", ",") + " €)" : "Dependência LU (não aplicável)";
       document.getElementById("valFinalNet").textContent = formatMoney(d.finalNet);
 
-      // Aba Férias e Feriados Compensatórios
-      const allVacUsed = Object.values(entries).filter(e => e.type === "vacation").length;
+      // Direitos de férias: país do empregador. Feriados: país do calendário.
+      const calendarCountry = settings.holidayCountry || "LU";
+      const year = Number(monthPrefix.slice(0,4));
+      const list = window.WTCountryRules.holidays(year,calendarCountry,settings.calendarRegion);
+      const allVacUsed = Object.values(entries).filter(e=>e.type==="vacation" && e.date.startsWith(String(year)+"-")).length;
       let compDays = 0;
-      const holHtml = luxHolidays2026.map(h => {
-        const dayOfWeek = new Date(h.date).getDay();
-        const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
-        if (isWeekend) compDays++;
-        return `
-          <div class="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl border border-slate-800">
-            <div>
-              <span class="font-bold text-white mr-2">${h.date}</span>
-              <span>${h.name}</span>
-            </div>
-            ${isWeekend ? `<span class="bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-lg text-[10px] font-bold">+1 Dia Compensatório</span>` : `<span class="text-slate-400 text-[10px]">Dia Útil</span>`}
-          </div>
-        `;
+      const holHtml = list.items.map(h => {
+        const date = new Date(h.date+"T12:00:00");
+        const weekday = date.getDay();
+        const schedule = settings.weeklySchedule || defaultSettings.weeklySchedule;
+        const shift = schedule[weekday] || defaultSettings.weeklySchedule[weekday];
+        const isNonworking = !shift.enabled;
+        // Apenas no Luxemburgo há um direito compensatório específico.
+        // São dias POTENCIAIS, sujeitos ao horário real/compensação concedida.
+        const potentialComp = calendarCountry==="LU" && isNonworking;
+        if(potentialComp) compDays++;
+        return `<div class="flex justify-between items-center bg-slate-800/60 p-2.5 rounded-xl border border-slate-800">
+          <div><span class="font-bold text-white mr-2">${h.date}</span><span>${escapeHtml(h.name)}</span></div>
+          <span class="text-[10px] ${potentialComp?'text-amber-300':'text-slate-400'}">${potentialComp?'Compensação possível':'Feriado'}</span>
+        </div>`;
       }).join("");
-
-      document.getElementById("holidaysList").innerHTML = holHtml;
+      document.getElementById("holidaysList").innerHTML = holHtml ||
+        '<p class="text-xs text-amber-300">Feriados ainda não verificados para este país/ano. Não estão assinalados automaticamente.</p>';
+      document.getElementById("holidayCountryHeading").textContent =
+        "📅 Feriados " + calendarCountry + " — " + year;
+      document.getElementById("holidayScopeNotice").textContent =
+        calendarCountry==="LU" ? "Compensações potenciais apenas; dependem do dia normal de trabalho e do descanso concedido. Não somadas automaticamente às férias."
+        : "Feriados nacionais. Regras regionais/municipais e compensatórias não incluídas automaticamente.";
       document.getElementById("vacTotalAllowed").textContent = settings.annualVacation + " d";
-      document.getElementById("vacCompensatory").textContent = "+" + compDays + " d";
-      document.getElementById("vacRemaining").textContent = (settings.annualVacation + compDays - allVacUsed) + " d";
+      document.getElementById("vacCompensatory").textContent = "+" + compDays + " pot.";
+      document.getElementById("vacRemaining").textContent = (settings.annualVacation - allVacUsed) + " d";
       document.getElementById("vacDailyValue").textContent = formatMoney(d.vacDailyBase);
 
       window.lastCalculatedNet = d.finalNet;
