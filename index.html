@@ -1424,7 +1424,7 @@
       const isPaidLeave = type === "vacation" || type === "holiday";
       let paidLeaveHours = 0;
       if (isPaidLeave) {
-        const hoursInput = document.getElementById("entryPaidLeaveHours").value.trim();
+        const hoursInput = String(document.getElementById("entryPaidLeaveHours").value).trim();
         paidLeaveHours = Number(hoursInput);
         if (hoursInput === "" || !Number.isFinite(paidLeaveHours) ||
             paidLeaveHours < 0 || paidLeaveHours > 24) {
