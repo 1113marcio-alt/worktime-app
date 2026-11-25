@@ -258,15 +258,7 @@
   }
   function openDate(iso) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return;
-    $("entryDate").value = iso;
-    const entry = entries[iso];
-    $("entryType").value = entry ? entry.type : "work";
-    $("entryNormal").value = entry ? safeNumber(entry.normal) : 8;
-    $("entryExtra").value = entry ? safeNumber(entry.extra) : 0;
-    $("entryNight").value = entry ? safeNumber(entry.night) : 0;
-    $("entryIncludeBonus").checked = entry ? entry.includeBonus !== false : true;
-    $("entryNote").value = entry ? (entry.note || "") : "";
-    $("currentMonthPicker").value = iso.slice(0, 7);
+    loadManualEntryForDate(iso);
     renderAll();
     switchTab("registo");
   }
@@ -363,8 +355,16 @@
     const rows = [];
     for (const entry of Object.values(entries)) {
       if (!entry || typeof entry !== "object" || typeof entry.date !== "string") continue;
+      const clock = entry.manualTime;
       const savedShifts = Array.isArray(entry.shifts) ? entry.shifts : [];
-      if (savedShifts.length) {
+      if (entry.type === "work" && clock && clock.start && clock.end) {
+        // A manual correction takes precedence over archived widget shifts.
+        // The original shifts remain safely stored in the day for audit.
+        rows.push({date:entry.date,status:"saved",type:"work",
+          start:clock.start,end:clock.end,seconds:clock.workedMinutes*60,
+          breaks:[],manualBreakMinutes:clock.breakMinutes,
+          note:entry.note || "",manualExact:true,id:null});
+      } else if (savedShifts.length && !entry.manuallyEdited) {
         savedShifts.forEach(shift => {
           if (!shift || typeof shift !== "object") return;
           rows.push({date:entry.date,status:"saved",type:entry.type,
@@ -420,8 +420,10 @@
       interval.textContent=times+hours+" h"+(row.legacy?" · Registo manual (sem marcações)":"");
       const pause=document.createElement("div");pause.className="wt-entry-sub";
       const pauses=Array.isArray(row.breaks) ? row.breaks : [];
-      pause.textContent=pauses.length ? "Pausas: "+pauses.map(p => clockTime(p.start)+"–"+clockTime(p.end)).join(", ") :
-        (row.start ? "Sem pausas registadas" : "");
+      pause.textContent=row.manualExact
+        ? "Pausa não remunerada: "+Number(row.manualBreakMinutes||0)+" min"
+        : pauses.length ? "Pausas: "+pauses.map(p => clockTime(p.start)+"–"+clockTime(p.end)).join(", ")
+        : (row.start ? "Sem pausas registadas" : "");
       body.append(title,interval,pause);
       const button=document.createElement("button");
       button.className="wt-pill";
