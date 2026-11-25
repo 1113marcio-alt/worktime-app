@@ -547,6 +547,71 @@ lu:{
 };
 for(const [locale,dict] of Object.entries(expanded))Object.assign(words[locale],dict);
 
+
+const manualEntryStrings={
+en:{
+"Calcular pelas horas exatas de entrada e saída":"Calculate from exact start and finish times",
+"Hora de entrada":"Start time","Hora de saída":"Finish time",
+"Pausa não remunerada (min)":"Unpaid break (min)",
+"Saída no dia seguinte":"Finish on the following day",
+"Preenche as horas exatas. As horas normais e extra serão calculadas pelo horário configurado.":"Enter exact times. Regular hours and overtime are calculated from your schedule.",
+"As pausas são descontadas. Horas noturnas continuam ajustáveis manualmente.":"Unpaid breaks are deducted. Night hours can still be adjusted manually.",
+"Modo manual: preenche diretamente as horas normais e extra abaixo.":"Manual totals: enter regular hours and overtime directly below.",
+"Guardado":"Saved","Guardar Registo do Dia":"Save day entry",
+"Alterações por guardar.":"Unsaved changes.",
+"Registo existente. Altera um campo para gravar novamente.":"Saved entry. Change a field to save again.",
+"Dia novo: preenche as horas e guarda quando estiver pronto.":"New day: enter hours and save when ready.",
+"Introduz a hora de entrada e a hora de saída para calcular as horas.":"Enter start and finish times to calculate worked hours.",
+"Seleciona uma data válida.":"Select a valid date.","Indica a hora de entrada e a hora de saída.":"Enter start and finish times.",
+"A pausa deve ser um número inteiro de minutos válido.":"The break must be a valid whole number of minutes.",
+"A data selecionada é inválida.":"The selected date is invalid.",
+"A saída deve ser depois da entrada. Para turnos noturnos assinala «Saída no dia seguinte».":"Finish must follow start. For overnight shifts select Finish on the following day.",
+"A pausa não pode ser igual ou superior à duração do turno.":"The break must be shorter than the shift.",
+"Escolhe uma data válida.":"Choose a valid date.","Horas normais e extra devem ter valores válidos.":"Regular and overtime hours must be valid.",
+"As horas noturnas devem ser um valor válido.":"Night hours must be valid.",
+"Não foi possível guardar neste dispositivo. Não foram alterados os dados existentes.":"Could not save on this device. Existing records were not changed."
+},
+fr:{
+"Calcular pelas horas exatas de entrada e saída":"Calculer à partir des heures exactes d'arrivée et de départ",
+"Hora de entrada":"Heure d'arrivée","Hora de saída":"Heure de départ",
+"Pausa não remunerada (min)":"Pause non rémunérée (min)",
+"Saída no dia seguinte":"Départ le lendemain",
+"Preenche as horas exatas. As horas normais e extra serão calculadas pelo horário configurado.":"Saisissez les heures exactes. Les heures normales et supplémentaires seront calculées selon votre horaire.",
+"As pausas são descontadas. Horas noturnas continuam ajustáveis manualmente.":"Les pauses non payées sont déduites. Les heures de nuit restent modifiables manuellement.",
+"Modo manual: preenche diretamente as horas normais e extra abaixo.":"Saisie manuelle : indiquez directement les heures normales et supplémentaires ci-dessous.",
+"Guardado":"Enregistré","Guardar Registo do Dia":"Enregistrer la journée",
+"Alterações por guardar.":"Modifications non enregistrées.",
+"Registo existente. Altera um campo para gravar novamente.":"Journée déjà enregistrée. Modifiez un champ pour enregistrer de nouveau.",
+"Dia novo: preenche as horas e guarda quando estiver pronto.":"Nouvelle journée : saisissez les heures et enregistrez.",
+"Introduz a hora de entrada e a hora de saída para calcular as horas.":"Saisissez l'heure d'arrivée et de départ pour calculer les heures travaillées.",
+"Seleciona uma data válida.":"Sélectionnez une date valide.","Indica a hora de entrada e a hora de saída.":"Indiquez l'heure d'arrivée et l'heure de départ.",
+"A pausa deve ser um número inteiro de minutos válido.":"La pause doit être un nombre entier de minutes valide.",
+"A data selecionada é inválida.":"La date sélectionnée est invalide.",
+"A saída deve ser depois da entrada. Para turnos noturnos assinala «Saída no dia seguinte».":"Le départ doit suivre l'arrivée. Pour les services de nuit, cochez Départ le lendemain.",
+"A pausa não pode ser igual ou superior à duração do turno.":"La pause doit être plus courte que le service.",
+"Escolhe uma data válida.":"Choisissez une date valide.","Horas normais e extra devem ter valores válidos.":"Les heures normales et supplémentaires doivent être valides.",
+"As horas noturnas devem ser um valor válido.":"Les heures de nuit doivent être valides.",
+"Não foi possível guardar neste dispositivo. Não foram alterados os dados existentes.":"Impossible d'enregistrer sur cet appareil. Les données existantes sont inchangées."
+},
+de:{"Hora de entrada":"Arbeitsbeginn","Hora de saída":"Arbeitsende",
+"Pausa não remunerada (min)":"Unbezahlte Pause (Min.)",
+"Saída no dia seguinte":"Ende am nächsten Tag",
+"Calcular pelas horas exatas de entrada e saída":"Aus genauen Anfangs- und Endzeiten berechnen",
+"Guardado":"Gespeichert","Alterações por guardar.":"Ungespeicherte Änderungen."},
+es:{"Hora de entrada":"Hora de entrada","Hora de saída":"Hora de salida",
+"Pausa não remunerada (min)":"Pausa no remunerada (min)",
+"Saída no dia seguinte":"Salida al día siguiente",
+"Calcular pelas horas exatas de entrada e saída":"Calcular a partir de horas exactas de entrada y salida",
+"Guardado":"Guardado","Alterações por guardar.":"Cambios sin guardar."},
+lu:{"Hora de entrada":"Ufankszäit","Hora de saída":"Schlusszäit",
+"Pausa não remunerada (min)":"Onbezuelt Paus (Min.)",
+"Saída no dia seguinte":"Enn den nächsten Dag",
+"Calcular pelas horas exatas de entrada e saída":"Aus geneeëm Ufank an Enn berechnen",
+"Guardado":"Gespäichert","Alterações por guardar.":"Net gespäichert Ännerungen."}
+};
+for(const [locale,dict] of Object.entries(manualEntryStrings))
+  Object.assign(words[locale],dict);
+
 const originals = new WeakMap();
 function normalize(code) { return ["fr","en","de","es","lu","pt"].includes(code)?code:"pt"; }
 function tr(text,language) {
