@@ -723,7 +723,8 @@ function manualDayFixture(app, date="2026-11-11") {
     "entryBreakMinutes","entryNextDay","entryNormal","entryExtra","entryNight",
     "entryIncludeBonus","entryNote","currentMonthPicker","manualClockPanel",
     "manualClockFields","manualTotalHint","entrySaveButton","entrySaveText",
-    "entrySaveStatus","entryTimePreview","manualEntryCard"];
+    "entrySaveStatus","entryTimePreview","manualEntryCard",
+    "paidLeavePanel","paidLeaveHint","entryPaidLeaveHours"];
   for(const id of ids) elements[id]={
     value:"",checked:false,readOnly:false,disabled:false,
     textContent:"",className:"",
@@ -736,6 +737,7 @@ function manualDayFixture(app, date="2026-11-11") {
   elements.entryStartTime.value="06:02";
   elements.entryEndTime.value="17:05";
   elements.entryBreakMinutes.value="0";
+  elements.entryPaidLeaveHours.value="8";
   elements.entryNight.value="0";
   elements.entryIncludeBonus.checked=true;
   elements.currentMonthPicker.value="2026-11";
@@ -960,4 +962,89 @@ test("apagar registo ou preencher semana preserva dados quando o armazenamento f
   assert.equal(app.evaluate("Object.keys(entries).length"),1);
   assert.equal(app.values.get("wt_entries"),before);
   assert.ok(app.notices.some(msg=>msg.includes("Nenhum registo foi alterado")));
+});
+
+
+test("férias novas usam o horário do dia e as antigas conservam o valor de 8h",()=>{
+  const original={"2026-11-24":{date:"2026-11-24",type:"vacation",
+    normal:8,extra:0,night:0,includeBonus:false,note:"Férias antigas"}};
+  const app=makeApp({hourlyRate:20,hourlyBonus:2,vacAvgSupplement:16,
+    weeklySchedule:{1:{enabled:true,start:"09:00",end:"15:30",breakMinutes:30},
+      0:{enabled:false,start:"08:00",end:"16:30",breakMinutes:30}}},original);
+  const e=manualDayFixture(app,"2026-11-23");
+  assert.equal(app.evaluate('scheduledLeaveHours("2026-11-23")'),6);
+  assert.equal(app.evaluate('scheduledLeaveHours("2026-11-22")'),0);
+  assert.equal(app.evaluate('paidHoursForEntry(entries["2026-11-24"])'),8);
+  app.ctx.loadManualEntryForDate("2026-11-23");
+  e.entryType.value="vacation";
+  app.ctx.onDayTypeChange();
+  assert.equal(Number(e.entryPaidLeaveHours.value),6);
+  const result=app.ctx.saveEntry();
+  assert.equal(result,true);
+  const entries=JSON.parse(app.values.get("wt_entries"));
+  assert.equal(entries["2026-11-23"].paidLeaveHours,6);
+  assert.equal(entries["2026-11-24"].paidLeaveHours,undefined);
+  const month=app.evaluate('calculateMonthData("2026-11")');
+  assert.equal(month.vacDays,2);
+  assert.equal(month.vacPaidHours,14);
+  const expected=(6+8)*(20+2)+14/8*16;
+  assert.equal(month.vacationGross,expected);
+  app.ctx.loadManualEntryForDate("2026-11-24");
+  assert.equal(Number(e.entryPaidLeaveHours.value),8,
+    "Alterar um dia antigo não pode recalcular automaticamente as suas 8h");
+});
+
+test("dias de férias em folga têm 0h por defeito, mas permitem correção contratual",()=>{
+  const app=makeApp({hourlyRate:21,hourlyBonus:1,vacAvgSupplement:8});
+  const e=manualDayFixture(app,"2026-11-22"); // domingo sem trabalho programado
+  app.ctx.loadManualEntryForDate("2026-11-22");
+  e.entryType.value="vacation";
+  app.ctx.onDayTypeChange();
+  assert.equal(Number(e.entryPaidLeaveHours.value),0);
+  assert.equal(app.ctx.saveEntry(),true);
+  assert.equal(app.evaluate('calculateMonthData("2026-11").vacationGross'),0);
+  assert.equal(app.evaluate('calculateMonthData("2026-11").vacPaidHours'),0);
+  // Um dia sem horas remuneradas não consome férias na contagem anual.
+  e.entryPaidLeaveHours.value="3.5";
+  app.ctx.markEntryDirty();
+  assert.equal(app.ctx.saveEntry(),true);
+  assert.equal(app.evaluate('calculateMonthData("2026-11").vacPaidHours'),3.5);
+  assert.equal(app.evaluate('calculateMonthData("2026-11").vacationGross'),3.5*(21+1)+3.5/8*8);
+  assert.equal(JSON.parse(app.values.get("wt_entries"))["2026-11-22"].paidLeaveHours,3.5);
+});
+
+test("horas pagas de férias inválidas não apagam entradas anteriores",()=>{
+  const old={"2026-11-23":{date:"2026-11-23",type:"vacation",normal:8,extra:0,night:0,
+    paidLeaveHours:6,note:"Original"}};
+  const app=makeApp({},old);
+  const e=manualDayFixture(app,"2026-11-23");
+  app.ctx.loadManualEntryForDate("2026-11-23");
+  e.entryPaidLeaveHours.value="-2";
+  assert.equal(app.ctx.saveEntry(),false);
+  assert.equal(JSON.parse(app.values.get("wt_entries"))["2026-11-23"].paidLeaveHours,6);
+  e.entryPaidLeaveHours.value="25";
+  assert.equal(app.ctx.saveEntry(),false);
+  e.entryPaidLeaveHours.value="";
+  assert.equal(app.ctx.saveEntry(),false);
+  assert.ok(e.entrySaveStatus.textContent.includes("entre 0 e 24"));
+});
+
+test("o horário semanal permanece intacto quando falha a gravação",()=>{
+  const app=makeApp({}, {});
+  const oldSchedule=app.evaluate("JSON.stringify(settings.weeklySchedule)");
+  app.ctx.document.getElementById=id=>{
+    const matched=id.match(/^week(Enabled|Start|End|Break)(\d)$/);
+    if (matched) {
+      const field=matched[1],day=Number(matched[2]);
+      return {
+        checked: day>=1&&day<=5,
+        value:field==="Start"?"09:00":field==="End"?"18:00":"60"
+      };
+    }
+    return {value:""};
+  };
+  app.ctx.localStorage.setItem=()=>{throw Error("Storage quota exceeded");};
+  assert.equal(app.ctx.saveWeeklySchedule(),false);
+  assert.equal(app.evaluate("JSON.stringify(settings.weeklySchedule)"),oldSchedule);
+  assert.ok(app.notices.some(x=>x.includes("O horário anterior foi mantido")));
 });
