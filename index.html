@@ -1914,16 +1914,36 @@
       reader.readAsText(file);
     }
 
+    function safeCsvText(value) {
+      let raw = String(value ?? "");
+      // Spreadsheet apps may execute formulas starting with = + - @.
+      // The leading apostrophe keeps worker-supplied notes as plain text.
+      if (/^\s*[=+\-@]/.test(raw)) raw = "'" + raw;
+      return '"' + raw.replace(/"/g, '""') + '"';
+    }
+
     function exportCSV() {
-      let csv = "Data,Tipo,Horas Normais,Horas Extras,Horas Noturnas,Notas\n";
-      Object.values(entries).sort((a,b) => a.date.localeCompare(b.date)).forEach(e => {
-        csv += `${e.date},${e.type},${e.normal},${e.extra},${e.night},"${e.note || ""}"\n`;
-      });
+      const rows = [
+        ["Data","Tipo","Horas Normais","Horas Extras","Horas Noturnas","Notas"].join(",")
+      ];
+      Object.values(entries).filter(e => e && typeof e.date === "string")
+        .sort((a,b) => a.date.localeCompare(b.date)).forEach(e => {
+          rows.push([
+            safeCsvText(e.date), safeCsvText(e.type),
+            Number.isFinite(Number(e.normal)) ? Number(e.normal) : 0,
+            Number.isFinite(Number(e.extra)) ? Number(e.extra) : 0,
+            Number.isFinite(Number(e.night)) ? Number(e.night) : 0,
+            safeCsvText(e.note)
+          ].join(","));
+        });
+      const csv = "\uFEFF" + rows.join("\r\n") + "\r\n";
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = "horas_trabalho.csv";
-      a.click();
+      const anchor = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      anchor.href = url;
+      anchor.download = "horas_trabalho.csv";
+      anchor.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
     }
 
     window.addEventListener("DOMContentLoaded", initApp);
