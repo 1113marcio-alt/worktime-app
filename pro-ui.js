@@ -498,8 +498,30 @@
     const schedule = settings.weeklySchedule || defaultSettings.weeklySchedule;
     const slot = schedule[day] || defaultSettings.weeklySchedule[day];
     const planned = slot.enabled ? hoursForSchedule(slot) : null;
-    const normal = Math.min(hourTotal, planned === null ? hourTotal : planned);
+    // O limite normal aplica-se à soma dos turnos do dia, não a cada turno.
+    // Horas já registadas manualmente continuam intactas.
+    const alreadyNormal = prior ? safeNumber(prior.normal) : 0;
+    const remainingNormal = planned === null
+      ? hourTotal : Math.max(0, planned - alreadyNormal);
+    const normal = Math.round(Math.min(hourTotal, remainingNormal) * 100) / 100;
     const extra = Math.max(0, Math.round((hourTotal - normal) * 100) / 100);
+    // IDs diferentes ainda podem representar a mesma marcação, por engano.
+    // Rejeitar sobreposição temporal em vez de duplicar salário.
+    const ranges = prior ? [
+      ...(Array.isArray(prior.shifts) ? prior.shifts : []),
+      ...(prior.manualTime && prior.manualTime.start && prior.manualTime.end
+        ? [prior.manualTime] : [])
+    ] : [];
+    const draftStart = Date.parse(draft.start), draftEnd = Date.parse(draft.end);
+    if (Number.isFinite(draftStart) && Number.isFinite(draftEnd) &&
+        ranges.some(item => {
+          const a = Date.parse(item.start), b = Date.parse(item.end);
+          return Number.isFinite(a) && Number.isFinite(b) &&
+            draftStart < b && draftEnd > a;
+        })) {
+      alert("Este turno sobrepõe-se a horas já guardadas neste dia. O rascunho foi mantido para corrigires sem duplicar salário.");
+      return;
+    }
     if (prior && !confirm("Este dia já tem " +
       (safeNumber(prior.normal) + safeNumber(prior.extra)).toFixed(2) +
       " horas. Queres SOMAR este turno? Confirma para evitar horas duplicadas.")) return;
