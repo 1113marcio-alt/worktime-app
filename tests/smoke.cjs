@@ -1083,13 +1083,14 @@ test("build Android gera CSS local sem depender do servidor Tailwind",()=>{
 
 test("CSV escapa aspas, quebras e bloqueia fórmulas de notas",()=>{
   const app=makeApp();
+  const formulaPrefix = '"' + String.fromCharCode(39);
   const examples=[
     ["a,b",'"a,b"'],
     ['A"B','"A""B"'],
-    ['=HYPERLINK("https://exemplo")','"'=HYPERLINK(""https://exemplo"")"'],
-    ["   @SUM(A1)",'"'   @SUM(A1)"'],
-    ["+CMD",'"'+CMD"'],
-    ["-10",'"'-10"']
+    ['=HYPERLINK("https://exemplo")',formulaPrefix+'=HYPERLINK(""https://exemplo"")"'],
+    ["   @SUM(A1)",formulaPrefix+'   @SUM(A1)"'],
+    ["+CMD",formulaPrefix+'+CMD"'],
+    ["-10",formulaPrefix+'-10"']
   ];
   for(const [input,expected] of examples) {
     assert.equal(app.evaluate("safeCsvText("+JSON.stringify(input)+")"),expected);
