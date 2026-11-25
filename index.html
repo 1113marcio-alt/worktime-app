@@ -1692,7 +1692,10 @@
       const calendarCountry = settings.holidayCountry || "LU";
       const year = Number(monthPrefix.slice(0,4));
       const list = window.WTCountryRules.holidays(year,calendarCountry,settings.calendarRegion);
-      const allVacUsed = Object.values(entries).filter(e=>e.type==="vacation" && e.date.startsWith(String(year)+"-")).length;
+      const allVacUsed = Object.values(entries).filter(e=>
+        e.type==="vacation" && e.date.startsWith(String(year)+"-") &&
+        paidHoursForEntry(e) > 0
+      ).length;
       let compDays = 0;
       const holHtml = list.items.map(h => {
         const date = new Date(h.date+"T12:00:00");
