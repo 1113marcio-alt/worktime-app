@@ -997,8 +997,15 @@
         }
         weeklySchedule[day] = slot;
       }
-      settings.weeklySchedule = weeklySchedule;
-      localStorage.setItem("wt_settings", JSON.stringify(settings));
+      const next = { ...settings, weeklySchedule };
+      try { localStorage.setItem("wt_settings", JSON.stringify(next)); }
+      catch (_) {
+        alert("Não foi possível guardar o horário. O horário anterior foi mantido.");
+        return false;
+      }
+      settings = next;
+      refreshPaidLeaveInput(true);
+      return true;
     }
 
     function loadSettingsToInputs() {
