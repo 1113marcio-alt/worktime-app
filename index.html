@@ -1134,35 +1134,236 @@
       if (window.WTLocale) window.WTLocale.apply(settings.lang);
     }
 
+    // Calcula a duração real a partir de um dia histórico (hora local do
+    // telemóvel). Este cálculo nunca utiliza o relógio de ponto ativo.
+    function calculateManualEntryTime(date, startClock, endClock, breakMinutes, nextDay) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date || ""))
+        return { error: "Seleciona uma data válida." };
+      const startMinutes = parseClockMinutes(startClock);
+      const endMinutes = parseClockMinutes(endClock);
+      if (startMinutes === null || endMinutes === null)
+        return { error: "Indica a hora de entrada e a hora de saída." };
+      const pause = Number(breakMinutes);
+      if (!Number.isInteger(pause) || pause < 0 || pause > 1439)
+        return { error: "A pausa deve ser um número inteiro de minutos válido." };
+      const [year, month, day] = date.split("-").map(Number);
+      const check = new Date(year, month - 1, day, 12);
+      if (check.getFullYear() !== year || check.getMonth() !== month - 1 ||
+          check.getDate() !== day) return { error: "A data selecionada é inválida." };
+      const start = new Date(year, month - 1, day,
+        Math.floor(startMinutes / 60), startMinutes % 60);
+      const end = new Date(year, month - 1, day + (nextDay ? 1 : 0),
+        Math.floor(endMinutes / 60), endMinutes % 60);
+      const totalMinutes = Math.round((end.getTime() - start.getTime()) / 60000);
+      if (totalMinutes <= 0 || totalMinutes > 1440)
+        return { error: "A saída deve ser depois da entrada. Para turnos noturnos assinala «Saída no dia seguinte»." };
+      if (pause >= totalMinutes)
+        return { error: "A pausa não pode ser igual ou superior à duração do turno." };
+      const workedMinutes = totalMinutes - pause;
+      const weekday = start.getDay();
+      const schedule = settings.weeklySchedule || defaultSettings.weeklySchedule;
+      const slot = schedule[weekday] || defaultSettings.weeklySchedule[weekday];
+      const plannedHours = slot && slot.enabled ? hoursForSchedule(slot) : 0;
+      const normalMinutes = Math.min(workedMinutes, plannedHours === null
+        ? workedMinutes : Math.round(plannedHours * 60));
+      const extraMinutes = workedMinutes - normalMinutes;
+      return {
+        start: start.toISOString(), end: end.toISOString(),
+        startTime: startClock, endTime: endClock,
+        breakMinutes: pause, nextDay: !!nextDay, workedMinutes,
+        normal: Math.round(normalMinutes / 60 * 100) / 100,
+        extra: Math.round(extraMinutes / 60 * 100) / 100
+      };
+    }
+
+    function entrySaveVisual(saved, message, isError) {
+      const button = document.getElementById("entrySaveButton");
+      const label = document.getElementById("entrySaveText");
+      const status = document.getElementById("entrySaveStatus");
+      if (!button || !label || !status) return;
+      button.disabled = !!saved;
+      button.classList.toggle("wt-day-saved", !!saved);
+      label.textContent = saved ? "✓ Guardado" : "💾 Guardar Registo do Dia";
+      status.textContent = message || "";
+      status.className = "text-xs " +
+        (isError ? "text-rose-400" : saved ? "text-emerald-400" : "text-slate-400");
+    }
+
+    function markEntryDirty() {
+      entrySaveVisual(false, "Alterações por guardar.", false);
+    }
+
+    function refreshManualEntryMode() {
+      const type = document.getElementById("entryType").value;
+      const enabled = type === "work" && document.getElementById("entryUseTimes").checked;
+      const timePanel = document.getElementById("manualClockPanel");
+      const timeFields = document.getElementById("manualClockFields");
+      const totalHint = document.getElementById("manualTotalHint");
+      timePanel.classList.toggle("hidden", type !== "work");
+      timeFields.classList.toggle("hidden", !enabled);
+      totalHint.classList.toggle("hidden", enabled);
+      ["entryNormal","entryExtra"].forEach(id => {
+        const input = document.getElementById(id);
+        input.readOnly = enabled;
+        input.classList.toggle("wt-calculated", enabled);
+      });
+      if (enabled) refreshManualTimePreview();
+    }
+
+    function refreshManualTimePreview() {
+      if (!document.getElementById("entryUseTimes").checked ||
+          document.getElementById("entryType").value !== "work") return;
+      const date = document.getElementById("entryDate").value;
+      const start = document.getElementById("entryStartTime").value;
+      const end = document.getElementById("entryEndTime").value;
+      const preview = document.getElementById("entryTimePreview");
+      if (!start || !end) {
+        preview.textContent = "Introduz a hora de entrada e a hora de saída para calcular as horas.";
+        document.getElementById("entryNormal").value = "";
+        document.getElementById("entryExtra").value = "";
+        return;
+      }
+      const result = calculateManualEntryTime(date, start, end,
+        document.getElementById("entryBreakMinutes").value,
+        document.getElementById("entryNextDay").checked);
+      if (result.error) {
+        preview.textContent = result.error;
+        preview.className = "text-xs text-rose-400";
+        document.getElementById("entryNormal").value = "";
+        document.getElementById("entryExtra").value = "";
+        return;
+      }
+      preview.className = "text-xs text-sky-300";
+      preview.textContent = "Tempo útil: " +
+        Math.floor(result.workedMinutes/60) + "h " +
+        String(result.workedMinutes%60).padStart(2,"0") + "min • " +
+        "Normais: " + result.normal.toFixed(2) + "h • " +
+        "Extras: " + result.extra.toFixed(2) + "h";
+      document.getElementById("entryNormal").value = result.normal;
+      document.getElementById("entryExtra").value = result.extra;
+    }
+
+    function loadManualEntryForDate(date) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date || "")) return;
+      const entry = entries[date];
+      const clock = entry && entry.manualTime && entry.type === "work"
+        ? entry.manualTime : null;
+      document.getElementById("entryDate").value = date;
+      document.getElementById("entryType").value = entry ? entry.type : "work";
+      document.getElementById("entryUseTimes").checked = !entry || !!clock;
+      document.getElementById("entryStartTime").value = clock ? clock.startTime : "";
+      document.getElementById("entryEndTime").value = clock ? clock.endTime : "";
+      document.getElementById("entryBreakMinutes").value = clock ? clock.breakMinutes : 0;
+      document.getElementById("entryNextDay").checked = !!(clock && clock.nextDay);
+      document.getElementById("entryNormal").value = entry ? Number(entry.normal) || 0 : 0;
+      document.getElementById("entryExtra").value = entry ? Number(entry.extra) || 0 : 0;
+      document.getElementById("entryNight").value = entry ? Number(entry.night) || 0 : 0;
+      document.getElementById("entryIncludeBonus").checked =
+        entry ? entry.includeBonus !== false : true;
+      document.getElementById("entryNote").value = entry ? (entry.note || "") : "";
+      document.getElementById("currentMonthPicker").value = date.slice(0,7);
+      refreshManualEntryMode();
+      entrySaveVisual(!!entry, entry ? "Registo existente. Altera um campo para gravar novamente." :
+        "Dia novo: preenche as horas e guarda quando estiver pronto.");
+    }
+
+    function onEntryDateChange() {
+      loadManualEntryForDate(document.getElementById("entryDate").value);
+      renderAll();
+    }
+
     function onDayTypeChange() {
       const type = document.getElementById("entryType").value;
       if (type === "off") {
         document.getElementById("entryNormal").value = 0;
         document.getElementById("entryExtra").value = 0;
-      } else {
+      } else if (type !== "work" || !document.getElementById("entryUseTimes").checked) {
         document.getElementById("entryNormal").value = 8;
+        document.getElementById("entryExtra").value = 0;
       }
+      refreshManualEntryMode();
+    }
+
+    function initManualEntryEditor() {
+      const card = document.getElementById("manualEntryCard");
+      card.addEventListener("input", event => {
+        if (event.target.id === "entryDate") return;
+        if (["entryStartTime","entryEndTime","entryBreakMinutes"].includes(event.target.id))
+          refreshManualTimePreview();
+        markEntryDirty();
+      });
+      card.addEventListener("change", event => {
+        if (event.target.id === "entryDate") return; // a data carrega o dia escolhido
+        if (["entryUseTimes","entryNextDay"].includes(event.target.id))
+          refreshManualEntryMode();
+        markEntryDirty();
+      });
+      loadManualEntryForDate(document.getElementById("entryDate").value);
     }
 
     function saveEntry() {
       const date = document.getElementById("entryDate").value;
-      if (!date) return;
+      const type = document.getElementById("entryType").value;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date || "")) {
+        entrySaveVisual(false, "Escolhe uma data válida.", true);
+        return false;
+      }
+      let manualTime = null;
+      let normal, extra;
+      if (type === "work" && document.getElementById("entryUseTimes").checked) {
+        const result = calculateManualEntryTime(date,
+          document.getElementById("entryStartTime").value,
+          document.getElementById("entryEndTime").value,
+          document.getElementById("entryBreakMinutes").value,
+          document.getElementById("entryNextDay").checked);
+        if (result.error) {
+          entrySaveVisual(false, result.error, true);
+          return false;
+        }
+        manualTime = {
+          start: result.start, end: result.end, startTime: result.startTime,
+          endTime: result.endTime, breakMinutes: result.breakMinutes,
+          nextDay: result.nextDay, workedMinutes: result.workedMinutes
+        };
+        normal = result.normal;
+        extra = result.extra;
+      } else {
+        normal = Number(document.getElementById("entryNormal").value);
+        extra = Number(document.getElementById("entryExtra").value);
+        if (![normal,extra].every(value => Number.isFinite(value) && value >= 0 && value <= 24)) {
+          entrySaveVisual(false, "Horas normais e extra devem ter valores válidos.", true);
+          return false;
+        }
+      }
+      const night = Number(document.getElementById("entryNight").value);
+      if (!Number.isFinite(night) || night < 0 || night > 24) {
+        entrySaveVisual(false, "As horas noturnas devem ser um valor válido.", true);
+        return false;
+      }
       const oldEntry = entries[date];
-      if (oldEntry && !confirm("Este dia já tem um registo. Guardar as alterações e substituir as horas atuais?")) return;
-      entries[date] = {
-        ...(oldEntry || {}),
-        date,
-        type: document.getElementById("entryType").value,
-        normal: parseFloat(document.getElementById("entryNormal").value) || 0,
-        extra: parseFloat(document.getElementById("entryExtra").value) || 0,
-        night: parseFloat(document.getElementById("entryNight").value) || 0,
+      if (oldEntry && !confirm("Este dia já tem um registo. Guardar as alterações e substituir as horas atuais?"))
+        return false;
+      const updated = {
+        ...(oldEntry || {}), date, type, normal, extra, night,
         includeBonus: document.getElementById("entryIncludeBonus").checked,
         note: document.getElementById("entryNote").value.trim(),
         ...(oldEntry && Array.isArray(oldEntry.shifts) ? { manuallyEdited: true } : {})
       };
-      localStorage.setItem("wt_entries", JSON.stringify(entries));
-      document.getElementById("entryNote").value = "";
+      if (manualTime) updated.manualTime = manualTime;
+      else delete updated.manualTime;
+      // Copy-on-write: nunca alterar os registos em memória antes do
+      // armazenamento confirmar que a gravação foi possível.
+      const next = { ...entries, [date]: updated };
+      try {
+        localStorage.setItem("wt_entries", JSON.stringify(next));
+      } catch (_) {
+        entrySaveVisual(false, "Não foi possível guardar neste dispositivo. Não foram alterados os dados existentes.", true);
+        return false;
+      }
+      entries = next;
       renderAll();
+      entrySaveVisual(true, "✓ Registo de " + date + " guardado com sucesso.");
+      return true;
     }
 
     function deleteEntry(date) {
