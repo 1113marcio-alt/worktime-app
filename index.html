@@ -219,13 +219,13 @@
       </div>
 
       <!-- Formulário de Lançamento do Dia -->
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-4">
+      <div id="manualEntryCard" class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-4">
         <h2 class="font-bold text-sm text-blue-400 uppercase tracking-wider" data-i18n="logDayTitle">Registar Dia de Trabalho</h2>
         
         <div class="grid grid-cols-2 gap-3">
           <div>
             <label class="block text-xs text-slate-400 mb-1" data-i18n="date">Data</label>
-            <input type="date" id="entryDate" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
+            <input type="date" id="entryDate" onchange="onEntryDateChange()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
           </div>
           <div>
             <label class="block text-xs text-slate-400 mb-1" data-i18n="dayType">Tipo de Dia</label>
@@ -239,18 +239,56 @@
           </div>
         </div>
 
+        <div id="manualClockPanel" class="space-y-3 rounded-2xl border border-sky-500/30 bg-slate-800/50 p-3">
+          <label class="flex items-center gap-3 text-sm font-semibold">
+            <input type="checkbox" id="entryUseTimes" checked class="w-5 h-5 accent-blue-500" />
+            <span>⏱ Calcular pelas horas exatas de entrada e saída</span>
+          </label>
+          <div id="manualClockFields" class="space-y-3">
+            <div class="grid grid-cols-2 gap-3">
+              <label class="block text-xs text-slate-300">Hora de entrada
+                <input type="time" id="entryStartTime" step="60"
+                  class="mt-1 w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
+              </label>
+              <label class="block text-xs text-slate-300">Hora de saída
+                <input type="time" id="entryEndTime" step="60"
+                  class="mt-1 w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
+              </label>
+            </div>
+            <div class="grid grid-cols-2 gap-3 items-end">
+              <label class="block text-xs text-slate-300">Pausa não remunerada (min)
+                <input type="number" id="entryBreakMinutes" min="0" max="1439" step="1" value="0"
+                  class="mt-1 w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
+              </label>
+              <label class="flex items-center gap-2 text-xs text-slate-300 pb-3">
+                <input type="checkbox" id="entryNextDay" class="w-4 h-4 accent-blue-500" />
+                Saída no dia seguinte
+              </label>
+            </div>
+            <p id="entryTimePreview" class="text-xs text-sky-300" aria-live="polite">
+              Preenche as horas exatas. As horas normais e extra serão calculadas pelo horário configurado.
+            </p>
+            <p class="text-[11px] text-slate-400">
+              As pausas são descontadas. Horas noturnas continuam ajustáveis manualmente.
+            </p>
+          </div>
+          <p id="manualTotalHint" class="hidden text-xs text-slate-400">
+            Modo manual: preenche diretamente as horas normais e extra abaixo.
+          </p>
+        </div>
+
         <div id="hoursInputsContainer" class="grid grid-cols-3 gap-3">
           <div>
             <label class="block text-xs text-slate-400 mb-1" data-i18n="normalHours">H. Normais</label>
-            <input type="number" step="0.25" id="entryNormal" value="8" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm font-semibold" />
+            <input type="number" step="0.01" min="0" id="entryNormal" value="8" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm font-semibold" />
           </div>
           <div>
             <label class="block text-xs text-slate-400 mb-1" data-i18n="extraHours">H. Extras</label>
-            <input type="number" step="0.25" id="entryExtra" value="0" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm font-semibold text-amber-400" />
+            <input type="number" step="0.01" min="0" id="entryExtra" value="0" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm font-semibold text-amber-400" />
           </div>
           <div>
             <label class="block text-xs text-slate-400 mb-1" data-i18n="nightHours">H. Noturnas</label>
-            <input type="number" step="0.25" id="entryNight" value="0" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm font-semibold text-purple-400" />
+            <input type="number" step="0.01" min="0" id="entryNight" value="0" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm font-semibold text-purple-400" />
           </div>
         </div>
 
@@ -267,9 +305,11 @@
           <input type="text" id="entryNote" placeholder="Ex: +2h extra descarga / rota sul" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
         </div>
 
-        <button onclick="saveEntry()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl shadow-lg transition">
-          💾 <span data-i18n="saveDay">Guardar Registo do Dia</span>
+        <button type="button" id="entrySaveButton" onclick="saveEntry()"
+          class="wt-save-day w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl shadow-lg transition">
+          <span id="entrySaveText">💾 Guardar Registo do Dia</span>
         </button>
+        <p id="entrySaveStatus" class="text-xs text-slate-400" aria-live="polite"></p>
       </div>
 
       <!-- Lista de Registos do Mês -->
@@ -804,6 +844,7 @@
         document.getElementById("pinLockModal").classList.add("flex");
       }
 
+      initManualEntryEditor();
       loadSettingsToInputs();
       organizeSettings();
       renderAll();
