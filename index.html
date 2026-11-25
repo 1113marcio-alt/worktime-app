@@ -980,32 +980,46 @@
     }
 
     function saveSettings() {
-      settings.hourlyRate = parseFloat(document.getElementById("cfgHourlyRate").value) || 0;
-      settings.hourlyBonus = parseFloat(document.getElementById("cfgHourlyBonus").value) || 0;
-      settings.overtimePct = parseFloat(document.getElementById("cfgOvertimePct").value) || 40;
-      settings.nightPct = parseFloat(document.getElementById("cfgNightPct").value) || 15;
-      settings.dailyPanier = parseFloat(document.getElementById("cfgDailyPanier").value) || 0;
-      settings.vacAvgSupplement = parseFloat(document.getElementById("cfgVacAvgSupplement").value) || 0;
-      settings.taxSystem = document.getElementById("cfgTaxSystem").value;
-      settings.taxClass = document.getElementById("cfgTaxClass").value;
-      settings.manualTaxRate = parseFloat(document.getElementById("cfgManualTaxRate").value) || 0;
-      settings.cisCredit = parseFloat(document.getElementById("cfgCisCredit").value) || 0;
-      settings.lang = document.getElementById("cfgLang").value;
-      settings.startScreen = document.getElementById("cfgStartScreen").value;
-      settings.holidayCountry = document.getElementById("cfgHolidayCountry").value;
-      settings.syncCalendarWithEmployer = document.getElementById("cfgSyncCalendarWithEmployer").checked;
-      if (settings.syncCalendarWithEmployer) settings.holidayCountry = document.getElementById("cfgEmployerCountry").value;
-      settings.employerCountry = document.getElementById("cfgEmployerCountry").value;
-      settings.residenceCountry = document.getElementById("cfgResidenceCountry").value;
-      settings.calendarRegion = document.getElementById("cfgCalendarRegion").value.trim();
+      // Preparar cópia: um erro no armazenamento não deve alterar a configuração em memória.
+      const nextSettings = { ...settings };
+      nextSettings.hourlyRate = parseFloat(document.getElementById("cfgHourlyRate").value) || 0;
+      nextSettings.hourlyBonus = parseFloat(document.getElementById("cfgHourlyBonus").value) || 0;
+      const extraPct = Number(document.getElementById("cfgOvertimePct").value);
+      nextSettings.overtimePct = Number.isFinite(extraPct) && extraPct >= 0 && extraPct <= 100
+        ? extraPct : nextSettings.overtimePct;
+      const nightPct = Number(document.getElementById("cfgNightPct").value);
+      nextSettings.nightPct = Number.isFinite(nightPct) && nightPct >= 0 && nightPct <= 100
+        ? nightPct : nextSettings.nightPct;
+      nextSettings.dailyPanier = parseFloat(document.getElementById("cfgDailyPanier").value) || 0;
+      nextSettings.vacAvgSupplement = parseFloat(document.getElementById("cfgVacAvgSupplement").value) || 0;
+      nextSettings.taxSystem = document.getElementById("cfgTaxSystem").value;
+      nextSettings.taxClass = document.getElementById("cfgTaxClass").value;
+      nextSettings.manualTaxRate = parseFloat(document.getElementById("cfgManualTaxRate").value) || 0;
+      nextSettings.cisCredit = parseFloat(document.getElementById("cfgCisCredit").value) || 0;
+      nextSettings.lang = document.getElementById("cfgLang").value;
+      nextSettings.startScreen = document.getElementById("cfgStartScreen").value;
+      nextSettings.holidayCountry = document.getElementById("cfgHolidayCountry").value;
+      nextSettings.syncCalendarWithEmployer = document.getElementById("cfgSyncCalendarWithEmployer").checked;
+      if (nextSettings.syncCalendarWithEmployer) nextSettings.holidayCountry = document.getElementById("cfgEmployerCountry").value;
+      nextSettings.employerCountry = document.getElementById("cfgEmployerCountry").value;
+      nextSettings.residenceCountry = document.getElementById("cfgResidenceCountry").value;
+      nextSettings.calendarRegion = document.getElementById("cfgCalendarRegion").value.trim();
       // Dias de férias alteram-se pelo país empregador (exceto contrato personalizado).
-      settings.annualVacation = Number(document.getElementById("cfgAnnualVacation").value);
-      settings.manualSocialRate = Number(document.getElementById("cfgManualSocialRate").value) || 0;
+      nextSettings.annualVacation = Number(document.getElementById("cfgAnnualVacation").value);
+      nextSettings.manualSocialRate = Number(document.getElementById("cfgManualSocialRate").value) || 0;
       // O PIN só é alterado ao pressionar Guardar PIN, nunca noutras configurações.
 
-      localStorage.setItem("wt_settings", JSON.stringify(settings));
+      try {
+        localStorage.setItem("wt_settings", JSON.stringify(nextSettings));
+      } catch (_) {
+        alert("Não foi possível guardar as definições. As anteriores foram mantidas.");
+        loadSettingsToInputs();
+        return false;
+      }
+      settings = nextSettings;
       loadSettingsToInputs();
       renderAll();
+      return true;
     }
 
     function changeEmployerCountry() {
@@ -1367,10 +1381,19 @@
     }
 
     function deleteEntry(date) {
-      if (!confirm("Apagar o registo de " + date + "? Faça backup antes de eliminar dados importantes.")) return;
-      delete entries[date];
-      localStorage.setItem("wt_entries", JSON.stringify(entries));
+      if (!Object.prototype.hasOwnProperty.call(entries, date)) return false;
+      if (!confirm("Apagar o registo de " + date + "? Faça backup antes de eliminar dados importantes.")) return false;
+      // Não apagar da memória se o armazenamento do Android falhar.
+      const next = { ...entries };
+      delete next[date];
+      try { localStorage.setItem("wt_entries", JSON.stringify(next)); }
+      catch (_) {
+        alert("Não foi possível apagar o registo. Os dados anteriores foram mantidos.");
+        return false;
+      }
+      entries = next;
       renderAll();
+      return true;
     }
 
     function fillStandardWeek() {
@@ -1381,6 +1404,7 @@
       monday.setDate(monday.getDate() - ((weekday + 6) % 7));
       const schedule = settings.weeklySchedule || defaultSettings.weeklySchedule;
 
+      const next = { ...entries };
       for (let i = 0; i < 7; i++) {
         const d = new Date(monday);
         d.setDate(monday.getDate() + i);
@@ -1390,16 +1414,22 @@
         const hours = hoursForSchedule(slot);
         if (hours === null) continue;
         const iso = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
-        if (!entries[iso]) {
-          entries[iso] = {
+        if (!next[iso]) {
+          next[iso] = {
             date: iso, type: "work", normal: hours, extra: 0, night: 0,
             includeBonus: true, note: "Semana — horário configurado",
             scheduledStart: slot.start, scheduledEnd: slot.end, scheduledBreakMinutes: Number(slot.breakMinutes)
           };
         }
       }
-      localStorage.setItem("wt_entries", JSON.stringify(entries));
+      try { localStorage.setItem("wt_entries", JSON.stringify(next)); }
+      catch (_) {
+        alert("Não foi possível preencher a semana. Nenhum registo foi alterado.");
+        return false;
+      }
+      entries = next;
       renderAll();
+      return true;
     }
 
     function formatMoney(val) {
