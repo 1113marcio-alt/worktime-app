@@ -1083,13 +1083,17 @@ test("build Android gera CSS local sem depender do servidor Tailwind",()=>{
 
 test("CSV escapa aspas, quebras e bloqueia fórmulas de notas",()=>{
   const app=makeApp();
-  assert.equal(app.evaluate('safeCsvText("a,b")'),'"a,b"');
-  assert.equal(app.evaluate('safeCsvText("A\\\"B")'),'"A""B"');
-  assert.equal(app.evaluate('safeCsvText("=HYPERLINK(\\\"https://exemplo\\\")")'),
-    '"\\'=HYPERLINK(""https://exemplo"")"');
-  assert.equal(app.evaluate('safeCsvText("   @SUM(A1)")'),'"\\'   @SUM(A1)"');
-  assert.equal(app.evaluate('safeCsvText("+CMD")'),'"\\'+CMD"');
-  assert.equal(app.evaluate('safeCsvText("-10")'),'"\\'-10"');
+  const examples=[
+    ["a,b",'"a,b"'],
+    ['A"B','"A""B"'],
+    ['=HYPERLINK("https://exemplo")','"'=HYPERLINK(""https://exemplo"")"'],
+    ["   @SUM(A1)",'"'   @SUM(A1)"'],
+    ["+CMD",'"'+CMD"'],
+    ["-10",'"'-10"']
+  ];
+  for(const [input,expected] of examples) {
+    assert.equal(app.evaluate("safeCsvText("+JSON.stringify(input)+")"),expected);
+  }
   assert.ok(source.includes('rows.join("\\r\\n")'));
   assert.ok(source.includes("URL.revokeObjectURL"));
 });
