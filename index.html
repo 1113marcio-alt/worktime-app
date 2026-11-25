@@ -984,11 +984,13 @@
       const nextSettings = { ...settings };
       nextSettings.hourlyRate = parseFloat(document.getElementById("cfgHourlyRate").value) || 0;
       nextSettings.hourlyBonus = parseFloat(document.getElementById("cfgHourlyBonus").value) || 0;
-      const extraPct = Number(document.getElementById("cfgOvertimePct").value);
-      nextSettings.overtimePct = Number.isFinite(extraPct) && extraPct >= 0 && extraPct <= 100
+      const extraInput = document.getElementById("cfgOvertimePct").value;
+      const extraPct = Number(extraInput);
+      nextSettings.overtimePct = extraInput.trim() !== "" && Number.isFinite(extraPct) && extraPct >= 0 && extraPct <= 100
         ? extraPct : nextSettings.overtimePct;
-      const nightPct = Number(document.getElementById("cfgNightPct").value);
-      nextSettings.nightPct = Number.isFinite(nightPct) && nightPct >= 0 && nightPct <= 100
+      const nightInput = document.getElementById("cfgNightPct").value;
+      const nightPct = Number(nightInput);
+      nextSettings.nightPct = nightInput.trim() !== "" && Number.isFinite(nightPct) && nightPct >= 0 && nightPct <= 100
         ? nightPct : nextSettings.nightPct;
       nextSettings.dailyPanier = parseFloat(document.getElementById("cfgDailyPanier").value) || 0;
       nextSettings.vacAvgSupplement = parseFloat(document.getElementById("cfgVacAvgSupplement").value) || 0;
