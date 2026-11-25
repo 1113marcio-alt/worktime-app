@@ -715,3 +715,140 @@ test("tempo enviado ao widget exclui pausa aberta e pausa concluída", async() =
   assert.equal(states[2].state,"idle");
   assert.equal(states[2].workedSeconds,0);
 });
+
+
+function manualDayFixture(app, date="2026-11-11") {
+  const elements={};
+  const ids=["entryDate","entryType","entryUseTimes","entryStartTime","entryEndTime",
+    "entryBreakMinutes","entryNextDay","entryNormal","entryExtra","entryNight",
+    "entryIncludeBonus","entryNote","currentMonthPicker","manualClockPanel",
+    "manualClockFields","manualTotalHint","entrySaveButton","entrySaveText",
+    "entrySaveStatus","entryTimePreview","manualEntryCard"];
+  for(const id of ids) elements[id]={
+    value:"",checked:false,readOnly:false,disabled:false,
+    textContent:"",className:"",
+    classList:{toggle(){},add(){},remove(){}},
+    addEventListener(){},
+  };
+  elements.entryDate.value=date;
+  elements.entryType.value="work";
+  elements.entryUseTimes.checked=true;
+  elements.entryStartTime.value="06:02";
+  elements.entryEndTime.value="17:05";
+  elements.entryBreakMinutes.value="0";
+  elements.entryNight.value="0";
+  elements.entryIncludeBonus.checked=true;
+  elements.currentMonthPicker.value="2026-11";
+  app.ctx.document.getElementById=id=>elements[id]||null;
+  return elements;
+}
+
+test("horário exato de duas semanas atrás calcula 8h normais e 3,05h extra",()=>{
+  const app=makeApp();
+  const d=app.evaluate('calculateManualEntryTime("2026-11-11","06:02","17:05",0,false)');
+  assert.equal(d.workedMinutes,663);
+  assert.equal(d.normal,8);
+  assert.equal(d.extra,3.05);
+  assert.equal(d.startTime,"06:02");
+  assert.equal(d.endTime,"17:05");
+  const withBreak=app.evaluate('calculateManualEntryTime("2026-11-11","06:02","17:05",30,false)');
+  assert.equal(withBreak.workedMinutes,633);
+  assert.equal(withBreak.normal,8);
+  assert.equal(withBreak.extra,2.55);
+});
+
+test("cálculo histórico valida pausas e suporta saída no dia seguinte",()=>{
+  const app=makeApp();
+  const overnight=app.evaluate('calculateManualEntryTime("2026-11-11","22:00","06:00",30,true)');
+  assert.equal(overnight.workedMinutes,450);
+  assert.equal(overnight.normal,7.5);
+  assert.equal(overnight.extra,0);
+  assert.ok(overnight.end>overnight.start);
+  const noNext=app.evaluate('calculateManualEntryTime("2026-11-11","22:00","06:00",30,false)');
+  assert.ok(noNext.error.includes("dia seguinte"));
+  const invalid=app.evaluate('calculateManualEntryTime("2026-11-11","09:00","09:20",30,false)');
+  assert.ok(invalid.error.includes("pausa"));
+  const incomplete=app.evaluate('calculateManualEntryTime("2026-11-11","","17:00",30,false)');
+  assert.ok(incomplete.error);
+  assert.equal(app.evaluate('calculateManualEntryTime("2026-11-11","05:00","15:00",0,false)').workedMinutes,600);
+});
+
+test("guardar dia antigo guarda marcações exatas e o botão passa de azul a cinzento",()=>{
+  const old={date:"2026-11-11",type:"work",normal:8,extra:0,night:0,
+    includeBonus:true,note:"Entrega original",shifts:[{id:"shift-old",seconds:28800}]};
+  const app=makeApp({},{"2026-11-11":old});
+  const e=manualDayFixture(app);
+  e.entryNote.value="Ponto 06:02–17:05";
+  app.ctx.markEntryDirty();
+  assert.equal(e.entrySaveButton.disabled,false);
+  const result=app.ctx.saveEntry();
+  assert.equal(result,true);
+  const saved=JSON.parse(app.values.get("wt_entries"))["2026-11-11"];
+  assert.equal(saved.normal,8);
+  assert.equal(saved.extra,3.05);
+  assert.equal(saved.manualTime.startTime,"06:02");
+  assert.equal(saved.manualTime.endTime,"17:05");
+  assert.equal(saved.manualTime.workedMinutes,663);
+  assert.equal(saved.note,"Ponto 06:02–17:05");
+  assert.equal(saved.shifts[0].id,"shift-old","preserva o histórico do widget");
+  assert.equal(saved.manuallyEdited,true);
+  assert.equal(e.entrySaveButton.disabled,true);
+  assert.ok(e.entrySaveText.textContent.includes("Guardado"));
+  assert.ok(e.entrySaveStatus.textContent.includes("sucesso"));
+  app.ctx.markEntryDirty();
+  assert.equal(e.entrySaveButton.disabled,false);
+  assert.ok(e.entrySaveText.textContent.includes("Guardar"));
+  assert.ok(fs.readFileSync("pro-ui.css","utf8").includes("#entrySaveButton.wt-day-saved"));
+});
+
+test("guardar dia inválido ou armazenamento indisponível não altera as horas",()=>{
+  const original={"2026-11-11":{date:"2026-11-11",type:"work",normal:8,extra:1,note:"Original"}};
+  const app=makeApp({},original);
+  const e=manualDayFixture(app);
+  e.entryStartTime.value="";
+  assert.equal(app.ctx.saveEntry(),false);
+  assert.equal(JSON.parse(app.values.get("wt_entries"))["2026-11-11"].note,"Original");
+  assert.equal(e.entrySaveButton.disabled,false);
+  e.entryStartTime.value="06:02";
+  app.ctx.localStorage.setItem=()=>{throw Error("Disco cheio");};
+  assert.equal(app.ctx.saveEntry(),false);
+  assert.equal(app.evaluate('entries["2026-11-11"].note'),"Original");
+  assert.ok(e.entrySaveStatus.textContent.includes("Não foi possível guardar"));
+});
+
+test("editar data antiga carrega horas gravadas sem misturar com novo dia",()=>{
+  const app=makeApp({},{"2026-11-11":{date:"2026-11-11",type:"work",normal:8,extra:2.55,night:0,
+    note:"Quarta",manualTime:{start:"2026-11-11T06:02:00.000Z",
+      end:"2026-11-11T17:05:00.000Z",startTime:"06:02",endTime:"17:05",
+      breakMinutes:30,nextDay:false,workedMinutes:633}}});
+  const e=manualDayFixture(app);
+  app.ctx.loadManualEntryForDate("2026-11-11");
+  assert.equal(e.entryUseTimes.checked,true);
+  assert.equal(e.entryStartTime.value,"06:02");
+  assert.equal(e.entryEndTime.value,"17:05");
+  assert.equal(Number(e.entryBreakMinutes.value),30);
+  assert.equal(e.entryNote.value,"Quarta");
+  assert.equal(e.entrySaveButton.disabled,true);
+  app.ctx.loadManualEntryForDate("2026-11-12");
+  assert.equal(e.entryUseTimes.checked,true,"num dia novo propõe-se registo pelas horas");
+  assert.equal(e.entryStartTime.value,"");
+  assert.equal(e.entryEndTime.value,"");
+  assert.equal(e.entryNote.value,"");
+  assert.equal(e.entrySaveButton.disabled,false);
+});
+
+test("horário manual aparece no histórico de Ponto antes dos turnos antigos",()=>{
+  const app=makeApp({},{"2026-11-11":{
+    date:"2026-11-11",type:"work",normal:8,extra:2.55,
+    shifts:[{id:"shift-prev",seconds:30000}],
+    manualTime:{start:"2026-11-11T06:02:00.000Z",end:"2026-11-11T17:05:00.000Z",
+      workedMinutes:633,breakMinutes:30}
+  }});
+  vm.runInContext(proSource,app.ctx);
+  const rows=app.ctx.window.ProUI.helpers.historyRows();
+  assert.equal(rows.length,1);
+  assert.equal(rows[0].manualExact,true);
+  assert.equal(rows[0].manualBreakMinutes,30);
+  assert.equal(rows[0].seconds,633*60);
+  assert.ok(proSource.includes("loadManualEntryForDate(iso)"));
+});
