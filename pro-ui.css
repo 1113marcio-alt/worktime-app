@@ -161,3 +161,22 @@ html[data-wt-theme="light"] .wt-button.primary {background:#2f6fdb !important;co
 html[data-wt-theme="light"] .wt-button.cyan {background:#168679 !important;color:#fff !important;}
 html[data-wt-theme="light"] .wt-button.danger {color:#a92c4d !important;background:#ffe5eb !important;}
 html[data-wt-theme="light"] #pinLockModal {background:#eaf1fc !important;}
+
+
+/* A save is acknowledged by keeping the button grey until any field changes. */
+#entrySaveButton.wt-day-saved,
+#entrySaveButton.wt-day-saved:hover,
+html[data-wt-theme="light"] #entrySaveButton.wt-day-saved,
+html[data-wt-theme="light"] #entrySaveButton.wt-day-saved:hover {
+  background:#475569 !important;
+  background-image:none !important;
+  border-color:#64748b !important;
+  color:#e2e8f0 !important;
+  box-shadow:none !important;
+  opacity:1 !important;
+  cursor:default !important;
+}
+#entrySaveButton:focus-visible {outline:2px solid #8dc9ff;outline-offset:3px;}
+#manualEntryCard input.wt-calculated {background:#16233b !important;border-color:#5575a8 !important;color:#9ac2ff !important;}
+html[data-wt-theme="light"] #manualEntryCard input.wt-calculated {background:#e5edf8 !important;color:#22497a !important;}
+#manualClockPanel input[type="time"] {min-height:44px;}
