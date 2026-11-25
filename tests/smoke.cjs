@@ -852,3 +852,112 @@ test("horário manual aparece no histórico de Ponto antes dos turnos antigos",(
   assert.equal(rows[0].seconds,633*60);
   assert.ok(proSource.includes("loadManualEntryForDate(iso)"));
 });
+
+
+test("2 turnos no mesmo dia repartem corretamente 8h normais e 2h extra", () => {
+  const day="2026-11-23";
+  const a={id:"monday-am",date:day,start:"2026-11-23T08:00:00Z",
+    end:"2026-11-23T12:00:00Z",breaks:[],seconds:4*3600};
+  const b={id:"monday-pm",date:day,start:"2026-11-23T13:00:00Z",
+    end:"2026-11-23T19:00:00Z",breaks:[],seconds:6*3600};
+  const app=makeApp();
+  app.values.set("wt_shift_drafts",JSON.stringify([a,b]));
+  vm.runInContext(proSource,app.ctx);
+  app.ctx.window.ProUI.applyDraft(a.id);
+  let result=JSON.parse(app.values.get("wt_entries"))[day];
+  assert.equal(result.normal,4);
+  assert.equal(result.extra,0);
+  app.ctx.window.ProUI.applyDraft(b.id);
+  result=JSON.parse(app.values.get("wt_entries"))[day];
+  assert.equal(result.normal,8);
+  assert.equal(result.extra,2);
+  assert.equal(result.shifts.length,2);
+  assert.equal(JSON.parse(app.values.get("wt_shift_drafts")).length,0);
+  const sum=app.evaluate('calculateMonthData("2026-11")');
+  assert.equal(sum.normalH,8);
+  assert.equal(sum.extraH,2);
+});
+
+test("o registo adicional respeita horas manuais anteriores e impede sobreposição",()=>{
+  const day="2026-11-23";
+  const original={date:day,type:"work",normal:6,extra:1,night:0,
+    includeBonus:true,note:"Entrada manual"};
+  const app=makeApp({}, {[day]:original});
+  const draft={id:"extra-two",date:day,start:"2026-11-23T15:00:00Z",
+    end:"2026-11-23T17:00:00Z",breaks:[],seconds:7200};
+  const overlap={id:"overlapping",date:day,start:"2026-11-23T16:00:00Z",
+    end:"2026-11-23T18:00:00Z",breaks:[],seconds:7200};
+  app.values.set("wt_shift_drafts",JSON.stringify([draft,overlap]));
+  vm.runInContext(proSource,app.ctx);
+  app.ctx.window.ProUI.applyDraft(draft.id);
+  let saved=JSON.parse(app.values.get("wt_entries"))[day];
+  assert.equal(saved.normal,8);
+  assert.equal(saved.extra,1);
+  assert.equal(saved.shifts.length,1);
+  app.ctx.window.ProUI.applyDraft(overlap.id);
+  saved=JSON.parse(app.values.get("wt_entries"))[day];
+  assert.equal(saved.normal,8);
+  assert.equal(saved.extra,1);
+  assert.equal(saved.shifts.length,1);
+  assert.deepEqual(JSON.parse(app.values.get("wt_shift_drafts")).map(x=>x.id),["overlapping"]);
+  assert.ok(app.notices.some(n=>n.includes("sobrepõe")));
+});
+
+test("taxas de suplemento definidas a 0% permanecem a 0% após guardar",()=>{
+  const app=makeApp({overtimePct:40,nightPct:15,hourlyRate:28});
+  const vals={
+    cfgHourlyRate:"28",cfgHourlyBonus:"2.60",
+    cfgOvertimePct:"0",cfgNightPct:"0",
+    cfgDailyPanier:"0",cfgVacAvgSupplement:"0",
+    cfgTaxSystem:"luxembourg",cfgTaxClass:"1",
+    cfgManualTaxRate:"0",cfgCisCredit:"0",
+    cfgLang:"pt",cfgStartScreen:"ponto",
+    cfgHolidayCountry:"LU",cfgEmployerCountry:"LU",
+    cfgResidenceCountry:"LU",cfgCalendarRegion:"",
+    cfgAnnualVacation:"26",cfgManualSocialRate:"0"
+  };
+  app.ctx.document.getElementById=id=>({value:vals[id]??"",checked:id==="cfgSyncCalendarWithEmployer"});
+  assert.equal(app.ctx.saveSettings(),true);
+  const stored=JSON.parse(app.values.get("wt_settings"));
+  assert.equal(stored.overtimePct,0);
+  assert.equal(stored.nightPct,0);
+  assert.equal(stored.hourlyRate,28);
+  vals.cfgOvertimePct="";
+  vals.cfgNightPct="";
+  assert.equal(app.ctx.saveSettings(),true);
+  assert.equal(JSON.parse(app.values.get("wt_settings")).overtimePct,0,
+    "campo vazio não força uma majoração de 40%");
+  assert.equal(JSON.parse(app.values.get("wt_settings")).nightPct,0,
+    "campo vazio não força uma majoração de 15%");
+});
+
+test("falha ao guardar opções não altera as configurações na memória",()=>{
+  const app=makeApp({hourlyRate:24,overtimePct:40,nightPct:15});
+  const ids={cfgHourlyRate:"51",cfgHourlyBonus:"2",cfgOvertimePct:"0",cfgNightPct:"0",
+    cfgDailyPanier:"0",cfgVacAvgSupplement:"0",cfgTaxSystem:"luxembourg",
+    cfgTaxClass:"2",cfgManualTaxRate:"0",cfgCisCredit:"0",cfgLang:"pt",
+    cfgStartScreen:"ponto",cfgHolidayCountry:"LU",cfgEmployerCountry:"LU",
+    cfgResidenceCountry:"LU",cfgCalendarRegion:"",cfgAnnualVacation:"26",
+    cfgManualSocialRate:"0"};
+  app.ctx.document.getElementById=id=>({value:ids[id]??"",checked:false});
+  const old=app.values.get("wt_settings");
+  app.ctx.localStorage.setItem=()=>{throw Error("Sem espaço");};
+  assert.equal(app.ctx.saveSettings(),false);
+  assert.equal(app.evaluate("settings.hourlyRate"),24);
+  assert.equal(app.evaluate("settings.overtimePct"),40);
+  assert.equal(app.values.get("wt_settings"),old);
+});
+
+test("apagar registo ou preencher semana preserva dados quando o armazenamento falha",()=>{
+  const old={"2026-11-18":{date:"2026-11-18",type:"work",normal:7,extra:1,night:0}};
+  const app=makeApp({},old);
+  const before=app.values.get("wt_entries");
+  app.ctx.localStorage.setItem=()=>{throw Error("Sem espaço");};
+  assert.equal(app.ctx.deleteEntry("2026-11-18"),false);
+  assert.equal(app.evaluate('entries["2026-11-18"].normal'),7);
+  assert.equal(app.values.get("wt_entries"),before);
+  assert.equal(app.ctx.fillStandardWeek(),false);
+  assert.equal(app.evaluate("Object.keys(entries).length"),1);
+  assert.equal(app.values.get("wt_entries"),before);
+  assert.ok(app.notices.some(msg=>msg.includes("Nenhum registo foi alterado")));
+});
