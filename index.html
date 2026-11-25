@@ -277,6 +277,17 @@
           </p>
         </div>
 
+        <div id="paidLeavePanel" class="hidden rounded-2xl border border-sky-500/30 bg-slate-800/50 p-3 space-y-2">
+          <label class="block text-xs text-slate-200" for="entryPaidLeaveHours">
+            ⛱ Horas pagas neste dia de férias / feriado (estimativa)
+          </label>
+          <input id="entryPaidLeaveHours" type="number" min="0" max="24" step="0.01" value="8"
+            class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
+          <p id="paidLeaveHint" class="text-xs text-amber-300">
+            Valor sugerido pelo horário configurado. Confirma as regras aplicáveis no recibo.
+          </p>
+        </div>
+
         <div id="hoursInputsContainer" class="grid grid-cols-3 gap-3">
           <div>
             <label class="block text-xs text-slate-400 mb-1" data-i18n="normalHours">H. Normais</label>
@@ -912,6 +923,48 @@
       return Math.round((minutes - pause) / 60 * 100) / 100;
     }
 
+    function scheduledLeaveHours(date) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date || "")) return 0;
+      const d = new Date(date + "T12:00:00");
+      if (Number.isNaN(d.getTime())) return 0;
+      const schedule = settings.weeklySchedule || defaultSettings.weeklySchedule;
+      const weekday = d.getDay();
+      const slot = schedule[weekday] || defaultSettings.weeklySchedule[weekday];
+      if (!slot || !slot.enabled) return 0;
+      const hours = hoursForSchedule(slot);
+      return hours === null ? 0 : hours;
+    }
+
+    // Preservar o valor de 8h dos registos anteriores sem configuração
+    // de horas pagas. Novos registos recebem paidLeaveHours na gravação.
+    function paidHoursForEntry(entry) {
+      if (!entry || !["vacation","holiday"].includes(entry.type)) return 0;
+      const stored = entry.paidLeaveHours;
+      return typeof stored === "number" && Number.isFinite(stored) &&
+        stored >= 0 && stored <= 24 ? stored : 8;
+    }
+
+    function refreshPaidLeaveInput(preserveExisting) {
+      const type = document.getElementById("entryType").value;
+      const panel = document.getElementById("paidLeavePanel");
+      const input = document.getElementById("entryPaidLeaveHours");
+      const hint = document.getElementById("paidLeaveHint");
+      if (!panel || !input || !hint) return;
+      const visible = type === "vacation" || type === "holiday";
+      panel.classList.toggle("hidden", !visible);
+      if (!visible) return;
+      const date = document.getElementById("entryDate").value;
+      const existing = entries[date];
+      const sameType = existing && existing.type === type;
+      const legacy = sameType && existing.paidLeaveHours === undefined;
+      input.value = preserveExisting && sameType
+        ? paidHoursForEntry(existing)
+        : scheduledLeaveHours(date);
+      hint.textContent = legacy && preserveExisting
+        ? "Registo antigo: preservadas 8h para não modificar salários anteriores. Podes corrigir este valor."
+        : "Horas sugeridas pelo horário do dia. Dias sem trabalho programado recebem 0h; confirma o recibo e o contrato.";
+    }
+
     function renderWeeklySchedule() {
       const container = document.getElementById("weeklyScheduleGrid");
       const schedule = settings.weeklySchedule || defaultSettings.weeklySchedule;
@@ -1279,6 +1332,7 @@
       document.getElementById("entryNote").value = entry ? (entry.note || "") : "";
       document.getElementById("currentMonthPicker").value = date.slice(0,7);
       refreshManualEntryMode();
+      refreshPaidLeaveInput(true);
       entrySaveVisual(!!entry, entry ? "Registo existente. Altera um campo para gravar novamente." :
         "Dia novo: preenche as horas e guarda quando estiver pronto.");
     }
@@ -1298,6 +1352,7 @@
         document.getElementById("entryExtra").value = 0;
       }
       refreshManualEntryMode();
+      refreshPaidLeaveInput(false);
     }
 
     function initManualEntryEditor() {
@@ -1359,6 +1414,17 @@
       const oldEntry = entries[date];
       if (oldEntry && !confirm("Este dia já tem um registo. Guardar as alterações e substituir as horas atuais?"))
         return false;
+      const isPaidLeave = type === "vacation" || type === "holiday";
+      let paidLeaveHours = 0;
+      if (isPaidLeave) {
+        const hoursInput = document.getElementById("entryPaidLeaveHours").value.trim();
+        paidLeaveHours = Number(hoursInput);
+        if (hoursInput === "" || !Number.isFinite(paidLeaveHours) ||
+            paidLeaveHours < 0 || paidLeaveHours > 24) {
+          entrySaveVisual(false, "Indica entre 0 e 24 horas pagas para este dia.", true);
+          return false;
+        }
+      }
       const updated = {
         ...(oldEntry || {}), date, type, normal, extra, night,
         includeBonus: document.getElementById("entryIncludeBonus").checked,
@@ -1367,6 +1433,8 @@
       };
       if (manualTime) updated.manualTime = manualTime;
       else delete updated.manualTime;
+      if (isPaidLeave) updated.paidLeaveHours = paidLeaveHours;
+      else delete updated.paidLeaveHours;
       // Copy-on-write: nunca alterar os registos em memória antes do
       // armazenamento confirmar que a gravação foi possível.
       const next = { ...entries, [date]: updated };
@@ -1477,7 +1545,7 @@
     }
 
     function calculateMonthData(monthPrefix) {
-      let normalH = 0, extraH = 0, nightH = 0, bonusH = 0, workDays = 0, vacDays = 0;
+      let normalH = 0, extraH = 0, nightH = 0, bonusH = 0, workDays = 0, vacDays = 0, vacPaidHours = 0;
       const monthEntries = Object.values(entries)
         .filter(e => e.date.startsWith(monthPrefix))
         .sort((a, b) => b.date.localeCompare(a.date));
@@ -1493,6 +1561,7 @@
           }
         } else if (e.type === "vacation" || e.type === "holiday") {
           vacDays += 1;
+          vacPaidHours += paidHoursForEntry(e);
         } else if (e.type === "sick") {
           normalH += e.normal;
         }
@@ -1505,8 +1574,11 @@
       const extraTotalGross = extraBaseGross + extraMajorationGross;
       const nightGross = nightH * rate * (settings.nightPct / 100);
       const bonusGross = bonusH * settings.hourlyBonus;
+      // vacDailyBase continua a referência legada de 8h do painel.
+      // O cálculo real usa as horas pagas gravadas em cada dia.
       const vacDailyBase = (8 * rate) + (8 * settings.hourlyBonus) + settings.vacAvgSupplement;
-      const vacationGross = vacDays * vacDailyBase;
+      const vacationGross = vacPaidHours * (rate + settings.hourlyBonus) +
+        (vacPaidHours / 8) * settings.vacAvgSupplement;
       const panierGross = workDays * settings.dailyPanier;
 
       const totalGross = normalGross + extraTotalGross + nightGross + bonusGross + vacationGross + panierGross;
@@ -1529,7 +1601,7 @@
         forceManual: settings.taxSystem === "custom"
       });
       return {
-        monthEntries, normalH, extraH, nightH, vacDays,
+        monthEntries, normalH, extraH, nightH, vacDays, vacPaidHours,
         normalGross, extraTotalGross, nightGross, bonusGross, vacationGross, panierGross,
         totalGross, vacDailyBase, ...taxData,
         socialParameters: {pensionRate:taxData.pensionRate,depAllowance:taxData.depAllowance}
@@ -1579,7 +1651,7 @@
       document.getElementById("valNightGross").textContent = formatMoney(d.nightGross);
       document.getElementById("lblBonusBreakdown").textContent = `Bónus Horário (${settings.hourlyBonus.toFixed(2)} €/h)`;
       document.getElementById("valBonusGross").textContent = formatMoney(d.bonusGross);
-      document.getElementById("lblVacationBreakdown").textContent = `Férias / Feriados (${d.vacDays} dias c/ Média 3M)`;
+      document.getElementById("lblVacationBreakdown").textContent = `Férias / Feriados (${d.vacDays} dias • ${d.vacPaidHours.toFixed(2)}h pagas, estimativa)`;
       document.getElementById("valVacationGross").textContent = formatMoney(d.vacationGross);
       document.getElementById("valPanierGross").textContent = formatMoney(d.panierGross);
       document.getElementById("valTotalGross").textContent = formatMoney(d.totalGross);
