@@ -1048,3 +1048,48 @@ test("o horário semanal permanece intacto quando falha a gravação",()=>{
   assert.equal(app.evaluate("JSON.stringify(settings.weeklySchedule)"),oldSchedule);
   assert.ok(app.notices.some(x=>x.includes("O horário anterior foi mantido")));
 });
+
+
+test("build Android gera CSS local sem depender do servidor Tailwind",()=>{
+  const path=require("node:path"),os=require("node:os");
+  const {spawnSync}=require("node:child_process");
+  const workflow=fs.readFileSync(".github/workflows/apk.yml","utf8");
+  const config=fs.readFileSync("tailwind.config.cjs","utf8");
+  const tailwindInput=fs.readFileSync("tailwind-input.css","utf8");
+  assert.ok(workflow.includes("tailwindcss@3.4.17"));
+  assert.ok(workflow.includes("tailwind.generated.css"));
+  assert.ok(workflow.includes("python3 scripts/prepare_offline_android.py"));
+  assert.ok(config.includes('"./index.html"'));
+  assert.ok(tailwindInput.includes("@tailwind utilities"));
+  const tmp=fs.mkdtempSync(path.join(os.tmpdir(),"worktime-offline-"));
+  try {
+    const www=path.join(tmp,"www");
+    fs.mkdirSync(www);
+    fs.writeFileSync(path.join(www,"index.html"),source);
+    fs.writeFileSync(path.join(www,"sw.js"),fs.readFileSync("sw.js","utf8"));
+    // Test the transformer independently of a real npm installation.
+    fs.writeFileSync(path.join(www,"tailwind.generated.css"),"/* offline */"+".test{color:red;}".repeat(350));
+    const result=spawnSync("python3",[path.resolve("scripts/prepare_offline_android.py")],
+      {cwd:tmp,encoding:"utf8"});
+    assert.equal(result.status,0,result.stderr);
+    const html=fs.readFileSync(path.join(www,"index.html"),"utf8");
+    const sw=fs.readFileSync(path.join(www,"sw.js"),"utf8");
+    assert.ok(html.includes('href="tailwind.generated.css"'));
+    assert.ok(!html.includes("cdn.tailwindcss.com"));
+    assert.ok(!html.includes("tailwind.config ="));
+    assert.ok(sw.includes("'./tailwind.generated.css'"));
+  } finally {fs.rmSync(tmp,{recursive:true,force:true});}
+});
+
+test("CSV escapa aspas, quebras e bloqueia fórmulas de notas",()=>{
+  const app=makeApp();
+  assert.equal(app.evaluate('safeCsvText("a,b")'),'"a,b"');
+  assert.equal(app.evaluate('safeCsvText("A\\\"B")'),'"A""B"');
+  assert.equal(app.evaluate('safeCsvText("=HYPERLINK(\\\"https://exemplo\\\")")'),
+    '"\\'=HYPERLINK(""https://exemplo"")"');
+  assert.equal(app.evaluate('safeCsvText("   @SUM(A1)")'),'"\\'   @SUM(A1)"');
+  assert.equal(app.evaluate('safeCsvText("+CMD")'),'"\\'+CMD"');
+  assert.equal(app.evaluate('safeCsvText("-10")'),'"\\'-10"');
+  assert.ok(source.includes('rows.join("\\r\\n")'));
+  assert.ok(source.includes("URL.revokeObjectURL"));
+});
