@@ -180,3 +180,56 @@ html[data-wt-theme="light"] #entrySaveButton.wt-day-saved:hover {
 #manualEntryCard input.wt-calculated {background:#16233b !important;border-color:#5575a8 !important;color:#9ac2ff !important;}
 html[data-wt-theme="light"] #manualEntryCard input.wt-calculated {background:#e5edf8 !important;color:#22497a !important;}
 #manualClockPanel input[type="time"] {min-height:44px;}
+
+
+/* Save always stays accessible above the five-button Android navigation. */
+.wt-settings-savebar {
+  position:fixed;
+  z-index:39;
+  bottom:calc(76px + env(safe-area-inset-bottom, 0px));
+  left:12px; right:12px;
+  max-width:640px;
+  margin:0 auto;
+  display:grid;
+  grid-template-columns:minmax(150px, 0.9fr) minmax(120px, 1.1fr);
+  align-items:center;
+  gap:9px;
+  border:1px solid #47689e;
+  background:rgba(16,30,54,.97);
+  padding:9px;
+  border-radius:16px;
+  box-shadow:0 8px 26px rgba(0,0,0,.35);
+  backdrop-filter:blur(10px);
+}
+.wt-settings-save-button{
+  color:white;
+  border-radius:11px;
+  border:1px solid #72a6ff;
+  background:#2563eb;
+  padding:12px 8px;
+  min-height:43px;
+  font-size:13px;
+  font-weight:760;
+  box-shadow:0 2px 8px rgba(37,99,235,.2);
+}
+.wt-settings-save-button.wt-settings-saved,
+.wt-settings-save-button.wt-settings-saved:hover {
+  color:#e2e8f0;
+  background:#475569;
+  box-shadow:none;
+  border-color:#64748b;
+  cursor:default;
+}
+#settingsSaveStatus {margin:0;line-height:1.35;}
+html[data-wt-theme="light"] .wt-settings-savebar {
+  background:rgba(247,250,255,.98);
+  border-color:#b6c9e7;
+}
+html[data-wt-theme="light"] #settingsSaveStatus {color:#344b73;}
+/* Preserve enough space to reach the bottom PIN and backup actions. */
+#tab-config {padding-bottom:136px;}
+@media(max-width:380px){
+  .wt-settings-savebar {grid-template-columns:1fr;}
+  .wt-settings-save-button {min-height:38px;}
+}
+@media print {.wt-settings-savebar{display:none!important;}}
