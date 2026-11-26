@@ -1115,3 +1115,131 @@ test("CSV escapa aspas, quebras e bloqueia fórmulas de notas",()=>{
   assert.ok(source.includes('rows.join("\\r\\n")'));
   assert.ok(source.includes("URL.revokeObjectURL"));
 });
+
+
+function pinScreen(app,value="1234") {
+  const classes={hidden:new Set(["hidden"]),modal:new Set(["hidden"])};
+  const makeClasses=set=>({
+    add:key=>set.add(key),remove:key=>set.delete(key),
+    contains:key=>set.has(key)
+  });
+  const prompt={value};
+  const error={textContent:"",classList:makeClasses(classes.hidden)};
+  const modal={classList:makeClasses(classes.modal)};
+  app.ctx.document.getElementById=id=>
+    id==="pinInputPrompt"?prompt:
+    id==="pinError"?error:
+    id==="pinLockModal"?modal:null;
+  return {prompt,error,modal};
+}
+
+test("PIN antigo desbloqueia e é migrado sem bloquear registos",async()=>{
+  const old={"2026-11-17":{date:"2026-11-17",type:"work",normal:8,extra:0,note:"Dia preservado"}};
+  const app=makeApp({securityPin:"1234",hourlyRate:25},old);
+  setupPinSecurity(app);
+  const ui=pinScreen(app);
+  assert.equal(app.evaluate("pinIsEnabled()"),true);
+  assert.equal(await app.ctx.unlockApp(),true);
+  const verifier=JSON.parse(app.values.get("wt_pin_verifier"));
+  assert.equal(await app.ctx.window.WTPin.verify("1234",verifier),true);
+  assert.equal(JSON.parse(app.values.get("wt_settings")).securityPin,"");
+  assert.equal(JSON.parse(app.values.get("wt_settings")).hourlyRate,25);
+  assert.equal(JSON.parse(app.values.get("wt_entries"))["2026-11-17"].note,"Dia preservado");
+  assert.equal(ui.modal.classList.contains("hidden"),true);
+});
+
+test("tentativas falhadas não desbloqueiam a aplicação e bloqueiam após cinco",async()=>{
+  const app=makeApp({securityPin:"1234"});
+  setupPinSecurity(app);
+  const ui=pinScreen(app,"0000");
+  for(let i=0;i<5;i++){
+    ui.prompt.value="0000";
+    assert.equal(await app.ctx.unlockApp(),false);
+  }
+  assert.match(ui.error.textContent,/5 tentativas/);
+  ui.prompt.value="1234";
+  assert.equal(await app.ctx.unlockApp(),false,
+    "O PIN correto não deve contornar a espera após 5 erros");
+  assert.equal(ui.modal.classList.contains("hidden"),true,
+    "O modal inicia escondido no teste e só é apresentado por initApp");
+  assert.ok(!app.values.has("wt_pin_verifier"),"PIN legado não é migrado com tentativas incorretas");
+});
+
+test("sem criptografia disponível, PIN legado continua acessível e o novo PIN não é guardado",async()=>{
+  const app=makeApp({securityPin:"1234"});
+  const ui=pinScreen(app);
+  assert.equal(await app.ctx.unlockApp(),true,"PIN anterior deve funcionar offline");
+  assert.equal(JSON.parse(app.values.get("wt_settings")).securityPin,"1234");
+  const input={value:"5678"},status={textContent:"",className:""};
+  app.ctx.document.getElementById=id=>id==="cfgSecurityPin"?input:id==="pinSaveStatus"?status:null;
+  assert.equal(await app.ctx.savePin(),false);
+  assert.equal(JSON.parse(app.values.get("wt_settings")).securityPin,"1234");
+  assert.match(status.textContent,/não é possível/i);
+});
+
+test("backup JSON e cópia interna não contêm PIN mesmo durante migração",async()=>{
+  const app=makeApp({securityPin:"1234",hourlyRate:31},{
+    "2026-11-18":{date:"2026-11-18",type:"work",normal:8,extra:2}
+  });
+  setupPinSecurity(app);
+  const snapshot=app.ctx.snapshotAllData();
+  assert.equal(snapshot.settings.hourlyRate,31);
+  assert.equal(snapshot.settings.securityPin,undefined);
+  assert.ok(!JSON.stringify(snapshot).includes("1234"));
+  assert.equal(snapshot.entries["2026-11-18"].extra,2);
+  app.values.set("wt_pin_verifier",JSON.stringify(await app.ctx.window.WTPin.create("9876")));
+  assert.ok(!JSON.stringify(app.ctx.snapshotAllData()).includes("wt_pin_verifier"));
+});
+
+test("importar backup antigo não altera o PIN deste telemóvel",async()=>{
+  const app=makeApp({securityPin:"1234",hourlyRate:24},{
+    "2026-11-19":{date:"2026-11-19",type:"work",normal:8,extra:0}
+  });
+  const imported={settings:{securityPin:"9999",hourlyRate:44},entries:{
+    "2026-11-20":{date:"2026-11-20",type:"work",normal:7,extra:1}
+  }};
+  app.ctx.importBackupJSON({target:{files:[{content:JSON.stringify(imported)}]}});
+  const saved=JSON.parse(app.values.get("wt_settings"));
+  assert.equal(saved.securityPin,"1234","o PIN local não é substituído por backup antigo");
+  assert.equal(saved.hourlyRate,44);
+  assert.ok(!JSON.stringify(JSON.parse(app.values.get("wt_pre_import_backup"))).includes("1234"),
+    "a cópia de recuperação também não deve expor PIN");
+  app.ctx.restorePreviousState();
+  assert.equal(JSON.parse(app.values.get("wt_settings")).securityPin,"1234");
+  assert.equal(JSON.parse(app.values.get("wt_settings")).hourlyRate,24);
+});
+
+test("PIN migrado mantém-se ativo após importar backup legado com outro PIN",async()=>{
+  const app=makeApp({hourlyRate:25});
+  setupPinSecurity(app);
+  const verifier=await app.ctx.window.WTPin.create("2222");
+  app.values.set("wt_pin_verifier",JSON.stringify(verifier));
+  app.ctx.importBackupJSON({target:{files:[{content:JSON.stringify({
+    settings:{securityPin:"0000",hourlyRate:51},entries:{}
+  })}]}});
+  assert.equal(JSON.parse(app.values.get("wt_settings")).securityPin,"");
+  assert.equal(JSON.parse(app.values.get("wt_settings")).hourlyRate,51);
+  assert.deepEqual(JSON.parse(app.values.get("wt_pin_verifier")),verifier);
+  assert.equal(await app.ctx.window.WTPin.verify("2222",verifier),true);
+});
+
+test("PIN corrompido não desativa silenciosamente o bloqueio",()=>{
+  const app=makeApp({securityPin:""});
+  app.values.set("wt_pin_verifier","null");
+  assert.equal(app.evaluate("pinIsEnabled()"),true);
+  app.values.set("wt_pin_verifier","{");
+  assert.equal(app.evaluate("pinIsEnabled()"),true);
+});
+
+test("limpar PIN guardado remove verificador após guardar a configuração",async()=>{
+  const app=makeApp();
+  setupPinSecurity(app);
+  const verifier=await app.ctx.window.WTPin.create("2222");
+  app.values.set("wt_pin_verifier",JSON.stringify(verifier));
+  const field={value:""},status={textContent:"",className:""};
+  app.ctx.document.getElementById=id=>id==="cfgSecurityPin"?field:id==="pinSaveStatus"?status:null;
+  assert.equal(await app.ctx.savePin(),true);
+  assert.equal(app.values.has("wt_pin_verifier"),false);
+  assert.equal(app.evaluate("pinIsEnabled()"),false);
+  assert.match(status.textContent,/desativado/i);
+});
