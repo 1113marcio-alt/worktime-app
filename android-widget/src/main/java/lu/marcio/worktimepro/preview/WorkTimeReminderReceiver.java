@@ -18,6 +18,8 @@ public class WorkTimeReminderReceiver extends BroadcastReceiver {
     static final String CHANNEL = "worktime_personal_reminders";
     static final String ENTRY = "entry";
     static final String EXIT = "exit";
+    static final String PAUSE = "pause";
+    static int reminderId(String kind) { return ENTRY.equals(kind) ? 731 : EXIT.equals(kind) ? 732 : 734; }
 
     static SharedPreferences prefs(Context context) {
         return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
@@ -30,7 +32,7 @@ public class WorkTimeReminderReceiver extends BroadcastReceiver {
     static PendingIntent intent(Context context, String kind) {
         Intent event = new Intent(context, WorkTimeReminderReceiver.class);
         event.setAction("lu.marcio.worktimepro.preview.REMINDER_" + kind);
-        return PendingIntent.getBroadcast(context, ENTRY.equals(kind) ? 731 : 732,
+        return PendingIntent.getBroadcast(context, reminderId(kind),
             event, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 
@@ -61,13 +63,13 @@ public class WorkTimeReminderReceiver extends BroadcastReceiver {
         AlarmManager manager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         if (manager == null) throw new IllegalStateException("AlarmManager unavailable");
         SharedPreferences config = prefs(context);
-        for (String kind : new String[]{ENTRY, EXIT}) scheduleOne(context, manager, config, kind);
+        for (String kind : new String[]{ENTRY, EXIT, PAUSE}) scheduleOne(context, manager, config, kind);
     }
 
     static void scheduleOne(Context context, AlarmManager manager, SharedPreferences config, String kind) {
         PendingIntent alarm = intent(context, kind);
         manager.cancel(alarm);
-        if (!config.getBoolean("enabled", false)) return;
+        if (!config.getBoolean("enabled", false) || (PAUSE.equals(kind) && !config.getBoolean("pauseEnabled", false))) return;
         long next = nextTime(config.getString(kind, ""), config.getInt("days", 0), System.currentTimeMillis());
         if (next > 0) manager.setAndAllowWhileIdle(AlarmManager.RTC, next, alarm);
     }
@@ -75,10 +77,10 @@ public class WorkTimeReminderReceiver extends BroadcastReceiver {
     @Override public void onReceive(Context context, Intent event) {
         if (event == null || event.getAction() == null) return;
         String action = event.getAction();
-        String kind = action.endsWith("_entry") ? ENTRY : action.endsWith("_exit") ? EXIT : "";
+        String kind = action.endsWith("_entry") ? ENTRY : action.endsWith("_exit") ? EXIT : action.endsWith("_pause") ? PAUSE : "";
         if (kind.isEmpty()) return;
         SharedPreferences config = prefs(context);
-        if (!config.getBoolean("enabled", false)) return;
+        if (!config.getBoolean("enabled", false) || (PAUSE.equals(kind) && !config.getBoolean("pauseEnabled", false))) return;
         try {
             Calendar now = Calendar.getInstance();
             String clock = config.getString(kind, "");
@@ -101,13 +103,13 @@ public class WorkTimeReminderReceiver extends BroadcastReceiver {
             Intent launch = context.getPackageManager().getLaunchIntentForPackage(context.getPackageName());
             Notification.Builder builder = new Notification.Builder(context, CHANNEL)
                 .setSmallIcon(android.R.drawable.ic_menu_recent_history)
-                .setContentTitle(ENTRY.equals(kind) ? "Lembrete de entrada" : "Lembrete de saída")
-                .setContentText("Confirma o relógio de ponto quando estiveres em segurança.")
+                .setContentTitle(ENTRY.equals(kind) ? "Lembrete de entrada" : EXIT.equals(kind) ? "Lembrete de saída" : "Lembrete de pausa")
+                .setContentText(PAUSE.equals(kind) ? "Verifica a tua pausa quando estiveres em segurança." : "Confirma o relógio de ponto quando estiveres em segurança.")
                 .setVisibility(Notification.VISIBILITY_PRIVATE)
                 .setOnlyAlertOnce(true).setAutoCancel(true);
             if (launch != null) builder.setContentIntent(PendingIntent.getActivity(context, 733, launch,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE));
-            manager.notify(ENTRY.equals(kind) ? 731 : 732, builder.build());
+            manager.notify(reminderId(kind), builder.build());
             config.edit().putString("last_" + kind, day).apply();
         } catch (Exception ignored) {
             // A denied permission or unavailable service must not crash the app.
