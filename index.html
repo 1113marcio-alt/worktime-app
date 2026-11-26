@@ -2611,6 +2611,7 @@
       if (!/^\d{4}-\d{2}$/.test(month || ""))
         throw new Error("Escolhe um mês válido para o relatório.");
       const d = calculateMonthData(month);
+      const annualPremium = annualRecordedBonus(month.slice(0,4));
       const money = number => escapeHtml(formatMoney(Number(number) || 0));
       const text = value => escapeHtml(value);
       const labels = {work:"Trabalho",vacation:"Férias",holiday:"Feriado",sick:"Baixa",off:"Folga"};
@@ -2635,6 +2636,9 @@
         ["CIS (sujeito a elegibilidade)",money(d.cisCreditApplied)],
         ["LÍQUIDO ESTIMADO COM CIS",money(d.finalNet)]
       ];
+      if (annualPremium.enabled)
+        lines.push(["PRÉMIO ANUAL ACUMULADO (separado do salário mensal)",
+          money(annualPremium.bonus)]);
       const summaryRows = lines.map(([key,value])=>
         "<tr><td>"+text(key)+"</td><td class='value'>"+value+"</td></tr>").join("");
       const entriesRows = d.monthEntries.map(e => {
