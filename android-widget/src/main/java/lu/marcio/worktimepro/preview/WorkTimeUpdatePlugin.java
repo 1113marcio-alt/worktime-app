@@ -25,6 +25,7 @@ public class WorkTimeUpdatePlugin extends Plugin {
             data.put("versionCode", Build.VERSION.SDK_INT >= 28
                 ? info.getLongVersionCode() : info.versionCode);
             data.put("packageName", getContext().getPackageName());
+            data.put("debug", (getContext().getApplicationInfo().flags & android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0);
             call.resolve(data);
         } catch (Exception error) {
             call.reject("Não foi possível ler a versão instalada.");
