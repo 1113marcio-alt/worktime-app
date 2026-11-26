@@ -772,12 +772,15 @@
         </div>
 
         <details class="wt-card space-y-3">
-          <summary class="wt-section-title">Lembretes pessoais de entrada e saída</summary>
+          <summary class="wt-section-title">Lembretes pessoais de entrada, pausa e saída</summary>
           <p class="wt-note">Notificações silenciosas nos dias escolhidos, sem marcar o ponto automaticamente. Horas aproximadas: o Android pode adiar alarmes. Após reiniciar o telemóvel ou forçar a paragem da aplicação, abre-a novamente para reprogramar.</p>
           <div class="grid grid-cols-2 gap-2">
             <label class="text-xs">Entrada<input id="reminderEntry" type="time" value="05:00" class="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl p-2" /></label>
             <label class="text-xs">Saída<input id="reminderExit" type="time" value="16:00" class="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl p-2" /></label>
           </div>
+          <label class="flex gap-2 items-center text-sm"><input type="checkbox" id="reminderPauseEnabled" /> Lembrete de pausa (opcional)</label>
+          <label class="block text-xs">Hora da pausa<input id="reminderPause" type="time" value="12:00" class="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl p-2" /></label>
+          <p class="wt-note">Lembrete pessoal a uma hora fixa, não calcula pausas legais nem tempo de condução.</p>
           <div class="flex flex-wrap gap-3 text-xs" aria-label="Dias dos lembretes">
             <label class="flex items-center gap-1"><input type="checkbox" id="reminderDay0" /> Dom</label>
             <label class="flex items-center gap-1"><input type="checkbox" id="reminderDay1" checked/> Seg</label>
@@ -1345,7 +1348,7 @@
     }
     function validPersonalReminderConfig(config){
       return !!config&&typeof config.enabled==="boolean"&&Number.isInteger(config.days)&&config.days>=0&&config.days<=127&&
-        (!config.enabled||(config.days>0&&parseClockMinutes(config.entry)!==null&&parseClockMinutes(config.exit)!==null));
+        (!config.enabled||(config.days>0&&parseClockMinutes(config.entry)!==null&&parseClockMinutes(config.exit)!==null&&(!config.pauseEnabled||parseClockMinutes(config.pause)!==null)));
     }
     async function refreshPersonalReminders(load=false){
       const plugin=personalReminderPlugin(), button=document.getElementById("reminderSave"), off=document.getElementById("reminderDisable");
@@ -1357,6 +1360,9 @@
         if(load){
           if(parseClockMinutes(status.entry)!==null)document.getElementById("reminderEntry").value=status.entry;
           if(parseClockMinutes(status.exit)!==null)document.getElementById("reminderExit").value=status.exit;
+          const pause=document.getElementById("reminderPause"),enabled=document.getElementById("reminderPauseEnabled");
+          if(pause&&parseClockMinutes(status.pause)!==null)pause.value=status.pause;
+          if(enabled)enabled.checked=status.pauseEnabled===true;
           for(let i=0;i<7;i++)document.getElementById("reminderDay"+i).checked=!!(status.days&(1<<i));
         }
         button.disabled=status.available!==true||status.allowed!==true;off.disabled=status.enabled!==true;
@@ -1366,7 +1372,8 @@
     async function configurePersonalReminders(enabled){
       const plugin=personalReminderPlugin();if(!plugin)return false;
       const config={enabled,entry:document.getElementById("reminderEntry").value,exit:document.getElementById("reminderExit").value,
-        days:reminderDaysMask(Array.from({length:7},(_,i)=>document.getElementById("reminderDay"+i).checked))};
+        days:reminderDaysMask(Array.from({length:7},(_,i)=>document.getElementById("reminderDay"+i).checked)),
+        pauseEnabled:document.getElementById("reminderPauseEnabled")?.checked===true,pause:document.getElementById("reminderPause")?.value||"12:00"};
       if(!validPersonalReminderConfig(config)){personalReminderStatus("Escolhe horários e pelo menos um dia.");return false;}
       try{await plugin.configure(config);await refreshPersonalReminders(true);return true;}
       catch(_){personalReminderStatus("Não foi possível configurar. Confirma a autorização Android e tenta novamente.");return false;}
