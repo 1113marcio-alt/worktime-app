@@ -116,6 +116,7 @@
       <p class="text-xs text-slate-400 mb-4">Introduza o seu PIN de 4 dígitos</p>
       <input id="pinInputPrompt" type="password" maxlength="4" inputmode="numeric" class="w-full text-center text-2xl tracking-widest bg-slate-800 border border-slate-700 rounded-xl p-3 mb-4 focus:outline-none focus:border-blue-500" placeholder="••••" />
       <button onclick="unlockApp()" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-xl">Desbloquear</button>
+      <button type="button" id="biometricUnlockButton" onclick="unlockWithBiometric()" class="wt-button w-full mt-3 hidden">Desbloquear com biometria</button>
       <p id="pinError" class="text-red-400 text-xs mt-2 hidden">PIN incorreto!</p>
     </div>
   </div>
@@ -1023,6 +1024,8 @@
           <input type="password" maxlength="4" inputmode="numeric" id="cfgSecurityPin" placeholder="Definir PIN de 4 dígitos (vazio = sem PIN)" class="flex-1 bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs" />
           <button onclick="savePin()" class="bg-slate-800 border border-slate-700 px-4 py-2.5 rounded-xl text-xs font-bold text-emerald-400">Guardar PIN</button>
         </div>
+        <button type="button" id="biometricToggleButton" onclick="toggleBiometricUnlock()" class="wt-button w-full">Ativar desbloqueio biométrico</button>
+        <p id="biometricStatus" class="wt-note" aria-live="polite">Requer Android 11 ou superior, biometria forte configurada e PIN da aplicação ativo. Não encripta os dados. A preferência não passa para outro dispositivo.</p>
         <p id="pinSaveStatus" class="text-xs text-slate-400" aria-live="polite">O PIN é verificado neste dispositivo e protege apenas a interface. Não encripta registos nem backups. Os backups novos não incluem o PIN; depois de restaurar noutro dispositivo, define um novo.</p>
       </div>
     </section>
@@ -1262,10 +1265,59 @@
       renderAll();
       if (window.ProUI) window.ProUI.init();
       initEncryptedBackups();
+      refreshBiometricUI();
 
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('sw.js').catch(() => {});
       }
+    }
+
+    function biometricPlugin(){
+      return window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.WorkTimeBiometric;
+    }
+    function biometricEnabled(){
+      try{return pinIsEnabled()&&localStorage.getItem("wt_biometric_enabled")==="1";}catch(_){return false;}
+    }
+    function biometricStatus(message){
+      const el=document.getElementById("biometricStatus");if(el)el.textContent=message;
+    }
+    async function refreshBiometricUI(){
+      const button=document.getElementById("biometricUnlockButton"), toggle=document.getElementById("biometricToggleButton");
+      if(!button&&!toggle)return;
+      const plugin=biometricPlugin();
+      let available=false;
+      try{available=!!plugin&&(await plugin.getStatus()).available===true;}catch(_){}
+      if(button)button.classList.toggle("hidden",!(available&&biometricEnabled()));
+      if(toggle){toggle.disabled=!available&&!biometricEnabled();toggle.textContent=biometricEnabled()?"Desativar desbloqueio biométrico":"Ativar desbloqueio biométrico";}
+      biometricStatus(!available?"Biometria forte não disponível neste dispositivo. Usa o PIN.":!pinIsEnabled()?"Configura primeiro o PIN da aplicação.":biometricEnabled()?"Biometria ativa. O PIN continua disponível.":"Biometria forte disponível. Podes ativá-la.");
+    }
+    async function toggleBiometricUnlock(){
+      const plugin=biometricPlugin();
+      if(biometricEnabled()){
+        try{localStorage.removeItem("wt_biometric_enabled");}catch(_){biometricStatus("Não foi possível desativar.");return false;}
+        await refreshBiometricUI();return true;
+      }
+      if(!pinIsEnabled()||!plugin){biometricStatus("Configura primeiro o PIN e a biometria no Android.");return false;}
+      try{
+        if((await plugin.authenticate()).authenticated!==true)return false;
+        if(!pinIsEnabled())return false;
+        localStorage.setItem("wt_biometric_enabled","1");
+        await refreshBiometricUI();return true;
+      }catch(_){biometricStatus("Autenticação não concluída. O PIN permanece ativo.");return false;}
+    }
+    async function unlockWithBiometric(){
+      const plugin=biometricPlugin();
+      if(!biometricEnabled()||!plugin)return false;
+      const modal=document.getElementById("pinLockModal");
+      if(!modal||modal.classList.contains("hidden"))return false;
+      try{
+        const result=await plugin.authenticate();
+        if(result.authenticated!==true||!biometricEnabled())return false;
+        pinFailedAttempts=0;pinLockedUntil=0;
+        document.getElementById("pinError").classList.add("hidden");
+        document.getElementById("pinInputPrompt").value="";
+        modal.classList.add("hidden");modal.classList.remove("flex");return true;
+      }catch(_){return false;}
     }
 
     async function unlockApp() {
@@ -1749,6 +1801,8 @@
           ? "PIN guardado com verificador protegido. Será pedido ao voltar a abrir a aplicação."
           : "PIN desativado neste dispositivo.";
         status.className = "text-xs text-emerald-400";
+        if(!pin){try{localStorage.removeItem("wt_biometric_enabled");}catch(_){}}
+        refreshBiometricUI();
         return true;
       } catch (_) {
         // Best-effort rollback; the original config is never overwritten
