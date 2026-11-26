@@ -61,13 +61,15 @@ public class WorkTimeReminderReceiver extends BroadcastReceiver {
         AlarmManager manager = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         if (manager == null) throw new IllegalStateException("AlarmManager unavailable");
         SharedPreferences config = prefs(context);
-        for (String kind : new String[]{ENTRY, EXIT}) {
-            PendingIntent alarm = intent(context, kind);
-            manager.cancel(alarm);
-            if (!config.getBoolean("enabled", false)) continue;
-            long next = nextTime(config.getString(kind, ""), config.getInt("days", 0), System.currentTimeMillis());
-            if (next > 0) manager.setAndAllowWhileIdle(AlarmManager.RTC, next, alarm);
-        }
+        for (String kind : new String[]{ENTRY, EXIT}) scheduleOne(context, manager, config, kind);
+    }
+
+    static void scheduleOne(Context context, AlarmManager manager, SharedPreferences config, String kind) {
+        PendingIntent alarm = intent(context, kind);
+        manager.cancel(alarm);
+        if (!config.getBoolean("enabled", false)) return;
+        long next = nextTime(config.getString(kind, ""), config.getInt("days", 0), System.currentTimeMillis());
+        if (next > 0) manager.setAndAllowWhileIdle(AlarmManager.RTC, next, alarm);
     }
 
     @Override public void onReceive(Context context, Intent event) {
@@ -110,7 +112,10 @@ public class WorkTimeReminderReceiver extends BroadcastReceiver {
         } catch (Exception ignored) {
             // A denied permission or unavailable service must not crash the app.
         } finally {
-            try { schedule(context); } catch (Exception ignored) {}
+            try {
+                AlarmManager alarm = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+                if (alarm != null) scheduleOne(context, alarm, config, kind);
+            } catch (Exception ignored) {}
         }
     }
 }
