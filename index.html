@@ -353,6 +353,15 @@
           <div class="wt-balance-cell"><span>Bónus</span><strong class="money-val" id="salaryPreviewBonus">0,00 €</strong></div>
         </div>
       </div>
+      <div class="wt-card space-y-2" id="annualBonusPanel">
+        <p class="wt-kicker">Prémio contratual de fim de ano</p>
+        <div class="wt-flex">
+          <h3 class="wt-section-title" id="annualBonusHeading">Prémio acumulado</h3>
+          <span class="wt-pill" id="annualBonusRate">8%</span>
+        </div>
+        <p id="annualBonusValue" class="text-2xl font-bold text-sky-300 money-val">0,00 €</p>
+        <p id="annualBonusDetails" class="wt-note">Estimativa dos salários brutos registados neste ano, sem o subsídio diário.</p>
+      </div>
       <p class="wt-note">O Luxemburgo dispõe de uma estimativa por classe; França e Portugal precisam de retenção manual e dados adicionais. Confirma sempre com o recibo.</p>
       <button type="button" onclick="exportCSV()" id="salaryExportCsv"
         class="wt-button w-full no-print">📊 Exportar horas para Excel (.csv)</button>
@@ -479,8 +488,14 @@
         </div>
 
         <div class="bg-blue-950/40 border border-blue-800/50 p-3 rounded-xl text-xs space-y-1">
-          <p class="font-bold text-blue-300">💡 Valor Real do teu Dia de Férias (Lei do Luxemburgo):</p>
-          <p class="text-slate-300">Incluindo a média de horas extras e bónus horaires, cada dia de férias teu vale aproximadamente <strong class="text-white money-val" id="vacDailyValue">0,00 €</strong> brutos.</p>
+          <p class="font-bold text-blue-300">💡 Estimativa do valor do próximo dia de férias</p>
+          <label class="block text-slate-300">Data de referência
+            <input id="vacReferenceDate" type="date" onchange="renderAll()"
+              class="w-full mt-2 bg-slate-800 border border-slate-700 rounded-lg p-2 text-slate-100" />
+          </label>
+          <p class="text-slate-300">Base do horário mais média variável estimada: <strong class="text-white money-val" id="vacDailyValue">0,00 €</strong> brutos.</p>
+          <p id="vacThreeMonthInfo" class="text-slate-300">A verificar os dias disponíveis nos três meses anteriores.</p>
+          <p class="text-amber-200">Estimativa com dados registados; salários com grande variação podem exigir referência de 12 meses. Confirma o recibo e o contrato.</p>
         </div>
       </div>
 
@@ -579,10 +594,53 @@
             <input type="number" step="0.10" id="cfgDailyPanier" onchange="markSettingsDirty()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
           </div>
           <div>
-            <label class="block text-slate-400 mb-1">Média 3M Extra p/ Férias (€/dia)</label>
-            <input type="number" step="0.10" id="cfgVacAvgSupplement" onchange="markSettingsDirty()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
+            <label class="block text-slate-400 mb-1">Média variável de férias (automática)</label>
+            <p class="text-[11px] text-sky-300 rounded-xl bg-slate-800 border border-slate-700 p-2.5">
+              Calculada pelos dias trabalhados nos 3 meses anteriores a cada férias. Com 30 dias de histórico, usa apenas os dias disponíveis. Sem registos, considera 0 € e avisa.
+            </p>
+            <input id="cfgVacAvgSupplement" type="hidden" aria-label="Suplemento antigo apenas para registos legados" />
           </div>
         </div>
+      </div>
+
+      <!-- 1A. Prémio contratual anual, independente do salário mensal. -->
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+        <h3 class="font-bold text-sm text-blue-400">1A. Prémio de fim de ano</h3>
+        <label class="flex items-center gap-2 text-sm text-slate-100">
+          <input id="cfgYearEndBonusEnabled" type="checkbox" onchange="markSettingsDirty()" class="w-5 h-5 accent-blue-500" />
+          Ativar estimativa de prémio anual
+        </label>
+        <div class="grid grid-cols-2 gap-3 text-xs">
+          <label class="space-y-1 text-slate-300">Prémio base (%)
+            <input id="cfgYearEndBonusPct" type="number" min="0" max="100" step="0.1"
+              onchange="markSettingsDirty()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5" />
+          </label>
+          <label class="space-y-1 text-slate-300">Entrada na empresa
+            <input id="cfgCompanyStartDate" type="date" onchange="markSettingsDirty()"
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5" />
+          </label>
+          <label class="space-y-1 text-slate-300">Após X anos (opcional)
+            <input id="cfgYearEndBonusTierYears1" type="number" min="0" max="70" step="1"
+              placeholder="Ex.: 10" onchange="markSettingsDirty()"
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5" />
+          </label>
+          <label class="space-y-1 text-slate-300">Nova taxa (%)
+            <input id="cfgYearEndBonusTierRate1" type="number" min="0" max="100" step="0.1"
+              placeholder="Ex.: 9" onchange="markSettingsDirty()"
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5" />
+          </label>
+          <label class="space-y-1 text-slate-300">Após mais anos (opcional)
+            <input id="cfgYearEndBonusTierYears2" type="number" min="0" max="70" step="1"
+              placeholder="Ex.: 15" onchange="markSettingsDirty()"
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5" />
+          </label>
+          <label class="space-y-1 text-slate-300">Nova taxa (%)
+            <input id="cfgYearEndBonusTierRate2" type="number" min="0" max="100" step="0.1"
+              placeholder="Ex.: 10" onchange="markSettingsDirty()"
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5" />
+          </label>
+        </div>
+        <p class="text-xs text-amber-200">É uma simulação contratual, não um prémio legal universal. Só conta os valores brutos que tens registados, sem o subsídio diário e sem o próprio prémio; não prevê salários ainda não registados. Confirma as regras de antiguidade e pagamento com o contrato/recibo.</p>
       </div>
 
       <!-- 2. Sistema de Impostos -->
@@ -690,14 +748,23 @@
       </div>
 
       <!-- 5. Aparência -->
-      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center justify-between">
-        <div>
-          <h3 class="font-bold text-sm text-blue-400">5. Aparência</h3>
-          <p class="text-xs text-slate-400">Alternar entre Modo Escuro e Claro</p>
-        </div>
-        <button id="cfgThemeButton" onclick="toggleTheme()" class="bg-slate-800 border border-slate-700 px-4 py-2 rounded-xl text-xs font-bold">
+      <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+        <h3 class="font-bold text-sm text-blue-400">5. Aparência</h3>
+        <button id="cfgThemeButton" type="button" onclick="toggleTheme()"
+          class="bg-slate-800 border border-slate-700 px-4 py-2 rounded-xl text-xs font-bold w-full">
           🌗 Alternar Tema
         </button>
+        <label class="block text-xs text-slate-300" for="cfgAccentColor">Cor principal da aplicação</label>
+        <select id="cfgAccentColor" onchange="previewAccentColor()"
+          class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm">
+          <option value="blue">🔵 Azul original</option>
+          <option value="teal">🟢 Verde-água</option>
+          <option value="emerald">💚 Verde-esmeralda</option>
+          <option value="purple">🟣 Roxo</option>
+          <option value="orange">🟠 Laranja</option>
+          <option value="rose">🌹 Rosa</option>
+        </select>
+        <p class="text-xs text-slate-400">A nova cor é mostrada antes de guardar. O widget nativo mantém a cor e o logótipo WT para continuar reconhecível.</p>
       </div>
 
       <!-- 6. Dados e Backup: guardar JSON e restaurar JSON são ações diferentes. -->
