@@ -1009,8 +1009,12 @@ test("férias novas usam o horário do dia e as antigas conservam o valor de 8h"
   const month=app.evaluate('calculateMonthData("2026-11")');
   assert.equal(month.vacDays,2);
   assert.equal(month.vacPaidHours,14);
-  const expected=(6+8)*(20+2)+14/8*16;
+  // O novo dia de férias usa a média observada (0: ainda não há dias
+  // trabalhados). O dia antigo continua a usar o suplemento legado de 16 €.
+  const expected=(6+8)*(20+2)+16;
   assert.equal(month.vacationGross,expected);
+  assert.equal(entries["2026-11-23"].vacSupplementPerDay,0);
+  assert.equal(entries["2026-11-23"].vacSupplementSampleDays,0);
   app.ctx.loadManualEntryForDate("2026-11-24");
   assert.equal(Number(e.entryPaidLeaveHours.value),8,
     "Alterar um dia antigo não pode recalcular automaticamente as suas 8h");
@@ -1031,7 +1035,8 @@ test("dias de férias em folga têm 0h por defeito, mas permitem correção cont
   app.ctx.markEntryDirty();
   assert.equal(app.ctx.saveEntry(),true);
   assert.equal(app.evaluate('calculateMonthData("2026-11").vacPaidHours'),3.5);
-  assert.equal(app.evaluate('calculateMonthData("2026-11").vacationGross'),3.5*(21+1)+3.5/8*8);
+  assert.equal(app.evaluate('calculateMonthData("2026-11").vacationGross'),3.5*(21+1),
+    "dias de férias novos sem histórico não herdam 8 € fixos");
   assert.equal(JSON.parse(app.values.get("wt_entries"))["2026-11-22"].paidLeaveHours,3.5);
 });
 
@@ -1606,4 +1611,127 @@ test("a impressão nativa usa a Activity UI thread mesmo com a WebView fora do e
   assert.ok(java.includes("getActivity().runOnUiThread(() -> {"));
   assert.ok(!java.includes("loaded.post("));
   assert.ok(java.includes("delegate.onFinish()"));
+});
+
+
+test("média de férias usa só os três meses anteriores e apenas dias trabalhados",()=>{
+  const rows={
+    "2026-08-25":{date:"2026-08-25",type:"work",normal:8,extra:10,night:0}, // fora
+    "2026-09-01":{date:"2026-09-01",type:"work",normal:8,extra:2,night:0,includeBonus:true},
+    "2026-09-02":{date:"2026-09-02",type:"vacation",normal:8,extra:0,night:0},
+    "2026-11-25":{date:"2026-11-25",type:"work",normal:8,extra:1,night:1,includeBonus:true},
+    "2026-11-27":{date:"2026-11-27",type:"work",normal:8,extra:90,night:0} // dia futuro
+  };
+  const app=makeApp({hourlyRate:20, hourlyBonus:2.6, overtimePct:40,nightPct:15},rows);
+  const x=app.ctx.threeMonthWorkAverage("2026-11-27");
+  assert.equal(x.from,"2026-08-27");
+  assert.equal(x.days,2);
+  // Sept 1: 2*28+2*2.6=61.2; Nov 25: 28+3+2.6=33.6
+  assert.ok(Math.abs(x.variableGross-94.8)<0.0001);
+  assert.ok(Math.abs(x.avgPerDay-47.4)<0.0001);
+  assert.equal(x.partial,true);
+  assert.equal(app.ctx.threeMonthWorkAverage("2026-11-27").days,2);
+});
+
+test("a média de férias funciona com 7 ou 30 dias e sem dias de trabalho",()=>{
+  const week={"2026-11-22":{date:"2026-11-22",type:"work",normal:8,extra:2,night:0}};
+  const app=makeApp({hourlyRate:20,hourlyBonus:2,overtimePct:40},week);
+  const average=app.ctx.threeMonthWorkAverage("2026-11-27");
+  assert.equal(average.days,1);
+  assert.equal(average.avgPerDay,56);
+  assert.equal(average.partial,true);
+  assert.equal(app.ctx.threeMonthWorkAverage("2026-11-22").days,0);
+  const noData=app.ctx.threeMonthWorkAverage("2027-08-01");
+  assert.equal(noData.avgPerDay,0);
+  assert.equal(noData.days,0);
+});
+
+test("dias de férias novos gravam média observada sem afetar dias antigos",()=>{
+  const original={
+    "2026-11-24":{date:"2026-11-24",type:"vacation",normal:8,extra:0,night:0,
+      includeBonus:false,paidLeaveHours:8},
+    "2026-11-25":{date:"2026-11-25",type:"work",normal:8,extra:2,
+      night:0,includeBonus:false}
+  };
+  const app=makeApp({hourlyRate:20,hourlyBonus:2,overtimePct:40,
+    vacAvgSupplement:24},original);
+  const e=manualDayFixture(app,"2026-11-27");
+  app.ctx.loadManualEntryForDate("2026-11-27");
+  e.entryType.value="vacation";
+  app.ctx.onDayTypeChange();
+  assert.equal(app.ctx.saveEntry(),true);
+  const saved=JSON.parse(app.values.get("wt_entries"));
+  assert.equal(saved["2026-11-27"].vacSupplementPerDay,56);
+  assert.equal(saved["2026-11-27"].vacSupplementSampleDays,1);
+  assert.equal(saved["2026-11-27"].vacSupplementHoursBase,8);
+  assert.equal(saved["2026-11-24"].vacSupplementPerDay,undefined);
+  const month=app.ctx.calculateMonthData("2026-11");
+  const expectedLeave=(8*22+24)+(8*22+56);
+  assert.equal(month.vacationGross,expectedLeave);
+});
+
+test("registo automático de férias de seis horas usa um dia inteiro de média variável",()=>{
+  const rows={"2026-11-18":{date:"2026-11-18",type:"work",
+    normal:8,extra:1,night:0,includeBonus:false}};
+  const app=makeApp({hourlyRate:20,hourlyBonus:2,overtimePct:40,
+    weeklySchedule:{5:{enabled:true,start:"08:00",end:"14:30",breakMinutes:30}}},rows);
+  const e=manualDayFixture(app,"2026-11-27"); // sexta
+  app.ctx.loadManualEntryForDate("2026-11-27");
+  e.entryType.value="vacation";
+  app.ctx.onDayTypeChange();
+  assert.equal(Number(e.entryPaidLeaveHours.value),6);
+  assert.equal(app.ctx.saveEntry(),true);
+  const saved=JSON.parse(app.values.get("wt_entries"))["2026-11-27"];
+  assert.equal(saved.vacSupplementPerDay,28);
+  assert.equal(saved.vacSupplementHoursBase,6);
+  assert.equal(app.ctx.calculateMonthData("2026-11").vacationGross,6*22+28);
+});
+
+test("prémio anual 8% contabiliza apenas o bruto registado até à data",()=>{
+  const rows={
+    "2026-01-05":{date:"2026-01-05",type:"work",normal:8,extra:0,night:0,includeBonus:true},
+    "2026-01-06":{date:"2026-01-06",type:"work",normal:8,extra:2,night:1,includeBonus:true},
+    "2026-01-07":{date:"2026-01-07",type:"off",normal:0,extra:0,night:0},
+    "2026-01-08":{date:"2026-01-08",type:"vacation",normal:0,extra:0,night:0,
+      paidLeaveHours:8,vacSupplementPerDay:20,vacSupplementHoursBase:8},
+    "2026-12-31":{date:"2026-12-31",type:"work",normal:8,extra:300,night:0,includeBonus:true}
+  };
+  const app=makeApp({hourlyRate:20,hourlyBonus:2,overtimePct:40,nightPct:15,
+    dailyPanier:99,yearEndBonusEnabled:true,yearEndBonusPct:8},rows);
+  const premium=app.ctx.annualRecordedBonus("2026","2026-11-26");
+  // 176 + 8*20+2*28+3+10*2 = 239; vacations 8*22+20=196.
+  assert.equal(premium.gross,176+160+56+3+20+196);
+  assert.ok(Math.abs(premium.bonus-premium.gross*.08)<0.00001);
+  assert.equal(premium.days,4);
+  assert.equal(app.ctx.annualRecordedBonus("2026","2026-01-05").bonus,176*.08);
+  assert.equal(app.ctx.annualRecordedBonus("2027","2026-11-26").bonus,0);
+});
+
+test("prémio contratual muda taxa em função da antiguidade configurada",()=>{
+  const app=makeApp({yearEndBonusEnabled:true,yearEndBonusPct:8,
+    companyStartDate:"2016-05-09",
+    yearEndBonusTiers:[{years:10,rate:9},{years:15,rate:10}]});
+  assert.equal(app.ctx.yearEndBonusRate("2025-05-08").rate,8);
+  assert.equal(app.ctx.yearEndBonusRate("2026-05-09").rate,9);
+  assert.equal(app.ctx.yearEndBonusRate("2031-05-09").rate,10);
+  assert.equal(app.ctx.yearEndBonusRate("2026-05-09").years,10);
+  assert.equal(app.ctx.yearEndBonusRate("2010-01-01").years,null);
+  assert.equal(app.ctx.annualRecordedBonus("2026","2026-11-26").bonus,0);
+});
+
+test("temas de cor guardam escolha e restauram após backup",()=>{
+  const app=makeApp({accentColor:"purple",theme:"dark",
+    yearEndBonusPct:8,yearEndBonusTiers:[{years:10,rate:9}]});
+  const snapshot=app.ctx.snapshotAllData();
+  assert.equal(snapshot.settings.accentColor,"purple");
+  assert.equal(snapshot.settings.yearEndBonusPct,8);
+  app.ctx.writeBackupState({settings:{accentColor:"orange",yearEndBonusPct:12,
+    yearEndBonusTiers:[]},entries:{}});
+  assert.equal(app.evaluate("settings.accentColor"),"orange");
+  app.ctx.writeBackupState(snapshot);
+  assert.equal(app.evaluate("settings.accentColor"),"purple");
+  assert.equal(app.evaluate("settings.yearEndBonusTiers[0].rate"),9);
+  const css=fs.readFileSync("pro-ui.css","utf8");
+  for(const color of ["blue","teal","emerald","purple","orange","rose"])
+    assert.ok(css.includes('data-wt-accent="'+color+'"'));
 });
