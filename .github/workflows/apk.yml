@@ -108,6 +108,9 @@ jobs:
             python3 scripts/configure_android_release_signing.py
             (cd android && ./gradlew assembleRelease --stacktrace)
             cp android/app/build/outputs/apk/release/app-release.apk dist/WorkTime-Pro-2-PREVIEW-SIGNED.apk
+            signer="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+            test -x "$signer"
+            "$signer" verify --print-certs dist/WorkTime-Pro-2-PREVIEW-SIGNED.apk
           else
             (cd android && ./gradlew assembleDebug --stacktrace)
             if [ "${GITHUB_REF_NAME}" = "worktime-pro-2" ]; then
