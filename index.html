@@ -2030,7 +2030,13 @@
     // de partilha do sistema para o utilizador guardar em Ficheiros/Drive/etc.
     // O cache NÃO é um backup persistente até o utilizador o exportar.
     async function exportBackupJSON() {
-      const backup = { ...snapshotAllData(), exportedAt: new Date().toISOString(), schemaVersion: 2 };
+      if (settingsDirty) {
+        const el = document.getElementById("backupSaveStatus");
+        if (el) el.textContent = "Tens definições por guardar. Carrega primeiro em «Guardar alterações» para as incluir no backup.";
+        return false;
+      }
+      const backup = { ...snapshotAllData(), exportedAt: new Date().toISOString(),
+        schemaVersion: 2, backupType: "worktime-full-settings-and-records" };
       const json = JSON.stringify(backup, null, 2);
       const fileName = "worktime_backup_" + new Date().toISOString().slice(0, 10) + ".json";
       const status = document.getElementById("backupSaveStatus");
@@ -2106,23 +2112,47 @@
       // imported JSON so a backup cannot silently change / disable it.
       const restoredSettings = {
         ...defaultSettings, ...parsed.settings,
-        securityPin: settings.securityPin || ""
+        weeklySchedule: {
+          ...defaultSettings.weeklySchedule,
+          ...(isPlainRecord(parsed.settings.weeklySchedule) ? parsed.settings.weeklySchedule : {})
+        },
+        // O PIN e as autorizações nativas permanecem deste telemóvel.
+        // A importação não deve ativar botões do widget sem consentimento.
+        securityPin: settings.securityPin || "",
+        widgetEnabled: settings.widgetEnabled === true,
+        shiftNotifications: settings.shiftNotifications === true
       };
       delete restoredSettings.pinVerifier;
-      localStorage.setItem("wt_settings", JSON.stringify(restoredSettings));
-      localStorage.setItem("wt_entries", JSON.stringify(parsed.entries));
-      // Backups da versão 1 não tinham turnos. Não apagar os turnos da Preview
-      // se o backup importado não mencionar estes campos.
-      if (Object.prototype.hasOwnProperty.call(parsed, "shiftDrafts"))
-        localStorage.setItem("wt_shift_drafts", JSON.stringify(parsed.shiftDrafts));
-      if (Object.prototype.hasOwnProperty.call(parsed, "activeShift")) {
-        if (parsed.activeShift === null) localStorage.removeItem("wt_active_shift");
-        else localStorage.setItem("wt_active_shift", JSON.stringify(parsed.activeShift));
+      const keys = ["wt_settings","wt_entries","wt_shift_drafts","wt_active_shift"];
+      const before = Object.fromEntries(keys.map(key => [key, localStorage.getItem(key)]));
+      try {
+        localStorage.setItem("wt_settings", JSON.stringify(restoredSettings));
+        localStorage.setItem("wt_entries", JSON.stringify(parsed.entries));
+        // Backups da versão 1 não tinham turnos. Não apagar turnos se omitidos.
+        if (Object.prototype.hasOwnProperty.call(parsed, "shiftDrafts"))
+          localStorage.setItem("wt_shift_drafts", JSON.stringify(parsed.shiftDrafts));
+        if (Object.prototype.hasOwnProperty.call(parsed, "activeShift")) {
+          if (parsed.activeShift === null) localStorage.removeItem("wt_active_shift");
+          else localStorage.setItem("wt_active_shift", JSON.stringify(parsed.activeShift));
+        }
+      } catch (error) {
+        // Se o armazenamento falhar a meio, restaurar todas as chaves.
+        for (const key of keys) {
+          try {
+            if (before[key] === null) localStorage.removeItem(key);
+            else localStorage.setItem(key,before[key]);
+          } catch (_) {}
+        }
+        throw error;
       }
       settings = restoredSettings;
       entries = parsed.entries;
-      loadSettingsToInputs();
+      pendingVacationAuto = null;
+      loadSettingsToInputs();  // Recria também os sete horários semanais.
       renderAll();
+      if (window.ProUI && window.ProUI.render) window.ProUI.render();
+      setSettingsSaveState(true,
+        "✓ Configurações restauradas: horários, salário, idioma, calendário, férias e tema. PIN e permissões do widget mantidos neste telemóvel.");
     }
 
     // Cópia antes da importação; permite recuperar os dados originais.
@@ -2135,21 +2165,37 @@
       if (!confirm("Repor os dados anteriores à última importação? Exporte um backup dos dados atuais antes de continuar.")) return;
       try {
         writeBackupState(parsed);
-        alert("Estado anterior à importação recuperado.");
+        const status = document.getElementById("backupImportStatus");
+        if (status) status.textContent = "✓ Estado anterior recuperado, incluindo as configurações.";
+        alert("Estado anterior à importação recuperado, incluindo as configurações.");
       } catch (_) {
         alert("Não foi possível recuperar automaticamente. Utilize o backup JSON guardado.");
       }
     }
 
+    function chooseBackupJSON() {
+      const input = document.getElementById("backupImportFile");
+      if (input) input.click();
+      return !!input;
+    }
+
     function importBackupJSON(event) {
       const file = event.target.files && event.target.files[0];
       if (!file) return;
+      const status = document.getElementById("backupImportStatus");
+      const show = text => { if (status) status.textContent = text; };
+      // Permitir escolher novamente o mesmo ficheiro em caso de erro.
+      if (event.target && "value" in event.target) event.target.value = "";
       const reader = new FileReader();
       reader.onload = e => {
         let parsed;
         try { parsed = JSON.parse(e.target.result); }
-        catch (_) { alert("O ficheiro não contém JSON válido."); return; }
+        catch (_) {
+          show("Não foi possível ler o ficheiro JSON.");
+          alert("O ficheiro não contém JSON válido."); return;
+        }
         if (!isValidWorkTimeBackup(parsed)) {
+          show("Backup incompatível. Os teus registos não foram alterados.");
           alert("Backup inválido: é necessário conter configurações e registos compatíveis.");
           return;
         }
@@ -2157,11 +2203,14 @@
         const keys = ["wt_settings", "wt_entries", "wt_shift_drafts", "wt_active_shift"];
         const before = Object.fromEntries(keys.map(key => [key, localStorage.getItem(key)]));
         const snapshot = snapshotAllData();
+        const settingsBefore = settings;
+        const entriesBefore = entries;
         try {
           // Gravar a cópia anterior primeiro, antes de substituir quaisquer dados.
           localStorage.setItem("wt_pre_import_backup", JSON.stringify(snapshot));
           writeBackupState(parsed);
-          alert("Backup restaurado com sucesso. O estado anterior ficou guardado para recuperação.");
+          show("✓ Backup restaurado: configurações, horários semanais, salários, férias, idioma, tema e registos. O PIN deste telemóvel permanece.");
+          alert("Backup completo restaurado com sucesso. As configurações anteriores também foram substituídas pelas do backup.");
         } catch (_) {
           try {
             keys.forEach(key => {
@@ -2169,12 +2218,19 @@
               else localStorage.setItem(key, before[key]);
             });
           } catch (_) {}
-          settings = snapshot.settings;
-          entries = snapshot.entries;
+          settings = settingsBefore;
+          entries = entriesBefore;
+          loadSettingsToInputs();
+          renderAll();
+          setSettingsSaveState(true);
+          show("Falha na importação. Tentámos recuperar os dados anteriores.");
           alert("Não foi possível restaurar o backup. Os dados anteriores foram mantidos sempre que possível.");
         }
       };
-      reader.onerror = () => alert("Não foi possível ler o ficheiro.");
+      reader.onerror = () => {
+        show("Não foi possível ler o ficheiro.");
+        alert("Não foi possível ler o ficheiro.");
+      };
       reader.readAsText(file);
     }
 
