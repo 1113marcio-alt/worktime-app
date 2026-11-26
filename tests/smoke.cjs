@@ -674,7 +674,7 @@ test("ícone do Android e PWA compartilham o mesmo logotipo WT azul da aplicaç�
     "Ícone não deve depender de um site externo");
   assert.ok(source.includes('href="wt-icon.svg"'));
   assert.ok(fs.readFileSync(".github/workflows/apk.yml","utf8")
-    .includes("wt-widget.js wt-icon.svg www/"));
+    .includes("wt-widget.js wt-icon.svg wt-pin.js www/"));
   assert.ok(fs.readFileSync("sw.js","utf8").includes("'./wt-icon.svg'"));
 });
 
