@@ -1945,3 +1945,13 @@ test("v3: fecho mensal não altera estado quando armazenamento falha",()=>{
   assert.equal(app.ctx.isPayrollMonthClosed("2026-10"),false);
   assert.equal(app.ctx.isValidWorkTimeBackup({settings:{payrollClosures:{"2026-10":{status:"closed"}}},entries:{}}),false);
 });
+
+test("v3: prémio anual usa o bruto congelado sem panier em meses fechados",()=>{
+  const date="2026-10-30";
+  const app=makeApp({hourlyRate:20,hourlyBonus:2,dailyPanier:4},{[date]:{date,type:"work",normal:8,extra:0,night:0,includeBonus:true}});
+  assert.equal(app.ctx.setPayrollMonthClosed("2026-10",true,null,"2026-11-26"),true);
+  app.evaluate('settings={...settings,hourlyRate:40}');
+  assert.equal(app.ctx.annualRecordedBonus("2026","2026-11-26").gross,176);
+  assert.equal(app.ctx.setPayrollMonthClosed("2026-10",false),true);
+  assert.equal(app.ctx.annualRecordedBonus("2026","2026-11-26").gross,336);
+});
