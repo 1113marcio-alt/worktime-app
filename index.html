@@ -1196,6 +1196,28 @@
           "Verifica os horários: entrada, saída e pausas dos dias selecionados.", true);
         return false;
       }
+      // Um campo vazio ou inválido não deve transformar salários e taxas
+      // em zero por acidente. 0% explícito continua permitido.
+      const limits = [
+        ["cfgHourlyRate",0,10000], ["cfgHourlyBonus",0,10000],
+        ["cfgDailyPanier",0,10000], ["cfgVacAvgSupplement",0,10000],
+        ["cfgOvertimePct",0,100], ["cfgNightPct",0,100],
+        ["cfgManualTaxRate",0,100], ["cfgManualSocialRate",0,100],
+        ["cfgCisCredit",0,10000], ["cfgAnnualVacation",0,365]
+      ];
+      for (const [id,min,max] of limits) {
+        const field = document.getElementById(id);
+        if (!field) continue;
+        const raw = String(field.value ?? "").trim();
+        if (raw === "" && (id === "cfgOvertimePct" || id === "cfgNightPct"))
+          continue; // Compatibilidade: manter o valor atual nesta situação.
+        const value = Number(raw);
+        if (raw === "" || !Number.isFinite(value) || value < min || value > max) {
+          setSettingsSaveState(false,
+            "Corrige o valor inválido em " + id + " antes de guardar.", true);
+          return false;
+        }
+      }
       const nextSettings = { ...settings, weeklySchedule };
       if (pendingVacationAuto !== null)
         nextSettings.vacationAuto = pendingVacationAuto;
@@ -1231,8 +1253,9 @@
       try {
         localStorage.setItem("wt_settings", JSON.stringify(nextSettings));
       } catch (_) {
+        setSettingsSaveState(false,
+          "Não foi possível guardar. As tuas alterações continuam no formulário para tentares novamente.", true);
         alert("Não foi possível guardar as definições. As anteriores foram mantidas.");
-        loadSettingsToInputs();
         return false;
       }
       settings = nextSettings;
