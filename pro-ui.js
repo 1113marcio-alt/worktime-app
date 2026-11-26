@@ -500,6 +500,10 @@
     const draft = pending.find(item => item.id === id);
     if (!draft || !/^\d{4}-\d{2}-\d{2}$/.test(draft.date)) return;
     const date = draft.date;
+    if (typeof isPayrollMonthClosed === "function" && isPayrollMonthClosed(date.slice(0,7))) {
+      alert("Mês fechado. Reabre-o na secção Salário antes de aplicar o turno. O rascunho fica guardado.");
+      return;
+    }
     const prior = entries[date];
     if (prior && Array.isArray(prior.shifts) && prior.shifts.some(shift => shift.id === draft.id)) {
       alert("Este turno já foi aplicado ao dia."); return;
