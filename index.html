@@ -491,6 +491,20 @@
           <div class="wt-balance-cell"><span>Bónus</span><strong class="money-val" id="salaryPreviewBonus">0,00 €</strong></div>
         </div>
       </div>
+      <details class="wt-card space-y-3" id="bankHoursPanel">
+        <summary class="wt-section-title">Banco de horas</summary>
+        <div id="bankTotals" class="wt-stats-summary"></div>
+        <p class="wt-note">Gestão pessoal a 1:1, apenas para horas autorizadas pela empresa. Não determina direitos legais. As horas extra acumuladas deixam de entrar no pagamento das horas extra; bónus horário e suplemento noturno mantêm-se separados.</p>
+        <label class="block text-xs">Data do registo<input type="date" id="bankDate" onchange="renderBankHours()" class="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl p-2" /></label>
+        <p id="bankDayDetail" class="wt-note"></p>
+        <label class="block text-xs" id="bankAmountLabel">Horas acumuladas / recuperadas
+          <input type="number" id="bankAmount" min="0" max="24" step="0.01" class="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl p-2" />
+        </label>
+        <button type="button" id="bankSave" onclick="saveBankHours()" class="wt-button primary w-full">Guardar movimento</button>
+        <p class="wt-note">Num dia de trabalho, indica quantas das horas extra vão para o banco. Numa folga, indica as horas recuperadas. A folga não gera remuneração automática neste modelo. Usa 0 para retirar o movimento, desde que o saldo continue válido.</p>
+        <p id="bankStatus" class="wt-note" aria-live="polite"></p>
+        <div id="bankHistory" class="max-h-56 overflow-y-auto space-y-2"></div>
+      </details>
       <div class="wt-card space-y-2" id="payrollClosePanel">
         <div class="wt-flex"><h3 class="wt-section-title">Fecho mensal de salários</h3><span class="wt-pill" id="payrollCloseStatus">Aberto</span></div>
         <p class="wt-note" id="payrollCloseDetails"></p>
@@ -2055,6 +2069,7 @@
         return false;
       }
       const oldEntry = entries[date];
+      if(oldEntry && (bankCredit(oldEntry)>0||bankDebit(oldEntry)>0)) {entrySaveVisual(false,"Este dia tem um movimento de banco de horas. Retira primeiro o movimento na secção Salário.",true);return false;}
       if (oldEntry && !confirm("Este dia já tem um registo. Guardar as alterações e substituir as horas atuais?"))
         return false;
       const isPaidLeave = type === "vacation" || type === "holiday";
@@ -2120,6 +2135,7 @@
 
     function deleteEntry(date) {
       if (!Object.prototype.hasOwnProperty.call(entries, date)) return false;
+      if(bankCredit(entries[date])>0||bankDebit(entries[date])>0){alert("Retira primeiro o movimento de banco de horas na secção Salário.");return false;}
       if (isPayrollMonthClosed(date.slice(0,7))) {
         alert("Mês fechado. Reabre-o na secção Salário antes de apagar o registo.");
         return false;
@@ -2220,6 +2236,80 @@
       }
       document.getElementById("driverStatus").textContent=summary.rows.length?"Diário independente do cálculo salarial.":"Sem atividades neste dia.";
       if(window.WTLocale)window.WTLocale.apply(settings.lang);
+    }
+
+    // Bank movements are attached to the original daily entry; there is no second
+    // ledger to drift out of sync. Hours are stored to hundredths, as in legacy entries.
+    function bankCredit(entry){
+      const n=entry&&entry.bankExtraHours;
+      return entry&&entry.type==="work"&&typeof n==="number"&&Number.isFinite(n)&&n>=0&&n<=Math.max(0,Number(entry.extra)||0)?n:0;
+    }
+    function bankDebit(entry){
+      const n=entry&&entry.bankRecoveredHours;
+      return entry&&entry.type==="off"&&typeof n==="number"&&Number.isFinite(n)&&n>=0&&n<=24?n:0;
+    }
+    function paidExtraHours(entry){return Math.max(0,(Number(entry.extra)||0)-bankCredit(entry));}
+    function bankLedger(source=entries,asOf="9999-12-31"){
+      let balance=0,credited=0,recovered=0,paid=0,valid=true;
+      const rows=[];
+      for(const [date,entry] of Object.entries(source).sort(([a],[b])=>a.localeCompare(b))){
+        if(date>asOf)continue;
+        const credit=Math.round(bankCredit(entry)*100), debit=Math.round(bankDebit(entry)*100);
+        if(entry.type==="work")paid+=Math.round(paidExtraHours(entry)*100);
+        if(credit||debit){
+          credited+=credit;recovered+=debit;balance+=credit-debit;
+          if(balance<0)valid=false;
+          rows.push({date,credit:credit/100,debit:debit/100,balance:balance/100});
+        }
+      }
+      return {balance:balance/100,credited:credited/100,recovered:recovered/100,paid:paid/100,valid,rows};
+    }
+    function validBankEntry(entry){
+      if("bankExtraHours" in entry && (entry.type!=="work"||typeof entry.bankExtraHours!=="number"||!Number.isFinite(entry.bankExtraHours)||entry.bankExtraHours<0||entry.bankExtraHours>Math.max(0,Number(entry.extra)||0)))return false;
+      if("bankRecoveredHours" in entry && (entry.type!=="off"||typeof entry.bankRecoveredHours!=="number"||!Number.isFinite(entry.bankRecoveredHours)||entry.bankRecoveredHours<0||entry.bankRecoveredHours>24))return false;
+      return true;
+    }
+    function setBankHours(date,amount,today=payrollToday()){
+      if(!validCalendarDate(date)||date>today||isPayrollMonthClosed(date.slice(0,7))||
+        typeof amount!=="number"||!Number.isFinite(amount)||amount<0||amount>24||Math.abs(amount*100-Math.round(amount*100))>1e-7)return false;
+      const old=entries[date];if(!old||!["work","off"].includes(old.type))return false;
+      if(old.type==="work"&&amount>(Number(old.extra)||0))return false;
+      const updated={...old};
+      delete updated.bankExtraHours;delete updated.bankRecoveredHours;
+      if(amount>0)updated[old.type==="work"?"bankExtraHours":"bankRecoveredHours"]=amount;
+      const next={...entries,[date]:updated};
+      if(!bankLedger(next).valid)return false;
+      try{localStorage.setItem("wt_entries",JSON.stringify(next));}catch(_){return false;}
+      entries=next;return true;
+    }
+    function saveBankHours(){
+      const date=document.getElementById("bankDate").value,field=document.getElementById("bankAmount");
+      if(!field.value.trim()){alert("Indica as horas.");return;}
+      const amount=Number(field.value);
+      if(!confirm("Guardar este movimento de "+amount+" h no banco de horas? Confirma que foi autorizado pela empresa."))return;
+      if(!setBankHours(date,amount)){alert("Movimento inválido: confirma o dia, horas extra disponíveis, saldo cronológico e se o mês está aberto.");return;}
+      renderAll();document.getElementById("bankStatus").textContent="Movimento guardado.";
+    }
+    function renderBankHours(){
+      const field=document.getElementById("bankDate");if(!field)return;
+      if(!field.value)field.value=payrollToday();
+      const ledger=bankLedger(entries,payrollToday()), totals=document.getElementById("bankTotals"), list=document.getElementById("bankHistory");
+      totals.replaceChildren();
+      for(const [label,value] of [["Saldo disponível",ledger.balance],["Horas acumuladas",ledger.credited],["Horas recuperadas",ledger.recovered],["Horas extra não acumuladas",ledger.paid]]){
+        const cell=document.createElement("div"),name=document.createElement("span"),amount=document.createElement("strong");name.textContent=label;amount.textContent=value.toFixed(2)+" h";cell.append(name,amount);totals.append(cell);
+      }
+      const entry=entries[field.value],closed=isPayrollMonthClosed(field.value.slice(0,7)),input=document.getElementById("bankAmount");
+      const usable=!!entry&&["work","off"].includes(entry.type)&&!closed&&field.value<=payrollToday();
+      input.disabled=!usable;document.getElementById("bankSave").disabled=!usable;
+      if(input.dataset.date!==field.value||input.dataset.entry!==JSON.stringify(entry||null)){
+        input.value=entry?String(entry.type==="work"?bankCredit(entry):bankDebit(entry)):"";
+        input.dataset.date=field.value;input.dataset.entry=JSON.stringify(entry||null);
+      }
+      document.getElementById("bankDayDetail").textContent=!entry?"Primeiro guarda um dia de trabalho ou folga no calendário.":closed?"Mês fechado. Reabre-o para corrigir o movimento.":entry.type==="work"?"Horas extra registadas: "+(Number(entry.extra)||0)+" h; não acumuladas: "+paidExtraHours(entry).toFixed(2)+" h.":entry.type==="off"?"Folga: indica as horas a recuperar.":"Este tipo de dia não admite movimentos.";
+      list.replaceChildren();
+      for(const row of ledger.rows.slice().reverse()){
+        const line=document.createElement("p");line.className="wt-note";line.textContent=row.date+" • "+(row.credit?"+"+row.credit:"−"+row.debit)+" h • saldo "+row.balance.toFixed(2)+" h";list.append(line);
+      }
     }
 
     function pendingCalendarDates(){
@@ -2583,12 +2673,12 @@
         const rates = payRatesForDate(e.date);
         const rate = rates.hourlyRate, ot = rates.overtimePct/100,
           night = rates.nightPct/100, bonus = rates.hourlyBonus;
-        const overtimeHours = Math.max(0,Number(e.extra)||0);
+        const overtimeHours = paidExtraHours(e);
         const nightHours = Math.max(0,Number(e.night)||0);
         // Extra base + majoração, suplemento noturno e bónus em horas extras.
         // Não duplicar a remuneração das horas normais nem incluir panier.
         variableGross += overtimeHours*rate*(1+ot) + nightHours*rate*night +
-          (e.includeBonus ? overtimeHours*bonus : 0);
+          (e.includeBonus ? Math.max(0,Number(e.extra)||0)*bonus : 0);
       });
       const earliest = sample.length
         ? sample.map(e=>e.date).sort()[0] : "";
@@ -2670,7 +2760,7 @@
           const norm = Math.max(0,Number(e.normal)||0),
             extra = Math.max(0,Number(e.extra)||0),
             night = Math.max(0,Number(e.night)||0);
-          gross += norm*hourRate + extra*hourRate*(1+extraPct) +
+          gross += norm*hourRate + paidExtraHours(e)*hourRate*(1+extraPct) +
             night*hourRate*nightPct +
             (e.includeBonus ? (norm+extra)*hourlyBonus : 0);
         } else if (e.type === "vacation" || e.type === "holiday") {
@@ -2808,8 +2898,9 @@
         const normal=Number(e.normal)||0, extra=Number(e.extra)||0, night=Number(e.night)||0;
         if (e.type === "work") {
           normalGross += normal*rates.hourlyRate;
-          extraBaseGross += extra*rates.hourlyRate;
-          extraMajorationGross += extra*rates.hourlyRate*rates.overtimePct/100;
+          const paidExtra=paidExtraHours(e);
+          extraBaseGross += paidExtra*rates.hourlyRate;
+          extraMajorationGross += paidExtra*rates.hourlyRate*rates.overtimePct/100;
           nightGross += night*rates.hourlyRate*rates.nightPct/100;
           normalH += normal;
           extraH += extra;
@@ -3009,6 +3100,7 @@
       renderStatistics(monthPrefix);
       previewCalendarRange();
       renderDriverActivities();
+      renderBankHours();
       // Resumo Rápido
       document.getElementById("quickTotalHours").textContent = (d.normalH + d.extraH) + "h";
       document.getElementById("quickExtraHours").textContent = "+" + d.extraH + "h";
@@ -3290,6 +3382,7 @@
           entry[field] === undefined || (typeof entry[field] === "number" && Number.isFinite(entry[field])))
       );
       if (!validEntries) return false;
+      if(!Object.values(value.entries).every(validBankEntry)||!bankLedger(value.entries).valid)return false;
       if("driverActivities" in value.settings && (!Array.isArray(value.settings.driverActivities)||!value.settings.driverActivities.every(validDriverActivity)))return false;
       if("vacationCarryByYear" in value.settings && (!isPlainRecord(value.settings.vacationCarryByYear)||!Object.entries(value.settings.vacationCarryByYear).every(([y,n])=>/^\d{4}$/.test(y)&&Number.isInteger(n)&&n>=0&&n<=365)))return false;
       if ("payrollClosures" in value.settings && (!isPlainRecord(value.settings.payrollClosures) || !Object.keys(value.settings.payrollClosures).every(month=>!!payrollClosure(month,value.settings)))) return false;
@@ -3462,6 +3555,8 @@
         ["CIS (sujeito a elegibilidade)",money(d.cisCreditApplied)],
         ["LÍQUIDO ESTIMADO COM CIS",money(d.finalNet)]
       ];
+      const banked=d.monthEntries.reduce((sum,e)=>sum+bankCredit(e),0), recovered=d.monthEntries.reduce((sum,e)=>sum+bankDebit(e),0);
+      if(banked||recovered)lines.push(["Horas extra não acumuladas",(d.extraH-banked).toFixed(2)+" h"],["Banco de horas — acumuladas",banked.toFixed(2)+" h"],["Banco de horas — recuperadas",recovered.toFixed(2)+" h"]);
       const closure=payrollClosure(month);
       if (d.closed) {
         lines.push(["MÊS FECHADO EM",text(closure.closedAt.slice(0,10))]);
