@@ -2315,3 +2315,76 @@ test("v3: relatórios profissionais abrem impressão nativa e não exportam em p
   assert.equal(await app.ctx.exportProfessionalExcel(),false);
   assert.match(elements.professionalReportStatus.textContent,/privacidade/);
 });
+
+test("v3: leitura de recibos reconhece formatos monetários e não escolhe montantes ambíguos",()=>{
+  const app=makeApp();
+  for(const text of ["3 192,00 €","3.192,00","3,192.00","3192.00"])assert.equal(app.ctx.parseReceiptAmount(text),3192);
+  for(const text of ["1.234","-15","1 2","2,345,67","abc"])assert.equal(app.ctx.parseReceiptAmount(text),null);
+  const sample="Total brut 3 985,40\nNet à payer avant impôt 3 200,00\nNet à payer 3 192,00 €";
+  assert.equal(app.ctx.suggestReceiptAmounts(sample).gross,3985.4);
+  assert.equal(app.ctx.suggestReceiptAmounts(sample).net,3192);
+  assert.equal(app.ctx.suggestReceiptAmounts("Net à payer 100,00\nNet à payer 200,00").net,null);
+});
+
+test("v3: recibos confirmados são guardados sem recalcular estimativas, inclusive após fecho",()=>{
+  const date="2026-10-30",app=makeApp({hourlyRate:20}, {[date]:{date,type:"work",normal:8,extra:2,night:0}});
+  const before=app.ctx.calculateMonthData("2026-10").totalGross;
+  assert.equal(app.ctx.setSalaryReceipt("2026-10",3000,2500,"2026-11-26"),true);
+  assert.equal(app.ctx.recordedActualNet("2026-10"),2500);
+  assert.equal(app.ctx.monthStatistics("2026-10","2026-11-26").actualNet,2500);
+  assert.equal(app.ctx.setPayrollMonthClosed("2026-10",true,null,"2026-11-26"),true);
+  assert.equal(app.ctx.recordedActualNet("2026-10"),2500);
+  assert.equal(app.ctx.setSalaryReceipt("2026-10",3100,2600,"2026-11-26"),true);
+  assert.equal(app.ctx.calculateMonthData("2026-10").totalGross,before);
+  assert.equal(app.ctx.recordedActualNet("2026-10"),2600);
+  assert.equal(app.ctx.reportModel("month","2026-10","2026-11-26").monthly[0][8],3100);
+  assert.equal(app.ctx.setSalaryReceipt("2026-12",1,1,"2026-11-26"),false);
+  const backup=app.ctx.snapshotAllData();
+  assert.equal(app.ctx.isValidWorkTimeBackup(backup),true);
+  app.ctx.writeBackupState({settings:{},entries:{}});
+  assert.equal(app.ctx.salaryReceipt("2026-10"),null);
+  app.ctx.writeBackupState(backup);
+  assert.equal(app.ctx.recordedActualNet("2026-10"),2600);
+  assert.equal(app.ctx.calculateMonthData("2026-10").totalGross,before);
+});
+
+test("v3: atualização seleciona apenas Preview publicada, versão superior e APK assinada",()=>{
+  const app=makeApp();
+  const candidate=n=>({draft:false,prerelease:true,tag_name:"worktime-preview-v3-"+n,assets:[{name:"WorkTime-Pro-3-PREVIEW-SIGNED.apk",state:"uploaded",size:1000}]});
+  assert.equal(app.ctx.chooseAppUpdate([candidate(12),candidate(13),candidate(11)],100012).code,100013);
+  assert.equal(app.ctx.chooseAppUpdate([candidate(12)],100012),null);
+  assert.equal(app.ctx.chooseAppUpdate([{...candidate(20),draft:true},{...candidate(30),prerelease:false},{...candidate(31),assets:[{name:"DEBUG.apk",state:"uploaded",size:1000}]}],100001),null);
+  assert.equal(app.ctx.chooseAppUpdate([{...candidate(20),tag_name:"untrusted"}],1),null);
+  assert.equal(app.ctx.chooseAppUpdate([{...candidate(20),assets:[{name:"WorkTime-Pro-3-PREVIEW-SIGNED.apk",state:"new",size:1000}]}],1),null);
+});
+
+test("v3: scripts de OCR e versão executam num projeto Android isolado",()=>{
+  const os=require("node:os"),path=require("node:path"),{spawnSync}=require("node:child_process");
+  const tmp=fs.mkdtempSync(path.join(os.tmpdir(),"wt-v3-native-"));
+  try{
+    const java=path.join(tmp,"android/app/src/main/java/lu/marcio/worktimepro/preview");
+    fs.mkdirSync(java,{recursive:true});
+    const activity=path.join(java,"MainActivity.java"),gradle=path.join(tmp,"android/app/build.gradle");
+    fs.writeFileSync(activity,"public class MainActivity extends BridgeActivity {\n        registerPlugin(WorkTimeReminderPlugin.class);\n}");
+    for(const file of ["WorkTimeReceiptPlugin.java","WorkTimeUpdatePlugin.java"])fs.writeFileSync(path.join(java,file),"// fixture");
+    fs.writeFileSync(gradle,'android {\n    defaultConfig {\n        versionCode 1\n        versionName "1.0"\n    }\n}\ndependencies {\n}\n');
+    for(let run=0;run<2;run++)for(const script of ["install_android_receipt.py","configure_android_preview_version.py"]){
+      const result=spawnSync("python3",[path.resolve("scripts",script)],{cwd:tmp,env:{...process.env,GITHUB_RUN_NUMBER:"230"},encoding:"utf8"});
+      assert.equal(result.status,0,result.error?.message||result.stderr);
+    }
+    const code=fs.readFileSync(activity,"utf8"),build=fs.readFileSync(gradle,"utf8");
+    for(const name of ["WorkTimeReceiptPlugin","WorkTimeUpdatePlugin"])assert.equal(code.split("registerPlugin("+name+".class)").length-1,1);
+    assert.equal(build.split("com.google.mlkit:text-recognition:16.0.1").length-1,1);
+    assert.match(build,/versionCode 100230/);
+    assert.match(build,/versionName "3\.0-preview\.230"/);
+  }finally{fs.rmSync(tmp,{recursive:true,force:true});}
+});
+
+test("v3: publicação da atualização é manual e exige APK assinada verificada",()=>{
+  const workflow=fs.readFileSync(".github/workflows/apk.yml","utf8");
+  assert.ok(workflow.includes("inputs.publish_preview == true"));
+  assert.ok(workflow.includes("github.event_name == 'workflow_dispatch'"));
+  assert.ok(workflow.includes("verify --print-certs"));
+  assert.ok(workflow.includes("test -s dist/WorkTime-Pro-2-PREVIEW-SIGNED.apk"));
+  assert.ok(workflow.includes("gh release create"));
+});
