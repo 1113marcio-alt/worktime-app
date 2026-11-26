@@ -66,6 +66,18 @@
       .wt-home-cards > .hidden,.wt-home-user-hidden {display:none!important}
       .wt-layout-row {display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--wt-border);border-radius:12px}
       .wt-layout-row input {width:20px;height:20px;accent-color:var(--wt-color,#3b82f6)}
+      .wt-stats-summary {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+      .wt-stats-summary > div {border:1px solid var(--wt-border);border-radius:12px;padding:9px;min-width:0}
+      .wt-stats-summary strong {display:block;font-size:1rem;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+      .wt-stats-summary span {display:block;font-size:.72rem;color:#a7bad6}
+      html[data-wt-theme="light"] .wt-stats-summary span {color:#465c7c}
+      html[data-wt-theme="light"] .wt-stats-summary > div {border-color:#d1dded}
+      .wt-stats-scroll {overflow-x:auto}
+      .wt-stats-table {width:100%;font-size:.72rem;border-collapse:collapse;white-space:nowrap}
+      .wt-stats-table th,.wt-stats-table td {padding:9px 5px;border-bottom:1px solid var(--wt-border);text-align:right}
+      .wt-stats-table th:first-child,.wt-stats-table td:first-child {text-align:left}
+      .wt-stats-table tr.wt-stats-current {font-weight:800}
+      html[data-wt-theme="light"] .wt-stats-table th,html[data-wt-theme="light"] .wt-stats-table td {border-color:#d1dded}
       .wt-layout-row button:disabled {opacity:.35}
       .wt-layout-row button:focus-visible,.wt-layout-row input:focus-visible {outline:2px solid #6096ff;outline-offset:2px}
       html[data-wt-style="minimal"] .wt-card,html[data-wt-style="minimal"] .wt-hero {box-shadow:none!important;border-radius:12px}
@@ -187,6 +199,20 @@
       <div id="homeCardRecent" class="wt-card">
         <div class="wt-flex mb-3"><h3 class="wt-section-title">Atividade recente</h3><button type="button" onclick="switchTab('calendario')" class="text-xs text-blue-300 font-bold">Ver calendário</button></div>
         <div id="homeRecent"></div>
+      </div>
+      <div id="homeCardStats" class="wt-card space-y-3">
+        <div class="wt-flex"><h3 class="wt-section-title">Estatísticas mensais e anuais</h3><span id="statsYear" class="wt-pill"></span></div>
+        <div id="statsMonthSummary" class="wt-stats-summary"></div>
+        <h4 class="font-bold text-sm">Total anual dos registos</h4>
+        <div id="statsAnnualSummary" class="wt-stats-summary"></div>
+        <details>
+          <summary class="font-semibold text-sm py-2">Ver os 12 meses</summary>
+          <div class="wt-stats-scroll">
+            <table class="wt-stats-table"><thead><tr><th>Mês</th><th>Horas</th><th>Bruto est.</th><th>Líquido est.</th><th>Líquido real</th></tr></thead><tbody id="statsMonths"></tbody></table>
+          </div>
+        </details>
+        <p id="statsCoverage" class="wt-note"></p>
+        <p class="wt-note">Apenas dias registados até hoje. A previsão salarial não entra nestes totais. Os meses sem registos não são salários de zero euros. O líquido estimado inclui o CIS configurado, se aplicável; o real vem do recibo introduzido no fecho.</p>
       </div>
       </div>
       <p class="wt-note">Os valores salariais são estimativas. As regras fiscais e de compensação ainda não foram validadas para todos os países.</p>
@@ -2667,6 +2693,84 @@
       if(details)details.textContent=forecast.projectedDays+" dia(s) projetados • "+forecast.projectedHours.toFixed(2)+" h pelo horário semanal • "+forecast.holidayDays+" feriado(s). Sem novas horas extra ou noturnas. Dias passados sem registo não são preenchidos. "+(forecast.calendarVerified?"":"Calendário de feriados não verificado. ");
     }
 
+    // Historical statistics: actual recorded days only, not the forecast or future planned leave.
+    function monthStatistics(month,asOf=payrollToday()){
+      if(!validPayrollMonth(month)||!validCalendarDate(asOf))return null;
+      const future=month>asOf.slice(0,7), selected=Object.entries(entries).filter(([date])=>date.startsWith(month+"-")&&validCalendarDate(date));
+      const recorded=Object.fromEntries(selected.filter(([date])=>date<=asOf));
+      const count=Object.keys(recorded).length;
+      const futureEntries=selected.length-count;
+      const closure=!future && isPayrollMonthClosed(month) ? payrollClosure(month) : null;
+      const data=count ? (closure?calculateMonthData(month):calculateMonthData(month,recorded,false)) : null;
+      let missing=0,workdays=0,vacation=0,sick=0,holidays=0,off=0,hours=0,extra=0,night=0;
+      for(const entry of Object.values(recorded)){
+        if(entry.type==="work"){workdays++;hours+=(Number(entry.normal)||0)+(Number(entry.extra)||0);extra+=Number(entry.extra)||0;night+=Number(entry.night)||0;}
+        else if(entry.type==="vacation")vacation++;
+        else if(entry.type==="sick")sick++;
+        else if(entry.type==="holiday")holidays++;
+        else if(entry.type==="off")off++;
+      }
+      if(!future){
+        const calendar=window.WTCountryRules.holidays(Number(month.slice(0,4)),settings.holidayCountry||"LU",settings.calendarRegion);
+        const holidayDates=new Set(calendar.items.map(row=>row.date));
+        for(let d=new Date(month+"-01T12:00:00");;d.setDate(d.getDate()+1)){
+          const date=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+          if(!date.startsWith(month+"-")||date>asOf)break;
+          if(!Object.prototype.hasOwnProperty.call(recorded,date)&&scheduledLeaveHours(date)>0&&!holidayDates.has(date))missing++;
+        }
+      }
+      const status=future?"future":closure?"closed":count?"open":"empty";
+      return {month,status,count,futureEntries,missing,workdays,vacation,sick,holidays,off,hours,extra,night,
+        gross:data?data.totalGross:null,net:data?data.finalNet:null,actualNet:closure?closure.actualNet:null};
+    }
+    function yearStatistics(year,asOf=payrollToday()){
+      if(!/^\d{4}$/.test(String(year))||!validCalendarDate(asOf))return null;
+      const months=Array.from({length:12},(_,i)=>monthStatistics(String(year)+"-"+String(i+1).padStart(2,"0"),asOf));
+      const totals={gross:0,net:0,actualNet:0,actualMonths:0,recordedMonths:0,closedMonths:0,hours:0,extra:0,night:0,workdays:0,vacation:0,sick:0,missing:0,futureEntries:0};
+      for(const row of months){
+        for(const key of ["hours","extra","night","workdays","vacation","sick","missing","futureEntries"])totals[key]+=row[key];
+        if(row.count){totals.recordedMonths++;totals.gross+=row.gross;totals.net+=row.net;}
+        if(row.status==="closed")totals.closedMonths++;
+        if(row.actualNet!==null){totals.actualMonths++;totals.actualNet+=row.actualNet;}
+      }
+      return {year:String(year),months,totals};
+    }
+    function renderStatistics(month){
+      const panel=document.getElementById("homeCardStats");
+      if(!panel)return;
+      const asOf=payrollToday(), annual=yearStatistics(month.slice(0,4),asOf);
+      if(!annual)return;
+      const row=annual.months.find(item=>item.month===month), t=annual.totals;
+      if(!row)return;
+      const money=v=>v===null?"—":formatMoney(v);
+      const hrs=v=>v.toFixed(2)+" h";
+      const summary=(id,pairs)=>{
+        const root=document.getElementById(id);root.replaceChildren();
+        for(const [label,value] of pairs){
+          const cell=document.createElement("div"), name=document.createElement("span"), amount=document.createElement("strong");
+          name.textContent=label;amount.textContent=String(value);cell.append(name,amount);root.append(cell);
+        }
+      };
+      document.getElementById("statsYear").textContent=annual.year;
+      summary("statsMonthSummary",[
+        ["Mês selecionado",row.month],["Dias trabalhados",row.workdays],["Horas trabalhadas",hrs(row.hours)],["Horas extra",hrs(row.extra)],
+        ["Horas noturnas",hrs(row.night)],["Férias / baixa",row.vacation+" / "+row.sick],["Bruto estimado",money(row.gross)],["Líquido real recebido",money(row.actualNet)]]);
+      summary("statsAnnualSummary",[
+        ["Bruto estimado",money(t.recordedMonths?t.gross:null)],["Líquido estimado",money(t.recordedMonths?t.net:null)],
+        ["Líquido real recebido",money(t.actualMonths?t.actualNet:null)],["Meses com recibo real",t.actualMonths+" / 12"],
+        ["Horas trabalhadas",hrs(t.hours)],["Horas extra",hrs(t.extra)],["Dias trabalhados",t.workdays],["Férias / baixa",t.vacation+" / "+t.sick]]);
+      const tbody=document.getElementById("statsMonths");tbody.replaceChildren();
+      for(const item of annual.months){
+        const tr=document.createElement("tr");if(item.month===month)tr.className="wt-stats-current";
+        const status={future:"Futuro",empty:"Sem registos",closed:"Fechado",open:"Aberto"}[item.status];
+        for(const val of [item.month.slice(5)+" • "+status,item.count?hrs(item.hours):"—",money(item.gross),money(item.net),money(item.actualNet)]){
+          const cell=document.createElement("td");cell.textContent=val;tr.append(cell);
+        }
+        tbody.append(tr);
+      }
+      document.getElementById("statsCoverage").textContent=t.recordedMonths+" mês(es) com registos, "+t.closedMonths+" fechado(s). "+t.missing+" dia(s) previstos sem registo, segundo o horário atual (exclui feriados conhecidos). "+t.futureEntries+" registo(s) futuros não somados.";
+    }
+
     function escapeHtml(value) {
       return String(value ?? "").replace(/[&<>"']/g, char =>
         ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
@@ -2679,6 +2783,7 @@
       renderForecast(monthPrefix);
       renderPayrollClosure(monthPrefix,d);
       renderHomeLayout();
+      renderStatistics(monthPrefix);
       // Resumo Rápido
       document.getElementById("quickTotalHours").textContent = (d.normalH + d.extraH) + "h";
       document.getElementById("quickExtraHours").textContent = "+" + d.extraH + "h";
