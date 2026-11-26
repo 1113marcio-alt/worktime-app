@@ -1893,3 +1893,55 @@ test("v3: previsão salarial usa horário semanal sem criar registos",()=>{
   assert.equal(app.ctx.forecastMonth("2026-11","invalid"),null);
   assert.equal(app.ctx.forecastMonth("2026-11","2026-11-30").projectedDays,1);
 });
+
+test("v3: fecho mensal fixa bruto e líquido, incluindo após restauro e alteração de taxas",()=>{
+  const entries={"2026-10-30":{date:"2026-10-30",type:"work",normal:8,extra:0,night:0,includeBonus:true}};
+  const app=makeApp({hourlyRate:20,hourlyBonus:2,dailyPanier:4},entries);
+  const original=app.ctx.calculateMonthData("2026-10");
+  assert.equal(app.ctx.setPayrollMonthClosed("2026-11",true,null,"2026-11-26"),false);
+  assert.equal(app.ctx.setPayrollMonthClosed("2026-10",true,-1,"2026-11-26"),false);
+  assert.equal(app.ctx.setPayrollMonthClosed("2026-10",true,150,"2026-11-26"),true);
+  app.evaluate('settings={...settings,hourlyRate:40,taxClass:"1"}');
+  assert.equal(app.ctx.calculateMonthData("2026-10").totalGross,original.totalGross);
+  assert.equal(app.ctx.calculateMonthData("2026-10").finalNet,original.finalNet);
+  const snapshot=app.ctx.snapshotAllData();
+  assert.equal(app.ctx.isValidWorkTimeBackup(snapshot),true);
+  app.ctx.writeBackupState({settings:{},entries:{}});
+  assert.equal(app.ctx.isPayrollMonthClosed("2026-10"),false);
+  app.ctx.writeBackupState(snapshot);
+  assert.equal(app.ctx.isPayrollMonthClosed("2026-10"),true);
+  assert.equal(app.ctx.calculateMonthData("2026-10").finalNet,original.finalNet);
+  assert.match(app.ctx.createSalaryReportHtml("2026-10"),/LÍQUIDO REAL RECEBIDO/);
+  assert.equal(app.ctx.setPayrollMonthClosed("2026-10",false),true);
+  assert.ok(app.ctx.calculateMonthData("2026-10").totalGross>original.totalGross);
+});
+
+test("v3: um mês fechado impede edição, eliminação, preenchimento e aplicação de turnos",()=>{
+  const date="2026-10-30", original={date,type:"work",normal:8,extra:0,night:0};
+  const app=makeApp({}, {[date]:original});
+  const draft={id:"late-draft",date,start:"2026-10-30T08:00:00Z",end:"2026-10-30T10:00:00Z",seconds:7200,breaks:[]};
+  app.values.set("wt_shift_drafts",JSON.stringify([draft]));
+  assert.equal(app.ctx.setPayrollMonthClosed("2026-10",true,null,"2026-11-26"),false);
+  app.values.delete("wt_shift_drafts");
+  assert.equal(app.ctx.setPayrollMonthClosed("2026-10",true,null,"2026-11-26"),true);
+  manualDayFixture(app,date);
+  assert.equal(app.ctx.saveEntry(),false);
+  assert.equal(app.ctx.deleteEntry(date),false);
+  assert.equal(app.ctx.fillStandardWeek(),true);
+  assert.deepEqual(JSON.parse(app.values.get("wt_entries")),{[date]:original});
+  app.values.set("wt_shift_drafts",JSON.stringify([draft]));
+  vm.runInContext(proSource,app.ctx);
+  app.ctx.window.ProUI.applyDraft(draft.id);
+  assert.deepEqual(JSON.parse(app.values.get("wt_entries")),{[date]:original});
+  assert.deepEqual(JSON.parse(app.values.get("wt_shift_drafts")),[draft]);
+  assert.equal(app.ctx.setPayrollMonthClosed("2026-10",false),true);
+  assert.equal(app.ctx.deleteEntry(date),true);
+});
+
+test("v3: fecho mensal não altera estado quando armazenamento falha",()=>{
+  const date="2026-10-30", app=makeApp({}, {[date]:{date,type:"work",normal:8,extra:0,night:0}});
+  app.ctx.localStorage.setItem=()=>{throw Error("disk full");};
+  assert.equal(app.ctx.setPayrollMonthClosed("2026-10",true,null,"2026-11-26"),false);
+  assert.equal(app.ctx.isPayrollMonthClosed("2026-10"),false);
+  assert.equal(app.ctx.isValidWorkTimeBackup({settings:{payrollClosures:{"2026-10":{status:"closed"}}},entries:{}}),false);
+});
