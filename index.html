@@ -397,6 +397,15 @@
           <div class="wt-balance-cell"><span>Bónus</span><strong class="money-val" id="salaryPreviewBonus">0,00 €</strong></div>
         </div>
       </div>
+      <div class="wt-card space-y-2" id="payrollClosePanel">
+        <div class="wt-flex"><h3 class="wt-section-title">Fecho mensal de salários</h3><span class="wt-pill" id="payrollCloseStatus">Aberto</span></div>
+        <p class="wt-note" id="payrollCloseDetails"></p>
+        <label for="payrollActualNet" class="block text-xs text-slate-300">Líquido real recebido (opcional, €)</label>
+        <input type="number" min="0" max="10000000" step="0.01" id="payrollActualNet" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
+        <p class="wt-note" id="payrollCloseDifference" aria-live="polite"></p>
+        <button type="button" id="payrollCloseButton" onclick="togglePayrollMonthClosure()" class="wt-button primary w-full">Fechar mês</button>
+        <p class="wt-note">O fecho guarda uma fotografia dos valores estimados e bloqueia alterações aos dias. Reabre o mês para corrigir. Faz backup para preservar o histórico.</p>
+      </div>
       <div class="wt-card space-y-2" id="salaryForecastPanel">
         <p class="wt-kicker">Previsão até ao fim do mês</p>
         <p class="text-xs wt-muted">Líquido estimado sem CIS</p>
@@ -932,6 +941,7 @@
       yearEndBonusPct: 8,
       companyStartDate: "",
       yearEndBonusTiers: [],
+      payrollClosures: {},
       payrollHistory: [],
       payrollBaseline: null,
       accentColor: "blue",
@@ -1876,6 +1886,10 @@
         entrySaveVisual(false, "Escolhe uma data válida.", true);
         return false;
       }
+      if (isPayrollMonthClosed(date.slice(0,7))) {
+        entrySaveVisual(false,"Mês fechado. Reabre-o na secção Salário antes de alterar este dia.",true);
+        return false;
+      }
       let manualTime = null;
       let normal, extra;
       if (type === "work" && document.getElementById("entryUseTimes").checked) {
@@ -1974,6 +1988,10 @@
 
     function deleteEntry(date) {
       if (!Object.prototype.hasOwnProperty.call(entries, date)) return false;
+      if (isPayrollMonthClosed(date.slice(0,7))) {
+        alert("Mês fechado. Reabre-o na secção Salário antes de apagar o registo.");
+        return false;
+      }
       if (!confirm("Apagar o registo de " + date + "? Faça backup antes de eliminar dados importantes.")) return false;
       // Não apagar da memória se o armazenamento do Android falhar.
       const next = { ...entries };
@@ -2006,7 +2024,7 @@
         const hours = hoursForSchedule(slot);
         if (hours === null) continue;
         const iso = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
-        if (!next[iso]) {
+        if (!next[iso] && !isPayrollMonthClosed(iso.slice(0,7))) {
           next[iso] = {
             date: iso, type: "work", normal: hours, extra: 0, night: 0,
             includeBonus: true, note: "Semana — horário configurado",
@@ -2277,7 +2295,113 @@
         year,asOf:cutoff,enabled};
     }
 
-    function calculateMonthData(monthPrefix, sourceEntries=entries) {
+    const PAYROLL_SNAPSHOT_NUMBERS=["normalH","extraH","nightH","vacDays","vacPaidHours","normalGross","extraTotalGross","nightGross","bonusGross","vacationGross","panierGross","totalGross","vacDailyBase","ccssPension","ccssHealth","ccssDep","socialOther","taxIrs","effectiveTaxRate","netBeforeCredit","finalNet","cisCreditApplied","pensionRate","depAllowance"];
+    const PAYROLL_SNAPSHOT_TEXT=["taxLabel","taxStatus","taxSource","country"];
+    const PAYROLL_SNAPSHOT_FLAGS=["socialComplete","taxClassApplicable","manualMode"];
+    function validPayrollMonth(month) {
+      return typeof month==="string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(month);
+    }
+    function payrollClosure(month,source=settings) {
+      if(!validPayrollMonth(month) || !isPlainRecord(source.payrollClosures))return null;
+      const row=source.payrollClosures[month];
+      if(!isPlainRecord(row)||!["closed","open"].includes(row.status)||
+        typeof row.closedAt!=="string"||!Number.isFinite(Date.parse(row.closedAt))||
+        !(row.actualNet===null || (typeof row.actualNet==="number" && Number.isFinite(row.actualNet) && row.actualNet>=0 && row.actualNet<=10000000))||
+        !isPlainRecord(row.totals)||
+        !PAYROLL_SNAPSHOT_NUMBERS.every(key=>typeof row.totals[key]==="number" && Number.isFinite(row.totals[key]))||
+        !PAYROLL_SNAPSHOT_TEXT.every(key=>typeof row.totals[key]==="string")||
+        !PAYROLL_SNAPSHOT_FLAGS.every(key=>typeof row.totals[key]==="boolean"))return null;
+      return row;
+    }
+    function isPayrollMonthClosed(month,source=settings) {
+      const row=payrollClosure(month,source);
+      return !!row && row.status==="closed";
+    }
+    function monthlyPendingShift(month) {
+      try {
+        const active=JSON.parse(localStorage.getItem("wt_active_shift")||"null");
+        const drafts=JSON.parse(localStorage.getItem("wt_shift_drafts")||"[]");
+        const day=shift=>{
+          if(!shift)return "";
+          if(validCalendarDate(shift.date))return shift.date;
+          const date=new Date(shift.start);
+          if(!Number.isFinite(date.getTime()))return "";
+          return date.getFullYear()+"-"+String(date.getMonth()+1).padStart(2,"0")+"-"+String(date.getDate()).padStart(2,"0");
+        };
+        return day(active).startsWith(month+"-") || !Array.isArray(drafts) || drafts.some(shift=>day(shift).startsWith(month+"-"));
+      } catch (_) {return true;}
+    }
+    function setPayrollMonthClosed(month,closed,actualNet=null,today=payrollToday()) {
+      if(!validPayrollMonth(month)||!validCalendarDate(today))return false;
+      const old=payrollClosure(month);
+      let row;
+      if(closed){
+        if(isPayrollMonthClosed(month)||month>=today.slice(0,7)||monthlyPendingShift(month))return false;
+        if(!(actualNet===null || (typeof actualNet==="number" && Number.isFinite(actualNet) && actualNet>=0 && actualNet<=10000000)))return false;
+        const data=calculateMonthData(month,entries,false);
+        if(!data.monthEntries.length)return false;
+        const totals=Object.fromEntries([...PAYROLL_SNAPSHOT_NUMBERS,...PAYROLL_SNAPSHOT_TEXT,...PAYROLL_SNAPSHOT_FLAGS].map(key=>[key,data[key]]));
+        row={status:"closed",closedAt:new Date().toISOString(),actualNet,totals};
+        if(!payrollClosure(month,{payrollClosures:{[month]:row}}))return false;
+      } else {
+        if(!old||old.status!=="closed")return false;
+        row={...old,status:"open",reopenedAt:new Date().toISOString()};
+      }
+      const next={...settings,payrollClosures:{...(isPlainRecord(settings.payrollClosures)?settings.payrollClosures:{}),[month]:row}};
+      try {localStorage.setItem("wt_settings",JSON.stringify(next));}
+      catch (_) {return false;}
+      settings=next;
+      return true;
+    }
+    function togglePayrollMonthClosure() {
+      const month=document.getElementById("currentMonthPicker").value;
+      const closed=isPayrollMonthClosed(month);
+      const input=document.getElementById("payrollActualNet");
+      const raw=input.value.trim();
+      const actual=raw===""?null:Number(raw);
+      if(!closed && month>=payrollToday().slice(0,7)){
+        alert("Só podes fechar meses já terminados.");return;
+      }
+      if(!closed && monthlyPendingShift(month)){
+        alert("Existem turnos por guardar neste mês. Resolve-os antes de fechar.");return;
+      }
+      if(!closed && actual!==null && (!Number.isFinite(actual)||actual<0||actual>10000000)){
+        alert("Introduz um valor líquido válido.");return;
+      }
+      if(!confirm(closed?"Reabrir este mês? Os totais voltam a ser calculados pelas definições atuais.":"Fechar este mês e guardar os valores estimados? Os dias ficam bloqueados até reabrir."))return;
+      if(!setPayrollMonthClosed(month,!closed,actual)){
+        alert("Não foi possível alterar o estado. Confirma se há registos e espaço para guardar.");return;
+      }
+      renderAll();
+    }
+    function renderPayrollClosure(month,data) {
+      const status=document.getElementById("payrollCloseStatus");
+      if(!status)return;
+      const row=payrollClosure(month), closed=!!row && row.status==="closed";
+      status.textContent=closed?"Fechado":"Aberto";
+      document.getElementById("payrollCloseDetails").textContent=closed
+        ?"Valores fixados em "+row.closedAt.slice(0,10)+". O líquido continua a ser uma estimativa."
+        :month>=payrollToday().slice(0,7)?"O mês só pode ser fechado depois de terminar.":"Confirma os registos e o recibo antes de fechar.";
+      const input=document.getElementById("payrollActualNet");
+      if(input.dataset.month!==month||closed){
+        input.value=row && row.actualNet!==null?String(row.actualNet):"";
+        input.dataset.month=month;
+      }
+      input.disabled=closed;
+      input.classList.toggle("hidden",privacyMode);
+      document.getElementById("payrollCloseDifference").textContent=closed && row.actualNet!==null
+        ?"Diferença real − estimativa: "+formatMoney(row.actualNet-data.finalNet):"";
+      const button=document.getElementById("payrollCloseButton");
+      button.textContent=closed?"Reabrir mês":"Fechar mês";
+      button.disabled=!closed && (month>=payrollToday().slice(0,7)||!data.monthEntries.length);
+    }
+    function calculateMonthData(monthPrefix, sourceEntries=entries, useClosure=true) {
+      const frozen=useClosure && sourceEntries===entries && isPayrollMonthClosed(monthPrefix) ? payrollClosure(monthPrefix) : null;
+      if(frozen){
+        const totals=JSON.parse(JSON.stringify(frozen.totals));
+        return {...totals,monthEntries:Object.values(sourceEntries).filter(e=>e.date.startsWith(monthPrefix+"-")).sort((a,b)=>b.date.localeCompare(a.date)),
+          socialParameters:{pensionRate:totals.pensionRate,depAllowance:totals.depAllowance},closed:true};
+      }
       let normalH = 0, extraH = 0, nightH = 0, bonusH = 0, workDays = 0, vacDays = 0, vacPaidHours = 0;
       let vacationGross = 0, normalGross=0, extraBaseGross=0, extraMajorationGross=0,
         nightGross=0, bonusGross=0, panierGross=0;
@@ -2287,18 +2411,19 @@
 
       monthEntries.forEach(e => {
         const rates=payRatesForDate(e.date);
+        const normal=Number(e.normal)||0, extra=Number(e.extra)||0, night=Number(e.night)||0;
         if (e.type === "work") {
-          normalGross += e.normal*rates.hourlyRate;
-          extraBaseGross += e.extra*rates.hourlyRate;
-          extraMajorationGross += e.extra*rates.hourlyRate*rates.overtimePct/100;
-          nightGross += e.night*rates.hourlyRate*rates.nightPct/100;
-          normalH += e.normal;
-          extraH += e.extra;
-          nightH += e.night;
+          normalGross += normal*rates.hourlyRate;
+          extraBaseGross += extra*rates.hourlyRate;
+          extraMajorationGross += extra*rates.hourlyRate*rates.overtimePct/100;
+          nightGross += night*rates.hourlyRate*rates.nightPct/100;
+          normalH += normal;
+          extraH += extra;
+          nightH += night;
           if (e.includeBonus) {
-            bonusH += (e.normal + e.extra);
+            bonusH += (normal + extra);
             workDays += 1;
-            bonusGross += (e.normal+e.extra)*rates.hourlyBonus;
+            bonusGross += (normal+extra)*rates.hourlyBonus;
             panierGross += rates.dailyPanier;
           }
         } else if (e.type === "vacation" || e.type === "holiday") {
@@ -2308,8 +2433,8 @@
           vacationGross += paid * (rates.hourlyRate+rates.hourlyBonus) +
             paidVacationSupplement(e);
         } else if (e.type === "sick") {
-          normalH += e.normal;
-          normalGross += e.normal*rates.hourlyRate;
+          normalH += normal;
+          normalGross += normal*rates.hourlyRate;
         }
       });
 
@@ -2351,7 +2476,7 @@
     // Projection is a read-only simulation, not a new daily entry.
     function forecastMonth(month,asOf=payrollToday()) {
       if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month||"") || !validCalendarDate(asOf)) return null;
-      if(month!==asOf.slice(0,7)) return null; // Do not fabricate missing historical or future months.
+      if(month!==asOf.slice(0,7) || isPayrollMonthClosed(month)) return null; // Do not fabricate missing historical or future months.
       const simulated={...entries};
       const cutoff=new Date(asOf+"T12:00:00");
       const holidays=window.WTCountryRules.holidays(Number(month.slice(0,4)),settings.holidayCountry||"LU",settings.calendarRegion);
@@ -2407,6 +2532,7 @@
       const d = calculateMonthData(monthPrefix);
 
       renderForecast(monthPrefix);
+      renderPayrollClosure(monthPrefix,d);
       // Resumo Rápido
       document.getElementById("quickTotalHours").textContent = (d.normalH + d.extraH) + "h";
       document.getElementById("quickExtraHours").textContent = "+" + d.extraH + "h";
@@ -2433,7 +2559,7 @@
       }
 
       // Aba Folha de Salário
-      const hasHistory=validPayrollHistory(settings).length>0;
+      const hasHistory=d.closed || validPayrollHistory(settings).length>0;
       document.getElementById("lblNormalBreakdown").textContent = hasHistory
         ? `Horas Normais (${d.normalH}h • taxas por data)`
         : `Horas Normais (${d.normalH}h × ${settings.hourlyRate.toFixed(2)} €)`;
@@ -2685,6 +2811,7 @@
           entry[field] === undefined || (typeof entry[field] === "number" && Number.isFinite(entry[field])))
       );
       if (!validEntries) return false;
+      if ("payrollClosures" in value.settings && (!isPlainRecord(value.settings.payrollClosures) || !Object.keys(value.settings.payrollClosures).every(month=>!!payrollClosure(month,value.settings)))) return false;
       const validShift = shift => isPlainRecord(shift) &&
         typeof shift.start === "string" && !Number.isNaN(Date.parse(shift.start)) &&
         Array.isArray(shift.breaks);
@@ -2854,6 +2981,11 @@
         ["CIS (sujeito a elegibilidade)",money(d.cisCreditApplied)],
         ["LÍQUIDO ESTIMADO COM CIS",money(d.finalNet)]
       ];
+      const closure=payrollClosure(month);
+      if (d.closed) {
+        lines.push(["MÊS FECHADO EM",text(closure.closedAt.slice(0,10))]);
+        if(closure.actualNet!==null)lines.push(["LÍQUIDO REAL RECEBIDO",money(closure.actualNet)],["Diferença real − estimativa",money(closure.actualNet-d.finalNet)]);
+      }
       if (annualPremium.enabled)
         lines.push(["PRÉMIO ANUAL ACUMULADO (separado do salário mensal)",
           money(annualPremium.bonus)]);
@@ -2881,7 +3013,7 @@
         "tr{break-inside:avoid}.small{font-size:10px}"+
         "</style></head><body><h1>WorkTime Pro — Relatório mensal</h1>"+
         "<p class='sub'>Mês: "+text(month)+" · País empregador: "+
-        text(settings.employerCountry || "LU")+" · Classe: "+text(settings.taxClass || "—")+
+        text(d.country || "LU")+" · "+text(d.taxLabel || "—")+
         "</p><p class='warning'>Simulação pessoal, não é um recibo de vencimento "+
         "nem um cálculo fiscal oficial. Confirmar sempre com a empresa.</p>"+
         "<h2>Resumo de horas e valores</h2><table>"+summaryRows+"</table>"+
