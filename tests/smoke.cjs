@@ -2254,3 +2254,64 @@ test("v3: instalador Android executa sem erro Python e não duplica permissões 
     for(const plugin of ["WorkTimeWidgetPlugin","WorkTimePrintPlugin","WorkTimeBiometricPlugin","WorkTimeReminderPlugin"])assert.ok(activity.includes("registerPlugin("+plugin+".class)"));
   }finally{fs.rmSync(tmp,{recursive:true,force:true});}
 });
+
+test("v3: relatórios semanal mensal anual distinguem datas, estimativas, recibo e futuro",()=>{
+  const rows={"2026-10-30":{date:"2026-10-30",type:"work",normal:8,extra:2,night:1,includeBonus:true,note:"<img>"},
+    "2026-11-02":{date:"2026-11-02",type:"work",normal:8,extra:1,night:0,includeBonus:true},
+    "2026-11-30":{date:"2026-11-30",type:"vacation",normal:0,extra:0,night:0,paidLeaveHours:8}};
+  const app=makeApp({},rows);
+  assert.equal(app.ctx.setPayrollMonthClosed("2026-10",true,200,"2026-11-26"),true);
+  const before=JSON.stringify(app.ctx.snapshotAllData());
+  const week=app.ctx.reportModel("week","2026-10-31","2026-11-26");
+  assert.equal(week.start,"2026-10-26");assert.equal(week.end,"2026-11-01");
+  assert.equal(week.monthly.length,0);assert.equal(week.rows.length,1);
+  const month=app.ctx.reportModel("month","2026-11","2026-11-26");
+  assert.equal(month.rows.length,1);assert.equal(month.summary.find(x=>x[0]==="Registos futuros excluídos")[1],1);
+  const year=app.ctx.reportModel("year","2026-11","2026-11-26");
+  assert.equal(year.monthly.length,12);assert.equal(year.rows.length,2);
+  assert.equal(year.monthly[0][4],null);assert.equal(year.monthly[9][6],200);
+  assert.ok(app.ctx.professionalReportHtml(week).includes("&lt;img&gt;"));
+  assert.ok(!app.ctx.professionalReportHtml(week).includes("<img>"));
+  assert.equal(JSON.stringify(app.ctx.snapshotAllData()),before);
+});
+
+test("v3: Excel real é ZIP OOXML válido com dados numéricos e notas sem fórmulas",()=>{
+  const app=makeApp({},{"2026-11-02":{date:"2026-11-02",type:"work",normal:8,extra:1,night:0,note:'=HYPERLINK("x") <img> Férias €'}});
+  app.ctx.TextEncoder=TextEncoder;
+  const model=app.ctx.reportModel("year","2026-11","2026-11-26");
+  const bytes=app.ctx.createReportXlsx(model);
+  const os=require("node:os"),path=require("node:path"),{spawnSync}=require("node:child_process");
+  const tmp=fs.mkdtempSync(path.join(os.tmpdir(),"wt-xlsx-"));
+  try{
+    const file=path.join(tmp,"report.xlsx");fs.writeFileSync(file,bytes);
+    const py=[
+      "import sys, zipfile, xml.etree.ElementTree as ET",
+      "with zipfile.ZipFile(sys.argv[1]) as z:",
+      "    assert z.testzip() is None",
+      "    assert len(z.namelist()) == 7",
+      "    for name in z.namelist(): ET.fromstring(z.read(name))",
+      "    ns = {'m':'http://schemas.openxmlformats.org/spreadsheetml/2006/main'}",
+      "    sheet = ET.fromstring(z.read('xl/worksheets/sheet2.xml'))",
+      "    assert sheet.find('.//m:c[@r=\"C2\"]/m:v', ns).text == '8'",
+      "    assert sheet.find('.//m:c[@r=\"H2\"]/m:is/m:t', ns).text.startswith('=HYPERLINK')",
+      "    assert 'Férias €' in sheet.find('.//m:c[@r=\"H2\"]/m:is/m:t', ns).text",
+      "    assert sheet.find('.//m:f', ns) is None"
+    ].join("\n");
+    const result=spawnSync("python3",["-c",py,file],{encoding:"utf8"});
+    assert.equal(result.status,0,result.error?.message||result.stderr);
+  }finally{fs.rmSync(tmp,{recursive:true,force:true});}
+});
+
+test("v3: relatórios profissionais abrem impressão nativa e não exportam em privacidade",async()=>{
+  const app=makeApp();
+  const elements={reportPeriod:{value:"year"},currentMonthPicker:{value:"2026-11"},professionalReportStatus:{textContent:""}};
+  app.ctx.document.getElementById=id=>elements[id]||null;
+  let printed=null;
+  app.ctx.window.Capacitor={getPlatform:()=>"android",Plugins:{WorkTimePrint:{print:async data=>{printed=data;}}}};
+  assert.equal(await app.ctx.printProfessionalReport(),true);
+  assert.match(printed.html,/Relatório Anual 2026/);
+  assert.match(elements.professionalReportStatus.textContent,/Escolhe/);
+  app.evaluate("privacyMode=true;");
+  assert.equal(await app.ctx.exportProfessionalExcel(),false);
+  assert.match(elements.professionalReportStatus.textContent,/privacidade/);
+});
