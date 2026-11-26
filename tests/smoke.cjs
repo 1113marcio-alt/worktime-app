@@ -1955,3 +1955,76 @@ test("v3: prémio anual usa o bruto congelado sem panier em meses fechados",()=>
   assert.equal(app.ctx.setPayrollMonthClosed("2026-10",false),true);
   assert.equal(app.ctx.annualRecordedBonus("2026","2026-11-26").gross,336);
 });
+
+test("v3: painel personalizável valida ordem, oculta cartões e mantém atalhos",()=>{
+  const app=makeApp();
+  const raw=[{id:"homeCardActions",visible:false},{id:"homeCardSalary",visible:false},{id:"homeCardSalary",visible:true},{id:"unknown",visible:false}];
+  const layout=app.ctx.normalizeHomeLayout(raw);
+  assert.equal(layout.length,8);
+  assert.equal(layout[0].visible,true);
+  assert.equal(layout[1].visible,false);
+  assert.equal(new Set(layout.map(row=>row.id)).size,8);
+  assert.equal(app.ctx.moveHomeLayout(layout,"homeCardSalary",-1)[0].id,"homeCardSalary");
+  assert.equal(app.ctx.moveHomeLayout(layout,"homeCardActions",-1)[0].id,"homeCardActions");
+  const root={children:[],insertBefore(el,ref){this.children.splice(this.children.indexOf(el),1);const i=ref?this.children.indexOf(ref):this.children.length;this.children.splice(i,0,el);}};
+  const elements={homeCards:root};
+  for(const row of app.ctx.normalizeHomeLayout(null)){
+    const el={id:row.id,parentElement:root,hidden:false,classList:{toggle(cls,flag){if(cls==="wt-home-user-hidden")el.hidden=flag;}}};
+    root.children.push(el);elements[row.id]=el;
+  }
+  app.ctx.document.getElementById=id=>elements[id]||null;
+  app.ctx.writeBackupState({settings:{homeLayout:layout},entries:{}});
+  app.ctx.renderHomeLayout();
+  assert.equal(root.children[0].id,"homeCardActions");
+  assert.equal(elements.homeCardSalary.hidden,true);
+  assert.equal(elements.homeCardActions.hidden,false);
+});
+
+test("v3: estilos, tamanho do texto e painel guardam e restauram preferências",()=>{
+  const app=makeApp();
+  const ui=settingsEditFixture(app);
+  ui.elements.cfgVisualStyle={value:"glass"};
+  ui.elements.cfgTextSize={value:"xl"};
+  ui.elements.cfgHomeLayout={};
+  app.evaluate('homeLayoutDraft=normalizeHomeLayout([{id:"homeCardStats",visible:true},{id:"homeCardSalary",visible:false}])');
+  const attrs={};app.ctx.document.documentElement={setAttribute(k,v){attrs[k]=v;}};
+  app.ctx.previewVisualStyle();
+  assert.equal(attrs["data-wt-style"],"glass");
+  assert.equal(attrs["data-wt-text"],"xl");
+  assert.equal(app.evaluate("settings.visualStyle"),"original");
+  assert.equal(app.ctx.saveSettings(),true);
+  const backup=app.ctx.snapshotAllData();
+  assert.equal(backup.settings.visualStyle,"glass");
+  assert.equal(backup.settings.textSize,"xl");
+  assert.equal(backup.settings.homeLayout[0].id,"homeCardStats");
+  app.ctx.writeBackupState({settings:{},entries:{}});
+  assert.equal(app.evaluate("settings.visualStyle"),"original");
+  assert.equal(app.evaluate("settings.homeLayout"),null);
+  app.ctx.writeBackupState(backup);
+  assert.equal(app.evaluate("settings.visualStyle"),"glass");
+  assert.equal(app.evaluate("settings.homeLayout[1].visible"),false);
+  assert.equal(app.ctx.allowedVisualStyle("invalid"),"original");
+  assert.equal(app.ctx.allowedTextSize("invalid"),"normal");
+});
+
+test("v3: estatísticas excluem futuro, distinguem recebido e meses sem registos",()=>{
+  const entries={"2026-10-30":{date:"2026-10-30",type:"work",normal:8,extra:2,night:1,includeBonus:true},
+    "2026-11-25":{date:"2026-11-25",type:"work",normal:8,extra:1,night:0,includeBonus:true},
+    "2026-11-30":{date:"2026-11-30",type:"vacation",normal:0,extra:0,night:0,paidLeaveHours:8},
+    "2026-12-02":{date:"2026-12-02",type:"work",normal:8,extra:0,night:0}};
+  const app=makeApp({hourlyRate:20,hourlyBonus:2,dailyPanier:4},entries);
+  assert.equal(app.ctx.setPayrollMonthClosed("2026-10",true,200,"2026-11-26"),true);
+  const before=JSON.stringify(app.ctx.snapshotAllData()), stats=app.ctx.yearStatistics("2026","2026-11-26");
+  assert.equal(stats.months.length,12);
+  assert.equal(stats.totals.recordedMonths,2);
+  assert.equal(stats.totals.actualMonths,1);
+  assert.equal(stats.totals.actualNet,200);
+  assert.equal(stats.totals.hours,19);
+  assert.equal(stats.totals.extra,3);
+  assert.equal(stats.totals.futureEntries,2);
+  assert.equal(stats.months[11].status,"future");
+  assert.equal(stats.months[0].gross,null);
+  assert.equal(stats.months[9].status,"closed");
+  assert.equal(stats.months[10].vacation,0);
+  assert.equal(JSON.stringify(app.ctx.snapshotAllData()),before);
+});
