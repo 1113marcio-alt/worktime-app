@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="pro-ui.css" />
   <script defer src="country-rules.js"></script>
   <script defer src="wt-i18n.js"></script>
+  <script src="wt-pin.js"></script>
   <meta name="theme-color" content="#0f172a" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <script src="https://cdn.tailwindcss.com"></script>
@@ -712,7 +713,7 @@
           <input type="password" maxlength="4" inputmode="numeric" id="cfgSecurityPin" placeholder="Definir PIN de 4 dígitos (vazio = sem PIN)" class="flex-1 bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-xs" />
           <button onclick="savePin()" class="bg-slate-800 border border-slate-700 px-4 py-2.5 rounded-xl text-xs font-bold text-emerald-400">Guardar PIN</button>
         </div>
-        <p id="pinSaveStatus" class="text-xs text-slate-400" aria-live="polite">O PIN protege apenas a interface, não encripta os dados. Guarda-o num local seguro.</p>
+        <p id="pinSaveStatus" class="text-xs text-slate-400" aria-live="polite">O PIN é verificado neste dispositivo e protege apenas a interface. Não encripta registos nem backups. Os backups novos não incluem o PIN; depois de restaurar noutro dispositivo, define um novo.</p>
       </div>
     </section>
 
@@ -813,6 +814,36 @@
       settings.syncCalendarWithEmployer = false;
     let entries = JSON.parse(localStorage.getItem("wt_entries")) || {};
     let privacyMode = false;
+    let pinFailedAttempts = 0;
+    let pinLockedUntil = 0;
+
+    function storedPinVerifier() {
+      try {
+        const raw = localStorage.getItem("wt_pin_verifier");
+        return raw === null ? null : JSON.parse(raw);
+      } catch (_) { return {invalid:true}; } // Fail closed if storage is damaged.
+    }
+
+    function pinIsEnabled() {
+      return storedPinVerifier() !== null || /^\d{4}$/.test(settings.securityPin || "");
+    }
+
+    async function upgradeLegacyPin(pin) {
+      if (!window.WTPin || !window.WTPin.available()) return false;
+      try {
+        const verifier = await window.WTPin.create(pin);
+        // Save the verifier FIRST to prevent an unprotected gap on errors.
+        localStorage.setItem("wt_pin_verifier", JSON.stringify(verifier));
+        const sanitized = { ...settings, securityPin:"" };
+        try {
+          localStorage.setItem("wt_settings", JSON.stringify(sanitized));
+          settings = sanitized;
+        } catch (_) {
+          // Verifier already protects the interface; legacy PIN still works.
+        }
+        return true;
+      } catch (_) { return false; }
+    }
 
     // Organizar visualmente sem eliminar nem renomear campos da versão anterior.
     function organizeSettings() {
@@ -850,7 +881,7 @@
       document.getElementById("entryDate").value = today;
       document.getElementById("currentMonthPicker").value = today.slice(0, 7);
 
-      if (settings.securityPin && settings.securityPin.length === 4) {
+      if (pinIsEnabled()) {
         document.getElementById("pinLockModal").classList.remove("hidden");
         document.getElementById("pinLockModal").classList.add("flex");
       }
@@ -866,13 +897,46 @@
       }
     }
 
-    function unlockApp() {
-      const val = document.getElementById("pinInputPrompt").value;
-      if (val === settings.securityPin) {
-        document.getElementById("pinLockModal").classList.add("hidden");
-      } else {
-        document.getElementById("pinError").classList.remove("hidden");
+    async function unlockApp() {
+      const error = document.getElementById("pinError");
+      const prompt = document.getElementById("pinInputPrompt");
+      if (Date.now() < pinLockedUntil) {
+        error.textContent = "Demasiadas tentativas. Tenta novamente dentro de 30 segundos.";
+        error.classList.remove("hidden");
+        return false;
       }
+      const val = prompt.value;
+      const verifier = storedPinVerifier();
+      let correct = false;
+      if (verifier !== null) {
+        if (!window.WTPin || !window.WTPin.available()) {
+          error.textContent = "Não é possível verificar o PIN neste dispositivo. Os dados não foram alterados.";
+          error.classList.remove("hidden");
+          return false;
+        }
+        correct = await window.WTPin.verify(val,verifier);
+      } else {
+        correct = /^\d{4}$/.test(val) && val === settings.securityPin;
+      }
+      if (!correct) {
+        pinFailedAttempts++;
+        if (pinFailedAttempts >= 5) {
+          pinLockedUntil = Date.now() + 30000;
+          pinFailedAttempts = 0;
+          error.textContent = "5 tentativas incorretas. Tenta novamente dentro de 30 segundos.";
+        } else error.textContent = "PIN incorreto.";
+        error.classList.remove("hidden");
+        prompt.value = "";
+        return false;
+      }
+      pinFailedAttempts = 0;
+      pinLockedUntil = 0;
+      error.classList.add("hidden");
+      prompt.value = "";
+      if (verifier === null && settings.securityPin) await upgradeLegacyPin(val);
+      document.getElementById("pinLockModal").classList.add("hidden");
+      document.getElementById("pinLockModal").classList.remove("flex");
+      return true;
     }
 
     const COUNTRY_CODES = ("AD AE AF AG AI AL AM AO AQ AR AS AT AU AW AX AZ BA BB BD BE BF BG BH BI BJ BL BM BN BO BQ BR BS BT BV BW BY BZ CA CC CD CF CG CH CI CK CL CM CN CO CR CU CV CW CX CY CZ DE DJ DK DM DO DZ EC EE EG EH ER ES ET FI FJ FK FM FO FR GA GB GD GE GF GG GH GI GL GM GN GP GQ GR GS GT GU GW GY HK HM HN HR HT HU ID IE IL IM IN IO IQ IR IS IT JE JM JO JP KE KG KH KI KM KN KP KR KW KY KZ LA LB LC LI LK LR LS LT LU LV LY MA MC MD ME MF MG MH MK ML MM MN MO MP MQ MR MS MT MU MV MW MX MY MZ NA NC NE NF NG NI NL NO NP NR NU NZ OM PA PE PF PG PH PK PL PM PN PR PS PT PW PY QA RE RO RS RU RW SA SB SC SD SE SG SH SI SJ SK SL SM SN SO SR SS ST SV SX SY SZ TC TD TF TG TH TJ TK TL TM TN TO TR TT TV TW TZ UA UG UM US UY UZ VA VC VE VG VI VN VU WF WS YE YT ZA ZM ZW").split(" ");
@@ -1148,22 +1212,53 @@
       renderAll();
     }
 
-    function savePin() {
-      const pin = document.getElementById("cfgSecurityPin").value.trim();
+    async function savePin() {
+      const field = document.getElementById("cfgSecurityPin");
+      const pin = field.value.trim();
       const status = document.getElementById("pinSaveStatus");
       if (pin && !/^\d{4}$/.test(pin)) {
         status.textContent = "O PIN deve ter exatamente 4 algarismos.";
         status.className = "text-xs text-rose-400";
-        return;
+        return false;
       }
-      try {
-        settings.securityPin = pin;
-        localStorage.setItem("wt_settings", JSON.stringify(settings));
-        status.textContent = pin ? "PIN guardado neste dispositivo. Será pedido ao voltar a abrir a aplicação." : "PIN desativado e alteração guardada.";
-        status.className = "text-xs text-emerald-400";
-      } catch (_) {
-        status.textContent = "Não foi possível guardar o PIN. Verifica o armazenamento do dispositivo.";
+      if (pin && (!window.WTPin || !window.WTPin.available())) {
+        status.textContent = "Não é possível configurar um PIN seguro neste dispositivo. Os dados anteriores continuam intactos.";
         status.className = "text-xs text-rose-400";
+        return false;
+      }
+      const oldSettings = settings;
+      const before = localStorage.getItem("wt_pin_verifier");
+      try {
+        const verifier = pin ? await window.WTPin.create(pin) : null;
+        const sanitized = {...settings,securityPin:""};
+        if (pin) {
+          // Apply a verifier first. If the settings write fails the PIN
+          // remains active, never accidentally disabling protection.
+          localStorage.setItem("wt_pin_verifier",JSON.stringify(verifier));
+          localStorage.setItem("wt_settings",JSON.stringify(sanitized));
+        } else {
+          // Clear the legacy PIN first, then remove the verifier last.
+          localStorage.setItem("wt_settings",JSON.stringify(sanitized));
+          localStorage.removeItem("wt_pin_verifier");
+        }
+        settings = sanitized;
+        field.value = "";
+        status.textContent = pin
+          ? "PIN guardado com verificador protegido. Será pedido ao voltar a abrir a aplicação."
+          : "PIN desativado neste dispositivo.";
+        status.className = "text-xs text-emerald-400";
+        return true;
+      } catch (_) {
+        // Best-effort rollback; the original config is never overwritten
+        // in memory until both persistent writes have succeeded.
+        try { localStorage.setItem("wt_settings",JSON.stringify(oldSettings)); } catch (_) {}
+        try {
+          if (before === null) localStorage.removeItem("wt_pin_verifier");
+          else localStorage.setItem("wt_pin_verifier",before);
+        } catch (_) {}
+        status.textContent = "Não foi possível alterar o PIN. Verifica o armazenamento e tenta novamente.";
+        status.className = "text-xs text-rose-400";
+        return false;
       }
     }
 
