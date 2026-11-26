@@ -13,9 +13,9 @@ Base preservada: WorkTime Pro 2, commit 4f8f8e8897e8ea0685dd94a23425c7c327bb2f58
 - [x] Estilos de aparência: Premium original, Minimalista, AMOLED, Efeito vidro e 3 tamanhos de texto, cores/temas preservados e preferências no backup. Testes específicos de estado e persistência executados; contraste visual e navegação no Android pendentes.
 
 ## Fase 3 — Gestão de trabalho
-- [ ] Calendário avançado: seleção de intervalos, pré-visualização, confirmação, não substituir registos sem consentimento, férias transitadas por ano.
-- [ ] Modo motorista: eventos de condução, outros trabalhos, carga/descarga, pausas e disponibilidade; não substituir tacógrafo nem afirmar conformidade legal automática. Separar tempo de trabalho de disponibilidade e descanso.
-- [ ] Banco de horas: distinguir horas pagas, compensadas e acumuladas; saldo auditável, sem dupla contagem no salário.
+- [x] Calendário avançado: intervalo de até 366 dias, pré-visualização, confirmação, nunca substituir existentes, ignorar fechados, turnos pendentes e feriados conhecidos em férias; férias transitadas confirmadas manualmente por ano.
+- [x] Modo motorista: diário manual de intervalos de condução, carga, descarga, outros trabalhos, disponibilidade e descanso; travessia da meia-noite, proteção contra sobreposição e backup. Independente do relógio e da folha salarial; sem tacógrafo, GPS ou certificação legal.
+- [x] Banco de horas: crédito de horas extra e débito em folgas, saldo cronológico não negativo, associação ao registo diário, exclusão do pagamento das horas extra acumuladas, manutenção de bónus horário e suplemento noturno. Modelo pessoal 1:1; a remuneração da folga não é calculada automaticamente. Regras contratuais exigem confirmação. Testes específicos executados, CI/Android pendentes.
 
 ## Fase 4 — Segurança e automatização
 - [ ] Backup automático e encriptado: autenticação, recuperação, cópias versionadas, testes de corrupção e recuperação; conservar backup JSON existente. Preferir criptografia autenticada com chave derivada de palavra-passe, nunca criar chave ou segredo no repositório; destino externo requer consentimento.
