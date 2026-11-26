@@ -2129,3 +2129,102 @@ test("v3: backup do motorista rejeita atividades sobrepostas e IDs duplicados",(
   assert.equal(valid([row,{...row,start:"2026-11-23T10:00:00Z",end:"2026-11-23T11:00:00Z"}]),false);
   assert.equal(valid([row,{...row,id:"y",start:"2026-11-23T10:00:00Z",end:"2026-11-23T11:00:00Z"}]),true);
 });
+
+test("v3: backup AES-GCM recupera Unicode e rejeita palavra-passe errada e adulteração",async()=>{
+  const app=makeApp({}, {"2026-11-26":{date:"2026-11-26",type:"work",normal:8,extra:0,night:0,note:"Férias e salário €"}});
+  setupPinSecurity(app);app.ctx.TextDecoder=TextDecoder;
+  const crypto=app.ctx.window.WTBackupCrypto,password="test-passphrase-1234",payload=app.ctx.snapshotAllData();
+  const first=await crypto.encrypt(payload,password),second=await crypto.encrypt(payload,password);
+  assert.notEqual(first.salt,second.salt);assert.notEqual(first.iv,second.iv);
+  assert.ok(!JSON.stringify(first).includes("Férias"));
+  assert.equal(JSON.stringify(await crypto.decrypt(first,password)),JSON.stringify(payload));
+  await assert.rejects(crypto.decrypt(first,"wrong-passphrase-123"));
+  await assert.rejects(crypto.decrypt({...first,data:(first.data[0]==="A"?"B":"A")+first.data.slice(1)},password));
+  await assert.rejects(crypto.decrypt({...first,iterations:1},password));
+  await assert.rejects(crypto.encrypt(payload,"short"));
+  const before=JSON.stringify(app.ctx.snapshotAllData());
+  assert.equal(await app.ctx.restoreEncryptedEnvelope(first,"wrong-passphrase-123"),false);
+  assert.equal(JSON.stringify(app.ctx.snapshotAllData()),before);
+  app.ctx.writeBackupState({settings:{},entries:{}});
+  assert.equal(await app.ctx.restoreEncryptedEnvelope(first,password),true);
+  assert.equal(app.ctx.snapshotAllData().entries["2026-11-26"].note,"Férias e salário €");
+});
+
+test("v3: rotação de três cópias encriptadas e frequência diária/semanal",()=>{
+  const app=makeApp();
+  app.ctx.window.WTBackupCrypto={isEncrypted:value=>value?.backupType==="worktime-encrypted-backup"};
+  const envelope={backupType:"worktime-encrypted-backup"};
+  assert.equal(app.ctx.autoBackupDue([],"daily","2026-11-26"),true);
+  for(let day=23;day<=26;day++)assert.equal(app.ctx.storeEncryptedLocalBackup(envelope,"2026-11-"+day),true);
+  const rows=app.ctx.localEncryptedBackups();
+  assert.equal(rows.length,3);
+  assert.equal(rows[0].day,"2026-11-26");
+  assert.equal(app.ctx.autoBackupDue(rows,"daily","2026-11-26"),false);
+  assert.equal(app.ctx.autoBackupDue(rows,"daily","2026-11-27"),true);
+  assert.equal(app.ctx.autoBackupDue(rows,"weekly","2026-12-02"),false);
+  assert.equal(app.ctx.autoBackupDue(rows,"weekly","2026-12-03"),true);
+  const before=app.values.get("wt_encrypted_local_backups");
+  app.ctx.localStorage.setItem=()=>{throw Error("storage full");};
+  assert.equal(app.ctx.storeEncryptedLocalBackup(envelope,"2026-11-27"),false);
+  assert.equal(app.values.get("wt_encrypted_local_backups"),before);
+});
+
+test("v3: biometria requer PIN ativo e sucesso nativo; cancelamento não desbloqueia",async()=>{
+  const app=makeApp({securityPin:"1234"});
+  const classes=new Set(["flex"]);
+  const modal={classList:{contains:c=>classes.has(c),add:c=>classes.add(c),remove:c=>classes.delete(c)}};
+  const error={classList:{add(){}}},prompt={value:""},status={textContent:""};
+  app.ctx.document.getElementById=id=>({pinLockModal:modal,pinError:error,pinInputPrompt:prompt,biometricStatus:status}[id]||null);
+  let authenticated=false;
+  app.ctx.window.Capacitor={Plugins:{WorkTimeBiometric:{authenticate:async()=>({authenticated}),getStatus:async()=>({available:true})}}};
+  assert.equal(await app.ctx.toggleBiometricUnlock(),false);
+  assert.equal(app.ctx.biometricEnabled(),false);
+  authenticated=true;
+  assert.equal(await app.ctx.toggleBiometricUnlock(),true);
+  assert.equal(app.ctx.biometricEnabled(),true);
+  assert.equal("wt_biometric_enabled" in app.ctx.snapshotAllData().settings,false);
+  authenticated=false;
+  assert.equal(await app.ctx.unlockWithBiometric(),false);
+  assert.equal(classes.has("hidden"),false);
+  authenticated=true;
+  assert.equal(await app.ctx.unlockWithBiometric(),true);
+  assert.equal(classes.has("hidden"),true);
+  assert.equal(await app.ctx.toggleBiometricUnlock(),true);
+  assert.equal(app.ctx.biometricEnabled(),false);
+  const noPin=makeApp();
+  noPin.ctx.window.Capacitor=app.ctx.window.Capacitor;
+  assert.equal(await noPin.ctx.toggleBiometricUnlock(),false);
+});
+
+test("v3: lembretes validam dias e horários; avisos usam registos existentes",()=>{
+  const date="2026-11-25",vac="2026-12-01";
+  const app=makeApp({}, {[date]:{date,type:"work",normal:8,extra:0,night:0},[vac]:{date:vac,type:"vacation",normal:0,extra:0,night:0}});
+  assert.equal(app.ctx.reminderDaysMask([false,true,true,true,true,true,false]),62);
+  assert.equal(app.ctx.validPersonalReminderConfig({enabled:true,days:62,entry:"05:00",exit:"16:00"}),true);
+  assert.equal(app.ctx.validPersonalReminderConfig({enabled:true,days:0,entry:"05:00",exit:"16:00"}),false);
+  assert.equal(app.ctx.validPersonalReminderConfig({enabled:true,days:62,entry:"25:00",exit:"16:00"}),false);
+  const draft={id:"d",date:"2026-11-24",start:"2026-11-24T08:00:00Z",end:"2026-11-24T09:00:00Z",seconds:3600,breaks:[]};
+  app.values.set("wt_shift_drafts",JSON.stringify([draft]));
+  const before=JSON.stringify(app.ctx.snapshotAllData()), result=app.ctx.personalWorkAlerts("2026-11-26");
+  assert.equal(result.vacation,vac);
+  assert.equal(result.pending,1);
+  assert.ok(!result.missing.includes(date));
+  assert.ok(!result.missing.includes(draft.date));
+  assert.ok(result.missing.includes("2026-11-23"));
+  assert.equal(JSON.stringify(app.ctx.snapshotAllData()),before);
+});
+
+test("v3: integração Android declara plugins biométrico e lembretes privados",()=>{
+  const installer=fs.readFileSync("scripts/install_android_widget.py","utf8");
+  const biometric=fs.readFileSync("android-widget/src/main/java/lu/marcio/worktimepro/preview/WorkTimeBiometricPlugin.java","utf8");
+  const reminders=fs.readFileSync("android-widget/src/main/java/lu/marcio/worktimepro/preview/WorkTimeReminderReceiver.java","utf8");
+  assert.ok(installer.includes("registerPlugin(WorkTimeBiometricPlugin.class)"));
+  assert.ok(installer.includes("registerPlugin(WorkTimeReminderPlugin.class)"));
+  assert.ok(installer.includes("android.permission.USE_BIOMETRIC"));
+  assert.ok(installer.includes('".WorkTimeReminderReceiver"'));
+  assert.ok(biometric.includes("BIOMETRIC_STRONG"));
+  assert.ok(biometric.includes("onAuthenticationSucceeded"));
+  assert.ok(reminders.includes("setAndAllowWhileIdle"));
+  assert.ok(reminders.includes("IMPORTANCE_LOW"));
+  assert.ok(!reminders.includes("setExact"));
+});
