@@ -612,6 +612,112 @@ lu:{"Hora de entrada":"Ufankszäit","Hora de saída":"Schlusszäit",
 for(const [locale,dict] of Object.entries(manualEntryStrings))
   Object.assign(words[locale],dict);
 
+// Novas configurações de férias variáveis, prémio anual e cores.
+const salaryExtensions={
+fr:{
+"Prémio de fim de ano":"Prime de fin d'année",
+"Ativar estimativa de prémio anual":"Activer l'estimation de la prime annuelle",
+"Prémio base (%)":"Taux de base (%)",
+"Entrada na empresa":"Date d'entrée dans l'entreprise",
+"Após X anos (opcional)":"Après X années (facultatif)",
+"Nova taxa (%)":"Nouveau taux (%)",
+"Após mais anos (opcional)":"Après davantage d'années (facultatif)",
+"Média variável de férias (automática)":"Moyenne variable des congés (automatique)",
+"Cor principal da aplicação":"Couleur principale de l'application",
+"Azul original":"Bleu d'origine","Verde-água":"Turquoise",
+"Verde-esmeralda":"Vert émeraude","Roxo":"Violet",
+"Laranja":"Orange","Rosa":"Rose",
+"Prémio acumulado":"Prime cumulée",
+"Prémio contratual de fim de ano":"Prime contractuelle de fin d'année",
+"Prémio anual acumulado (contratual)":"Prime annuelle cumulée (contractuelle)",
+"Data de referência":"Date de référence",
+"Estimativa do valor do próximo dia de férias":"Estimation du prochain jour de congé",
+"Base do horário mais média variável estimada:":"Salaire de base plus moyenne variable estimée :"
+},
+en:{
+"Prémio de fim de ano":"Year-end bonus",
+"Ativar estimativa de prémio anual":"Enable annual bonus estimate",
+"Prémio base (%)":"Base bonus (%)",
+"Entrada na empresa":"Employment start date",
+"Após X anos (opcional)":"After X years (optional)",
+"Nova taxa (%)":"New rate (%)",
+"Após mais anos (opcional)":"After additional years (optional)",
+"Média variável de férias (automática)":"Variable holiday-pay average (automatic)",
+"Cor principal da aplicação":"App accent color",
+"Azul original":"Original blue","Verde-água":"Teal",
+"Verde-esmeralda":"Emerald green","Roxo":"Purple",
+"Laranja":"Orange","Rosa":"Rose",
+"Prémio acumulado":"Accrued bonus",
+"Prémio contratual de fim de ano":"Contractual year-end bonus",
+"Prémio anual acumulado (contratual)":"Accrued annual bonus (contractual)",
+"Data de referência":"Reference date",
+"Estimativa do valor do próximo dia de férias":"Estimated value of next holiday",
+"Base do horário mais média variável estimada:":"Scheduled pay plus estimated variable average:"
+},
+de:{
+"Prémio de fim de ano":"Jahresendprämie",
+"Ativar estimativa de prémio anual":"Jahresprämie berechnen",
+"Prémio base (%)":"Grundprämie (%)",
+"Entrada na empresa":"Eintrittsdatum",
+"Após X anos (opcional)":"Nach X Jahren (optional)",
+"Nova taxa (%)":"Neuer Satz (%)",
+"Após mais anos (opcional)":"Nach weiteren Jahren (optional)",
+"Média variável de férias (automática)":"Variabler Urlaubsentgeltdurchschnitt (automatisch)",
+"Cor principal da aplicação":"App-Akzentfarbe",
+"Azul original":"Originalblau","Verde-água":"Türkis",
+"Verde-esmeralda":"Smaragdgrün","Roxo":"Violett",
+"Laranja":"Orange","Rosa":"Rosa",
+"Prémio acumulado":"Angesammelte Prämie",
+"Prémio contratual de fim de ano":"Vertragliche Jahresendprämie",
+"Prémio anual acumulado (contratual)":"Angesammelte Jahresprämie (vertraglich)",
+"Data de referência":"Stichtag",
+"Estimativa do valor do próximo dia de férias":"Schätzwert des nächsten Urlaubstags",
+"Base do horário mais média variável estimada:":"Grundbetrag plus geschätzter variabler Durchschnitt:"
+},
+es:{
+"Prémio de fim de ano":"Prima de fin de año",
+"Ativar estimativa de prémio anual":"Activar estimación de prima anual",
+"Prémio base (%)":"Prima base (%)",
+"Entrada na empresa":"Fecha de incorporación",
+"Após X anos (opcional)":"Después de X años (opcional)",
+"Nova taxa (%)":"Nuevo porcentaje (%)",
+"Após mais anos (opcional)":"Después de más años (opcional)",
+"Média variável de férias (automática)":"Media variable de vacaciones (automática)",
+"Cor principal da aplicação":"Color principal de la aplicación",
+"Azul original":"Azul original","Verde-água":"Turquesa",
+"Verde-esmeralda":"Verde esmeralda","Roxo":"Morado",
+"Laranja":"Naranja","Rosa":"Rosa",
+"Prémio acumulado":"Prima acumulada",
+"Prémio contratual de fim de ano":"Prima contractual de fin de año",
+"Prémio anual acumulado (contratual)":"Prima anual acumulada (contractual)",
+"Data de referência":"Fecha de referencia",
+"Estimativa do valor do próximo dia de férias":"Valor estimado del próximo día de vacaciones",
+"Base do horário mais média variável estimada:":"Salario previsto más media variable estimada:"
+},
+lu:{
+"Prémio de fim de ano":"Joerennprimm",
+"Ativar estimativa de prémio anual":"Joerennprimm schätzen",
+"Prémio base (%)":"Basisprimm (%)",
+"Entrada na empresa":"Astellungsdatum",
+"Após X anos (opcional)":"No X Joer (optional)",
+"Nova taxa (%)":"Neien Taux (%)",
+"Após mais anos (opcional)":"No weidere Joer (optional)",
+"Média variável de férias (automática)":"Variabel Congés-Moyenne (automatesch)",
+"Cor principal da aplicação":"Haaptfaarf vun der App",
+"Azul original":"Original Blo","Verde-água":"Türkis",
+"Verde-esmeralda":"Smaragdgréng","Roxo":"Violett",
+"Laranja":"Orange","Rosa":"Rosa",
+"Prémio acumulado":"Gesammelt Primm",
+"Prémio contratual de fim de ano":"Vertraglech Joerennprimm",
+"Prémio anual acumulado (contratual)":"Gesammelt Joerennprimm (vertraglech)",
+"Data de referência":"Referenzdatum",
+"Estimativa do valor do próximo dia de férias":"Geschätzte Valeur vum nächste Congésdag",
+"Base do horário mais média variável estimada:":"Geplangte Pai plus geschätzte variabel Moyenne:"
+}
+};
+for(const [language,dict] of Object.entries(salaryExtensions))
+  Object.assign(words[language],dict);
+
 const originals = new WeakMap();
 function normalize(code) { return ["fr","en","de","es","lu","pt"].includes(code)?code:"pt"; }
 function tr(text,language) {
