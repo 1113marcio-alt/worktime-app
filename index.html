@@ -552,6 +552,16 @@
         </div>
 
         <p id="salaryPrintStatus" class="text-xs text-sky-300 no-print" aria-live="polite"></p>
+        <details class="wt-card space-y-3 no-print">
+          <summary class="wt-section-title">Relatórios profissionais PDF / Excel</summary>
+          <label class="block text-xs">Período
+            <select id="reportPeriod" onchange="changeReportPeriod()" class="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl p-2"><option value="month">Mês selecionado</option><option value="year">Ano selecionado</option><option value="week">Semana (segunda a domingo)</option></select>
+          </label>
+          <label id="reportWeekLabel" class="block text-xs hidden">Dia de referência da semana<input type="date" id="reportWeekDate" class="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl p-2" /></label>
+          <div class="grid grid-cols-2 gap-2"><button type="button" onclick="printProfessionalReport()" class="wt-button">PDF / Imprimir</button><button type="button" onclick="exportProfessionalExcel()" class="wt-button primary">Excel (.xlsx)</button></div>
+          <p class="wt-note">PDF pelo serviço de impressão Android; Excel em ficheiro XLSX real. Apenas registos até hoje, sem previsão. Semanas mostram horas, não retenção fiscal semanal. Os valores reais são separados das estimativas. Desativa a privacidade para exportar.</p>
+          <p id="professionalReportStatus" class="wt-note" aria-live="polite"></p>
+        </details>
         <!-- Rendimentos Brutos -->
         <div class="space-y-2 text-sm">
           <h3 class="text-xs font-bold uppercase text-slate-400 tracking-wider">1. Rendimentos Brutos</h3>
@@ -1291,6 +1301,7 @@
       renderAll();
       if (window.ProUI) window.ProUI.init();
       initEncryptedBackups();
+      changeReportPeriod();
       refreshBiometricUI();
       initPersonalReminders();
 
@@ -3925,6 +3936,139 @@
         show("Não foi possível abrir a impressão/PDF. Verifica se o dispositivo tem o serviço de impressão ativo.");
         return false;
       }
+    }
+
+    // Shared report model: no write operations, no invented pay for missing months.
+    function reportModel(period,reference,asOf=payrollToday()){
+      if(!validCalendarDate(asOf)||!["week","month","year"].includes(period))return null;
+      let start,end,heading;
+      if(period==="week"){
+        if(!validCalendarDate(reference))return null;
+        const day=new Date(reference+"T12:00:00");day.setDate(day.getDate()-((day.getDay()+6)%7));
+        start=driverLocalDay(day);day.setDate(day.getDate()+6);end=driverLocalDay(day);
+        heading="Semanal "+start+" — "+end;
+      }else{
+        if(!validPayrollMonth(reference))return null;
+        start=period==="year"?reference.slice(0,4)+"-01-01":reference+"-01";
+        const month=new Date(start+"T12:00:00");
+        if(period==="year")end=reference.slice(0,4)+"-12-31";
+        else{month.setMonth(month.getMonth()+1,0);end=driverLocalDay(month);}
+        heading=period==="year"?"Anual "+reference.slice(0,4):"Mensal "+reference;
+      }
+      const selected=Object.values(entries).filter(e=>e&&validCalendarDate(e.date)&&e.date>=start&&e.date<=end).sort((a,b)=>a.date.localeCompare(b.date));
+      const recorded=selected.filter(e=>e.date<=asOf);
+      const n=v=>Number.isFinite(Number(v))?Number(v):0;
+      const labels={work:"Trabalho",vacation:"Férias",holiday:"Feriado",sick:"Baixa",off:"Folga"};
+      const rows=recorded.map(e=>[e.date,labels[e.type]||String(e.type),n(e.normal),n(e.extra),n(e.night),bankCredit(e),bankDebit(e),String(e.note||"")]);
+      const work=recorded.filter(e=>e.type==="work"),sum=(list,fn)=>list.reduce((a,e)=>a+fn(e),0);
+      const rounded=v=>Math.round(v*100)/100;
+      const summary=[["Período",start+" — "+end],["Dados até",asOf],["Dias registados",recorded.length],["Dias de trabalho",work.length],["Horas trabalhadas",rounded(sum(work,e=>n(e.normal)+n(e.extra)))],["Horas extra trabalhadas",rounded(sum(work,e=>n(e.extra)))],["Horas noturnas",rounded(sum(work,e=>n(e.night)))],["Horas extra acumuladas",rounded(sum(recorded,bankCredit))],["Horas recuperadas",rounded(sum(recorded,bankDebit))],["Dias de férias",recorded.filter(e=>e.type==="vacation").length],["Dias de baixa",recorded.filter(e=>e.type==="sick").length],["Registos futuros excluídos",selected.length-recorded.length]];
+      let monthly=[];
+      if(period!=="week"){
+        const stats=period==="year"?yearStatistics(reference.slice(0,4),asOf):null;
+        const months=stats?stats.months:[monthStatistics(reference,asOf)];
+        const statuses={future:"Futuro",empty:"Sem registos",closed:"Fechado",open:"Aberto"};
+        monthly=months.map(m=>[m.month,statuses[m.status],m.count,m.count?rounded(m.hours):null,m.gross===null?null:rounded(m.gross),m.net===null?null:rounded(m.net),m.actualNet,m.missing]);
+        const recordedMonths=months.filter(m=>m.gross!==null),actualMonths=months.filter(m=>m.actualNet!==null);
+        summary.push(["Bruto estimado (€)",recordedMonths.length?rounded(sum(recordedMonths,m=>m.gross)):null],["Líquido estimado com CIS (€)",recordedMonths.length?rounded(sum(recordedMonths,m=>m.net)):null],["Líquido real recebido (€)",actualMonths.length?rounded(sum(actualMonths,m=>m.actualNet)):null],["Meses com valor real",actualMonths.length],["Dias previstos sem registo",sum(months,m=>m.missing)]);
+      }
+      return {period,start,end,heading,summary,rows,monthly};
+    }
+    const REPORT_ENTRY_HEADERS=["Data","Tipo","Normais (h)","Extra (h)","Noite (h)","Banco + (h)","Banco − (h)","Notas"];
+    const REPORT_MONTH_HEADERS=["Mês","Estado","Registos","Trabalho (h)","Bruto est. (€)","Líquido est. (€)","Real (€)","Dias sem registo"];
+    function reportSheets(model){
+      return [{name:"Resumo",rows:[["WorkTime Pro — "+model.heading],["Simulação pessoal; não é recibo oficial. Valores em EUR; horas decimais."],["Indicador","Valor"],...model.summary]},
+        {name:"Registos",rows:[REPORT_ENTRY_HEADERS,...model.rows]},
+        ...(model.monthly.length?[{name:"Meses",rows:[REPORT_MONTH_HEADERS,...model.monthly]}]:[])];
+    }
+    function professionalReportHtml(model){
+      const val=v=>v===null?"—":escapeHtml(typeof v==="number"?v.toLocaleString("pt-PT",{maximumFractionDigits:2}):v);
+      const table=(headers,rows)=>"<table><thead><tr>"+headers.map(h=>"<th>"+val(h)+"</th>").join("")+"</tr></thead><tbody>"+rows.map(r=>"<tr>"+r.map(v=>"<td>"+val(v)+"</td>").join("")+"</tr>").join("")+"</tbody></table>";
+      return "<!DOCTYPE html><html lang='pt'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1'><meta http-equiv='Content-Security-Policy' content=\"default-src 'none'; style-src 'unsafe-inline'\"><title>WorkTime Pro</title><style>@page{size:A4;margin:12mm}body{font:11px Arial,sans-serif;color:#17253c}h1{color:#2457ac;font-size:23px}h2{font-size:15px;margin-top:20px}table{border-collapse:collapse;width:100%;table-layout:fixed}td,th{border-bottom:1px solid #dce2ec;padding:6px 4px;text-align:left;overflow-wrap:anywhere}th{background:#edf2fb}thead{display:table-header-group}tr{break-inside:avoid}.warning{padding:10px;background:#f3f6fb;border-left:3px solid #e0a120}</style></head><body><h1>WorkTime Pro — Relatório "+val(model.heading)+"</h1><p class='warning'>Simulação pessoal, não é recibo de vencimento. Horas decimais. Valores monetários em EUR. Registos futuros e previsões excluídos. Dias sem registo baseados no horário atual.</p><h2>Resumo</h2>"+table(["Indicador","Valor"],model.summary)+(model.monthly.length?"<h2>Resumo salarial por mês</h2>"+table(REPORT_MONTH_HEADERS,model.monthly):"")+"<h2>Registos diários</h2>"+table(REPORT_ENTRY_HEADERS,model.rows)+"</body></html>";
+    }
+    // Minimal standards-based OOXML workbook, no external libraries or formulas.
+    function xlsxXmlText(value){
+      let result="";
+      for(const char of String(value)){
+        const c=char.codePointAt(0);
+        if(c===9||c===10||c===13||(c>=32&&c<=0xd7ff)||(c>=0xe000&&c<=0xfffd)||(c>=0x10000&&c<=0x10ffff))result+=char;
+      }
+      return result.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&apos;");
+    }
+    function xlsxColumn(index){let s="";for(let i=index+1;i>0;i=Math.floor((i-1)/26))s=String.fromCharCode(65+(i-1)%26)+s;return s;}
+    function xlsxWorksheet(rows){
+      return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols><col min="1" max="1" width="23" customWidth="1"/><col min="2" max="8" width="21" customWidth="1"/></cols><sheetData>'+rows.map((row,i)=>'<row r="'+(i+1)+'">'+row.map((v,j)=>{
+        const ref=xlsxColumn(j)+(i+1);
+        if(v===null||v===undefined)return "";
+        if(typeof v==="number"&&Number.isFinite(v))return '<c r="'+ref+'" t="n"><v>'+v+'</v></c>';
+        return '<c r="'+ref+'" t="inlineStr"><is><t xml:space="preserve">'+xlsxXmlText(String(v).slice(0,32767))+'</t></is></c>';
+      }).join("")+'</row>').join("")+'</sheetData></worksheet>';
+    }
+    function xlsxCrc32(bytes){let crc=0xffffffff;for(const byte of bytes){crc^=byte;for(let i=0;i<8;i++)crc=(crc>>>1)^((crc&1)?0xedb88320:0);}return (crc^0xffffffff)>>>0;}
+    function xlsxZip(files){
+      const enc=new TextEncoder(),parts=[],central=[];let offset=0,centralLength=0;
+      const header=(size)=>{const bytes=new Uint8Array(size);return {bytes,view:new DataView(bytes.buffer)};};
+      for(const [path,content] of files){
+        const name=enc.encode(path),data=enc.encode(content),crc=xlsxCrc32(data);
+        const local=header(30);local.view.setUint32(0,0x04034b50,true);local.view.setUint16(4,20,true);local.view.setUint16(12,33,true);local.view.setUint32(14,crc,true);local.view.setUint32(18,data.length,true);local.view.setUint32(22,data.length,true);local.view.setUint16(26,name.length,true);
+        const cd=header(46);cd.view.setUint32(0,0x02014b50,true);cd.view.setUint16(4,20,true);cd.view.setUint16(6,20,true);cd.view.setUint16(14,33,true);cd.view.setUint32(16,crc,true);cd.view.setUint32(20,data.length,true);cd.view.setUint32(24,data.length,true);cd.view.setUint16(28,name.length,true);cd.view.setUint32(42,offset,true);
+        parts.push(local.bytes,name,data);central.push(cd.bytes,name);offset+=30+name.length+data.length;centralLength+=46+name.length;
+      }
+      const end=header(22);end.view.setUint32(0,0x06054b50,true);end.view.setUint16(8,files.length,true);end.view.setUint16(10,files.length,true);end.view.setUint32(12,centralLength,true);end.view.setUint32(16,offset,true);
+      const result=new Uint8Array(offset+centralLength+22);let at=0;for(const p of [...parts,...central,end.bytes]){result.set(p,at);at+=p.length;}return result;
+    }
+    function createReportXlsx(model){
+      const sheets=reportSheets(model),xml='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>', rel='http://schemas.openxmlformats.org/package/2006/relationships',office='http://schemas.openxmlformats.org/officeDocument/2006/relationships',main='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+      return xlsxZip([
+        ["[Content_Types].xml",xml+'<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'+sheets.map((_,i)=>'<Override PartName="/xl/worksheets/sheet'+(i+1)+'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>').join("")+'</Types>'],
+        ["_rels/.rels",xml+'<Relationships xmlns="'+rel+'"><Relationship Id="rId1" Type="'+office+'/officeDocument" Target="xl/workbook.xml"/></Relationships>'],
+        ["xl/workbook.xml",xml+'<workbook xmlns="'+main+'" xmlns:r="'+office+'"><sheets>'+sheets.map((sheet,i)=>'<sheet name="'+xlsxXmlText(sheet.name)+'" sheetId="'+(i+1)+'" r:id="rId'+(i+1)+'"/>').join("")+'</sheets></workbook>'],
+        ["xl/_rels/workbook.xml.rels",xml+'<Relationships xmlns="'+rel+'">'+sheets.map((_,i)=>'<Relationship Id="rId'+(i+1)+'" Type="'+office+'/worksheet" Target="worksheets/sheet'+(i+1)+'.xml"/>').join("")+'</Relationships>'],
+        ...sheets.map((sheet,i)=>["xl/worksheets/sheet"+(i+1)+".xml",xlsxWorksheet(sheet.rows)])
+      ]);
+    }
+    function changeReportPeriod(){
+      const field=document.getElementById("reportPeriod"),date=document.getElementById("reportWeekDate");
+      if(!date.value)date.value=payrollToday();
+      document.getElementById("reportWeekLabel").classList.toggle("hidden",field.value!=="week");
+    }
+    function professionalReportStatus(message){const status=document.getElementById("professionalReportStatus");if(status)status.textContent=message;}
+    function selectedProfessionalReport(){
+      if(privacyMode){professionalReportStatus("Desativa o modo de privacidade antes de exportar.");return null;}
+      const period=document.getElementById("reportPeriod").value;
+      const ref=period==="week"?document.getElementById("reportWeekDate").value:document.getElementById("currentMonthPicker").value;
+      const model=reportModel(period,ref);
+      if(!model)professionalReportStatus("Escolhe um período válido.");
+      return model;
+    }
+    async function printProfessionalReport(){
+      const model=selectedProfessionalReport();if(!model)return false;
+      const html=professionalReportHtml(model),platform=window.Capacitor,plugin=platform&&platform.Plugins&&platform.Plugins.WorkTimePrint;
+      try{
+        if(plugin&&typeof plugin.print==="function"){await plugin.print({html,jobName:"WorkTime Pro - "+model.start+" - "+model.end});}
+        else if(!platform||typeof platform.getPlatform!=="function"||platform.getPlatform()==="web"){
+          const popup=window.open("","_blank");if(!popup)throw Error("Popup blocked");
+          popup.opener=null;popup.document.open();popup.document.write(html);popup.document.close();popup.focus();popup.print();
+        }else throw Error("Native print unavailable");
+        professionalReportStatus("Escolhe Guardar como PDF ou uma impressora e confirma.");return true;
+      }catch(_){professionalReportStatus("Não foi possível abrir a impressão. Confirma o serviço Android.");return false;}
+    }
+    async function exportProfessionalExcel(){
+      const model=selectedProfessionalReport();if(!model)return false;
+      try{
+        const data=createReportXlsx(model),filename="WorkTime_"+model.start+"_"+model.end+".xlsx";
+        const plugins=window.Capacitor&&window.Capacitor.Plugins;
+        if(plugins&&plugins.Filesystem&&plugins.Share){
+          let binary="";for(let i=0;i<data.length;i+=8192)binary+=String.fromCharCode(...data.subarray(i,i+8192));
+          await plugins.Filesystem.writeFile({path:filename,data:window.btoa(binary),directory:"CACHE"});
+          const uri=await plugins.Filesystem.getUri({path:filename,directory:"CACHE"});
+          await plugins.Share.share({title:"Relatório WorkTime Pro",files:[uri.uri]});
+          professionalReportStatus("Confirma que guardaste o Excel fora da aplicação.");return true;
+        }
+        const blob=new Blob([data],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}),url=URL.createObjectURL(blob),a=document.createElement("a");
+        a.href=url;a.download=filename;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),10000);
+        professionalReportStatus("Download solicitado. Confirma o ficheiro XLSX.");return true;
+      }catch(_){professionalReportStatus("Não foi possível exportar o Excel. Os registos não foram alterados.");return false;}
     }
 
     function safeCsvText(value) {
