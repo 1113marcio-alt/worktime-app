@@ -2234,6 +2234,101 @@
       reader.readAsText(file);
     }
 
+    // Relatório estático e auto-contido: o Android transforma-o em PDF
+    // através do diálogo nativo (ou imprime numa impressora escolhida).
+    function createSalaryReportHtml(month) {
+      if (!/^\d{4}-\d{2}$/.test(month || ""))
+        throw new Error("Escolhe um mês válido para o relatório.");
+      const d = calculateMonthData(month);
+      const money = number => escapeHtml(formatMoney(Number(number) || 0));
+      const text = value => escapeHtml(value);
+      const labels = {work:"Trabalho",vacation:"Férias",holiday:"Feriado",sick:"Baixa",off:"Folga"};
+      const lines = [
+        ["Horas normais", d.normalH.toFixed(2)+" h"],
+        ["Horas extra", d.extraH.toFixed(2)+" h"],
+        ["Horas noturnas", d.nightH.toFixed(2)+" h"],
+        ["Horas pagas de férias e feriados", d.vacPaidHours.toFixed(2)+" h"],
+        ["Remuneração normal",money(d.normalGross)],
+        ["Remuneração horas extra",money(d.extraTotalGross)],
+        ["Suplemento noturno",money(d.nightGross)],
+        ["Bónus horário",money(d.bonusGross)],
+        ["Férias / feriados",money(d.vacationGross)],
+        ["Subsídio diário",money(d.panierGross)],
+        ["TOTAL BRUTO ESTIMADO",money(d.totalGross)],
+        ["Contribuição pensão",money(d.ccssPension)],
+        ["Contribuição saúde",money(d.ccssHealth)],
+        ["Contribuição dependência",money(d.ccssDep)],
+        ["Outras contribuições",money(d.socialOther)],
+        ["Imposto / retenção estimada",money(d.taxIrs)],
+        ["LÍQUIDO ESTIMADO SEM CIS",money(d.netBeforeCredit)],
+        ["CIS (sujeito a elegibilidade)",money(d.cisCreditApplied)],
+        ["LÍQUIDO ESTIMADO COM CIS",money(d.finalNet)]
+      ];
+      const summaryRows = lines.map(([key,value])=>
+        "<tr><td>"+text(key)+"</td><td class='value'>"+value+"</td></tr>").join("");
+      const entriesRows = d.monthEntries.map(e => {
+        const manual = e.manualTime || {};
+        const span = manual.startTime && manual.endTime
+          ? text(manual.startTime + "–" + manual.endTime +
+            " (pausa " + (Number(manual.breakMinutes)||0) + " min)") : "—";
+        return "<tr><td>"+text(e.date)+"</td><td>"+text(labels[e.type]||e.type)+
+          "</td><td>"+text(e.normal ?? 0)+"</td><td>"+text(e.extra ?? 0)+
+          "</td><td>"+span+"</td><td>"+text(e.note||"")+"</td></tr>";
+      }).join("");
+      return "<!DOCTYPE html><html lang='pt'><head><meta charset='UTF-8'>"+
+        "<meta name='viewport' content='width=device-width, initial-scale=1'>"+
+        "<meta http-equiv='Content-Security-Policy' content=\"default-src 'none'; style-src 'unsafe-inline'\">"+
+        "<title>WorkTime Pro — "+text(month)+"</title>"+
+        "<style>@page{size:A4;margin:14mm}body{font:12px Arial,sans-serif;color:#17253c}"+
+        "h1{color:#2457ac;font-size:22px;margin:0 0 8px}h2{font-size:15px;margin-top:24px}"+
+        ".sub{color:#52627b;margin-bottom:18px}.warning{padding:10px;background:#f3f6fb;border-left:3px solid #e0a120}"+
+        "table{width:100%;border-collapse:collapse;margin-top:8px;table-layout:fixed}"+
+        "td,th{border-bottom:1px solid #dce2ec;padding:7px 5px;text-align:left;word-break:break-word}"+
+        "th{background:#edf2fb}.value{text-align:right;font-weight:600}"+
+        "tr{break-inside:avoid}.small{font-size:10px}"+
+        "</style></head><body><h1>WorkTime Pro — Relatório mensal</h1>"+
+        "<p class='sub'>Mês: "+text(month)+" · País empregador: "+
+        text(settings.employerCountry || "LU")+" · Classe: "+text(settings.taxClass || "—")+
+        "</p><p class='warning'>Simulação pessoal, não é um recibo de vencimento "+
+        "nem um cálculo fiscal oficial. Confirmar sempre com a empresa.</p>"+
+        "<h2>Resumo de horas e valores</h2><table>"+summaryRows+"</table>"+
+        "<h2>Registos do mês</h2><table class='small'><thead><tr>"+
+        "<th>Data</th><th>Tipo</th><th>Normais</th><th>Extra</th>"+
+        "<th>Entrada / saída</th><th>Notas</th></tr></thead><tbody>"+entriesRows+
+        "</tbody></table></body></html>";
+    }
+
+    async function printSalaryReport() {
+      const status = document.getElementById("salaryPrintStatus");
+      const show = message => { if(status) status.textContent=message; };
+      const month = document.getElementById("currentMonthPicker").value;
+      try {
+        const html = createSalaryReportHtml(month);
+        const platform = window.Capacitor;
+        const plugin = platform && platform.Plugins && platform.Plugins.WorkTimePrint;
+        if (plugin && typeof plugin.print === "function") {
+          show("A abrir a impressão Android. Seleciona «Guardar como PDF» ou uma impressora.");
+          await plugin.print({html,jobName:"WorkTime Pro - "+month});
+          show("Impressão aberta. Escolhe «Guardar como PDF» ou uma impressora e confirma no Android.");
+          return true;
+        }
+        // Um WebView Android sem plugin não suporta window.print de forma
+        // confiável. Não apresentar uma falsa confirmação de PDF exportado.
+        if (platform && typeof platform.getPlatform === "function" &&
+            platform.getPlatform() !== "web") {
+          show("Esta versão Android não tem o módulo PDF. Instala a Preview atualizada.");
+          return false;
+        }
+        if (typeof window.print !== "function") throw new Error("Impressão indisponível");
+        window.print();
+        show("No navegador, escolhe «Guardar como PDF» ou a impressora.");
+        return true;
+      } catch (_) {
+        show("Não foi possível abrir a impressão/PDF. Verifica se o dispositivo tem o serviço de impressão ativo.");
+        return false;
+      }
+    }
+
     function safeCsvText(value) {
       let raw = String(value ?? "");
       // Spreadsheet apps may execute formulas starting with = + - @.
