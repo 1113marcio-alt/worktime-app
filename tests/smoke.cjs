@@ -1735,3 +1735,70 @@ test("temas de cor guardam escolha e restauram após backup",()=>{
   for(const color of ["blue","teal","emerald","purple","orange","rose"])
     assert.ok(css.includes('data-wt-accent="'+color+'"'));
 });
+
+
+test("Guardar alterações confirma prémio, escalões de antiguidade e cor",()=>{
+  const app=makeApp({hourlyRate:20,yearEndBonusPct:8});
+  const ui=settingsEditFixture(app);
+  const elements=ui.elements;
+  elements.cfgYearEndBonusEnabled={checked:true};
+  elements.cfgYearEndBonusPct={value:"8"};
+  elements.cfgCompanyStartDate={value:"2016-05-09"};
+  elements.cfgYearEndBonusTierYears1={value:"10"};
+  elements.cfgYearEndBonusTierRate1={value:"9"};
+  elements.cfgYearEndBonusTierYears2={value:"15"};
+  elements.cfgYearEndBonusTierRate2={value:"10"};
+  elements.cfgAccentColor={value:"purple"};
+  app.ctx.markSettingsDirty();
+  assert.equal(app.ctx.saveSettings(),true);
+  const saved=JSON.parse(app.values.get("wt_settings"));
+  assert.equal(saved.yearEndBonusPct,8);
+  assert.equal(saved.companyStartDate,"2016-05-09");
+  assert.equal(saved.yearEndBonusTiers[0].years,10);
+  assert.equal(saved.yearEndBonusTiers[0].rate,9);
+  assert.equal(saved.yearEndBonusTiers[1].rate,10);
+  assert.equal(saved.accentColor,"purple");
+  assert.equal(ui.button.disabled,true);
+});
+
+test("regra de antiguidade inválida impede a gravação e não apaga o estado anterior",()=>{
+  const app=makeApp({yearEndBonusPct:8,accentColor:"blue"});
+  const ui=settingsEditFixture(app);
+  ui.elements.cfgYearEndBonusEnabled={checked:true};
+  ui.elements.cfgYearEndBonusPct={value:"8"};
+  ui.elements.cfgCompanyStartDate={value:""};
+  ui.elements.cfgYearEndBonusTierYears1={value:"10"};
+  ui.elements.cfgYearEndBonusTierRate1={value:"12"};
+  ui.elements.cfgYearEndBonusTierYears2={value:""};
+  ui.elements.cfgYearEndBonusTierRate2={value:""};
+  ui.elements.cfgAccentColor={value:"rose"};
+  assert.equal(app.ctx.saveSettings(),false);
+  assert.equal(app.evaluate("settings.accentColor"),"blue");
+  assert.equal(app.values.get("wt_settings"),JSON.stringify({yearEndBonusPct:8,accentColor:"blue"}));
+  assert.match(ui.status.textContent,/antiguidade/);
+});
+
+test("cor da app atualiza pré-visualização antes do Guardar sem tocar no widget",()=>{
+  const app=makeApp({accentColor:"blue"});
+  const ui=settingsEditFixture(app);
+  ui.elements.cfgAccentColor={value:"teal"};
+  const html={attrs:{},setAttribute(name,value){this.attrs[name]=value;}};
+  app.ctx.document.documentElement=html;
+  app.ctx.previewAccentColor();
+  assert.equal(html.attrs["data-wt-accent"],"teal");
+  assert.equal(ui.button.disabled,false);
+  assert.equal(app.evaluate("settings.accentColor"),"blue");
+  assert.equal(app.ctx.allowedAccentColor("inexistente"),"blue");
+  assert.equal(app.ctx.allowedAccentColor("rose"),"rose");
+});
+
+test("traduções incluem controlos do prémio, média de férias e cores",()=>{
+  const app=makeApp();
+  vm.runInContext(fs.readFileSync("wt-i18n.js","utf8"),app.ctx);
+  assert.equal(app.ctx.window.WTLocale.tr("1A. Prémio de fim de ano","en"),
+    "1A. Year-end bonus");
+  assert.equal(app.ctx.window.WTLocale.tr("Cor principal da aplicação","fr"),
+    "Couleur principale de l'application");
+  assert.equal(app.ctx.window.WTLocale.tr("Média variável de férias (automática)","de"),
+    "Variabler Urlaubsentgeltdurchschnitt (automatisch)");
+});
