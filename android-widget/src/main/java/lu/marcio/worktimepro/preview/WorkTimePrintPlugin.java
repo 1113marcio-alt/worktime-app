@@ -51,7 +51,7 @@ public class WorkTimePrintPlugin extends Plugin {
                     public void onPageFinished(WebView loaded, String url) {
                         if (started) return;
                         started = true;
-                        loaded.post(() -> {
+                        getActivity().runOnUiThread(() -> {
                             try {
                                 PrintManager manager = (PrintManager) getActivity()
                                     .getSystemService(Context.PRINT_SERVICE);
@@ -86,7 +86,7 @@ public class WorkTimePrintPlugin extends Plugin {
                                     @Override
                                     public void onFinish() {
                                         delegate.onFinish();
-                                        loaded.post(() -> {
+                                        getActivity().runOnUiThread(() -> {
                                             if (reportView == loaded) reportView = null;
                                             loaded.destroy();
                                         });
