@@ -1050,6 +1050,10 @@
           <p class="wt-note">Ao importar um backup encriptado, a cópia de recuperação anterior é protegida com a palavra-passe desse ficheiro. Para a recuperar, introduz essa mesma palavra-passe acima e carrega em «Desfazer a última importação».</p>
           <button type="button" onclick="document.getElementById('encryptedBackupFile').click()" class="wt-button w-full">Restaurar ficheiro encriptado</button>
           <input id="encryptedBackupFile" type="file" accept=".json,application/json" class="hidden" onchange="importEncryptedBackup(event)" />
+          <button type="button" onclick="document.getElementById('verifyBackupFile').click()" class="wt-button w-full">Verificar backup sem restaurar</button>
+          <input id="verifyBackupFile" type="file" accept=".json,application/json" class="hidden" onchange="verifyBackupFile(event)" />
+          <p class="wt-note">Escolhe um JSON antigo ou encriptado. Para um ficheiro encriptado, introduz a palavra-passe acima. A verificação não substitui os teus registos nem confirma que uma futura instalação será bem-sucedida.</p>
+          <p id="verifyBackupStatus" class="wt-note" aria-live="polite"></p>
           <label class="block text-xs">Frequência das cópias locais
             <select id="autoBackupFrequency" class="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl p-2"><option value="daily">Diária</option><option value="weekly">Semanal</option></select>
           </label>
@@ -3758,6 +3762,46 @@
         }
         return restoreParsedBackup(parsed,encryptedBackupStatus,recovery);
       }catch(_){encryptedBackupStatus("Palavra-passe incorreta, ficheiro danificado ou falha de encriptação. Nenhum registo alterado.");return false;}
+    }
+    function backupVerificationSummary(parsed){
+      if(!isValidWorkTimeBackup(parsed))return null;
+      const dates=Object.keys(parsed.entries).sort();
+      return {entries:dates.length,first:dates[0]||null,last:dates[dates.length-1]||null,
+        settingsCount:Object.keys(parsed.settings).length,
+        drafts:Array.isArray(parsed.shiftDrafts)?parsed.shiftDrafts.length:null,
+        activeShift:Object.prototype.hasOwnProperty.call(parsed,"activeShift")?parsed.activeShift!==null:null};
+    }
+    async function verifyBackupPayload(value,password){
+      try{
+        const encrypted=value&&value.backupType==="worktime-encrypted-backup";
+        if(encrypted&&(!window.WTBackupCrypto||!window.WTBackupCrypto.available()||!window.WTBackupCrypto.validPassword(password)))return null;
+        const parsed=encrypted?await window.WTBackupCrypto.decrypt(value,password):value;
+        const summary=backupVerificationSummary(parsed);
+        return summary?{...summary,encrypted}:null;
+      }catch(_){return null;}
+    }
+    let backupVerificationBusy=false;
+    function verifyBackupFile(event){
+      const field=event.target,file=field.files&&field.files[0];field.value="";
+      if(!file||backupVerificationBusy)return;
+      const status=document.getElementById("verifyBackupStatus"),show=message=>{if(status)status.textContent=message;};
+      if(file.size>18*1024*1024){show("Ficheiro demasiado grande.");return;}
+      const passwordField=document.getElementById("encryptedBackupPassword"),password=passwordField?passwordField.value:"";
+      if(passwordField)passwordField.value="";
+      backupVerificationBusy=true;show("A verificar o ficheiro...");
+      const reader=new FileReader();
+      reader.onload=async e=>{
+        try{
+          const summary=await verifyBackupPayload(JSON.parse(e.target.result),password);
+          if(!summary){show("Backup inválido, incompatível ou palavra-passe incorreta. Nenhum dado foi alterado.");return;}
+          const period=summary.first?summary.first+" a "+summary.last:"sem datas";
+          show("Backup "+(summary.encrypted?"encriptado":"JSON")+" compatível: "+summary.entries+" registo(s), "+period+", "+summary.settingsCount+" definições, "+(summary.drafts===null?"turnos não incluídos":summary.drafts+" turno(s) pendente(s)")+". "+(summary.activeShift===true?"Inclui turno ativo. ":"")+"Nenhum dado foi alterado.");
+        }catch(_){show("Não foi possível verificar o ficheiro. Nenhum dado foi alterado.");}
+        finally{backupVerificationBusy=false;}
+      };
+      reader.onerror=()=>{backupVerificationBusy=false;show("Não foi possível ler o ficheiro.");};
+      reader.onabort=()=>{backupVerificationBusy=false;show("Verificação cancelada.");};
+      try{reader.readAsText(file);}catch(_){backupVerificationBusy=false;show("Não foi possível abrir o ficheiro.");}
     }
     function importEncryptedBackup(event){
       const file=event.target.files&&event.target.files[0];event.target.value="";
