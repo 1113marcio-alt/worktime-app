@@ -280,26 +280,25 @@ test("Portugal e França não apresentam a retenção LU como se fosse oficial",
   assert.ok(pt.taxStatus.includes("tabelas"));
 });
 
-test("mudança de empregador atualiza férias automáticas e mantém valores manuais", () => {
-  const app=makeApp();
-  app.ctx.document.getElementById=() => ({value:"PT"});
-  app.evaluate("saveSettings = function(){ localStorage.setItem('wt_settings',JSON.stringify(settings)); }");
+test("mudança de empregador prepara férias mas só grava ao confirmar", () => {
+  const app=makeApp({employerCountry:"LU",annualVacation:26});
+  const elements={
+    cfgEmployerCountry:{value:"PT"},cfgHolidayCountry:{value:"LU"},
+    cfgAnnualVacation:{value:26},cfgSyncCalendarWithEmployer:{checked:true}
+  };
+  app.ctx.document.getElementById=id=>elements[id]||null;
   app.ctx.changeEmployerCountry();
-  assert.equal(app.evaluate("settings.employerCountry"),"PT");
-  assert.equal(app.evaluate("settings.annualVacation"),22);
+  assert.equal(elements.cfgAnnualVacation.value,22);
+  assert.equal(elements.cfgHolidayCountry.value,"PT");
+  assert.equal(app.evaluate("settings.employerCountry"),"LU",
+    "não gravar o país sem carregar no botão Guardar");
+  assert.equal(app.evaluate("settingsDirty"),true);
   app.evaluate("settings.vacationAuto=false; settings.annualVacation=29;");
-  app.ctx.document.getElementById=() => ({value:"FR"});
+  elements.cfgEmployerCountry.value="FR";
+  elements.cfgAnnualVacation.value=29;
   app.ctx.changeEmployerCountry();
-  assert.equal(app.evaluate("settings.annualVacation"),29);
+  assert.equal(elements.cfgAnnualVacation.value,29);
 });
-
-function setupPinSecurity(app) {
-  app.ctx.window.crypto=require("node:crypto").webcrypto;
-  app.ctx.window.btoa=btoa;
-  app.ctx.window.atob=atob;
-  app.ctx.TextEncoder=TextEncoder;
-  vm.runInContext(fs.readFileSync("wt-pin.js","utf8"),app.ctx);
-}
 
 test("PIN novo usa verificador criptográfico e não é guardado em texto", async() => {
   const app=makeApp({}, {});
@@ -333,34 +332,32 @@ test("a tradução de francês altera labels no dicionário e tem fallback segur
 });
 
 
-test("país do empregador pode sincronizar feriados sem alterar residência", () => {
+test("país e calendário ficam pendentes e a residência não é alterada", () => {
   const app=makeApp({residenceCountry:"LU",holidayCountry:"LU",syncCalendarWithEmployer:true}, {});
-  const refs={
+  const fields={
     cfgEmployerCountry:{value:"PT"},
     cfgHolidayCountry:{value:"LU"},
     cfgAnnualVacation:{value:26},
     cfgSyncCalendarWithEmployer:{checked:true}
   };
-  app.ctx.document.getElementById=id=>refs[id] || {value:""};
-  app.evaluate("saveSettings = function(){ settings.annualVacation=Number(document.getElementById('cfgAnnualVacation').value); settings.holidayCountry=document.getElementById('cfgHolidayCountry').value; localStorage.setItem('wt_settings',JSON.stringify(settings)); }");
+  app.ctx.document.getElementById=id=>fields[id]||null;
   app.ctx.changeEmployerCountry();
-  assert.equal(app.evaluate("settings.employerCountry"),"PT");
-  assert.equal(app.evaluate("settings.annualVacation"),22);
-  assert.equal(app.evaluate("settings.holidayCountry"),"PT");
+  assert.equal(fields.cfgHolidayCountry.value,"PT");
+  assert.equal(fields.cfgAnnualVacation.value,22);
   assert.equal(app.evaluate("settings.residenceCountry"),"LU");
-  refs.cfgHolidayCountry.value="FR";
-  app.evaluate("saveSettings = function(){ settings.holidayCountry=document.getElementById('cfgHolidayCountry').value; settings.employerCountry=document.getElementById('cfgEmployerCountry').value; settings.annualVacation=Number(document.getElementById('cfgAnnualVacation').value); localStorage.setItem('wt_settings',JSON.stringify(settings)); }");
+  assert.equal(app.evaluate("settings.holidayCountry"),"LU");
+  fields.cfgHolidayCountry.value="FR";
   app.ctx.confirm=()=>false;
   app.ctx.changeCalendarCountry();
-  assert.equal(app.evaluate("settings.syncCalendarWithEmployer"),false);
-  assert.equal(app.evaluate("settings.holidayCountry"),"FR");
-  assert.equal(app.evaluate("settings.employerCountry"),"PT");
+  assert.equal(fields.cfgSyncCalendarWithEmployer.checked,false);
+  assert.equal(fields.cfgEmployerCountry.value,"PT");
   app.ctx.confirm=()=>true;
-  refs.cfgHolidayCountry.value="LU";
+  fields.cfgHolidayCountry.value="LU";
   app.ctx.changeCalendarCountry();
-  assert.equal(app.evaluate("settings.holidayCountry"),"LU");
-  assert.equal(app.evaluate("settings.employerCountry"),"LU");
-  assert.equal(app.evaluate("settings.annualVacation"),26);
+  assert.equal(fields.cfgEmployerCountry.value,"LU");
+  assert.equal(fields.cfgAnnualVacation.value,26);
+  assert.equal(app.evaluate("settings.holidayCountry"),"LU",
+    "nenhuma alteração de país até carregar Guardar");
 });
 
 test("tradução aplica prefixos numerados nas definições", () => {
