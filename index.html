@@ -987,6 +987,23 @@
         <button type="button" onclick="exportBackupJSON()" id="backupExportButton"
           class="wt-button primary w-full">⬇️ Guardar backup completo (.json)</button>
         <p id="backupSaveStatus" class="text-xs text-slate-400" aria-live="polite">Guarda o ficheiro JSON fora da aplicação. Inclui horários e valores sem encriptação.</p>
+        <details class="wt-card space-y-3">
+          <summary class="wt-section-title">Backup encriptado e automático</summary>
+          <p class="wt-note">AES-256-GCM. Usa uma frase-passe forte, com pelo menos 12 caracteres. Sem ela, não há recuperação. O ficheiro JSON antigo continua disponível.</p>
+          <label class="block text-xs">Palavra-passe<input id="encryptedBackupPassword" type="password" autocomplete="new-password" maxlength="1024" class="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl p-2" /></label>
+          <label class="block text-xs">Confirmar palavra-passe (para criar cópias)<input id="encryptedBackupConfirm" type="password" autocomplete="new-password" maxlength="1024" class="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl p-2" /></label>
+          <button type="button" onclick="exportEncryptedBackup()" class="wt-button primary w-full">Exportar backup encriptado</button>
+          <button type="button" onclick="document.getElementById('encryptedBackupFile').click()" class="wt-button w-full">Restaurar ficheiro encriptado</button>
+          <input id="encryptedBackupFile" type="file" accept=".json,application/json" class="hidden" onchange="importEncryptedBackup(event)" />
+          <label class="block text-xs">Frequência das cópias locais
+            <select id="autoBackupFrequency" class="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl p-2"><option value="daily">Diária</option><option value="weekly">Semanal</option></select>
+          </label>
+          <button type="button" onclick="enableAutoBackup()" class="wt-button w-full">Ativar cópias automáticas nesta sessão</button>
+          <button type="button" onclick="disableAutoBackup()" class="wt-button w-full">Parar cópias automáticas</button>
+          <p class="wt-note">A palavra-passe fica apenas na memória até fechar a aplicação. As cópias automáticas são feitas enquanto está aberta e desbloqueada. Mantém até três versões locais; exporta uma para Ficheiros/Drive antes de desinstalar. Não há envio automático para a nuvem.</p>
+          <p id="encryptedBackupStatus" class="wt-note" aria-live="polite"></p>
+          <div id="autoBackupList" class="space-y-2"></div>
+        </details>
         <button type="button" onclick="chooseBackupJSON()" id="backupRestoreButton"
           class="wt-button w-full">📂 Restaurar backup completo (.json)</button>
         <input id="backupImportFile" type="file" accept=".json,application/json"
@@ -1244,6 +1261,7 @@
       initSettingsEditor();
       renderAll();
       if (window.ProUI) window.ProUI.init();
+      initEncryptedBackups();
 
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('sw.js').catch(() => {});
@@ -3331,7 +3349,11 @@
         schemaVersion: 2, backupType: "worktime-full-settings-and-records" };
       const json = JSON.stringify(backup, null, 2);
       const fileName = "worktime_backup_" + new Date().toISOString().slice(0, 10) + ".json";
-      const status = document.getElementById("backupSaveStatus");
+      return shareBackupFile(json,fileName,"backupSaveStatus");
+    }
+
+    async function shareBackupFile(json,fileName,statusId) {
+      const status = document.getElementById(statusId);
       const setStatus = message => { if (status) status.textContent = message; };
       const capacitor = window.Capacitor && window.Capacitor.Plugins;
       if (capacitor && capacitor.Filesystem && capacitor.Share) {
@@ -3371,6 +3393,118 @@
       } catch (_) {
         setStatus("Não foi possível guardar o backup neste dispositivo.");
       }
+    }
+
+    let autoBackupSession=null, autoBackupBusy=false;
+    const AUTO_BACKUP_KEY="wt_encrypted_local_backups";
+    function encryptedBackupStatus(message){
+      const status=document.getElementById("encryptedBackupStatus");if(status)status.textContent=message;
+    }
+    function backupPassphrase(confirmRequired){
+      const field=document.getElementById("encryptedBackupPassword"), confirmation=document.getElementById("encryptedBackupConfirm");
+      const p=field?field.value:"";
+      if(!window.WTBackupCrypto||!window.WTBackupCrypto.available()||!window.WTBackupCrypto.validPassword(p)||
+        (confirmRequired&&(!confirmation||confirmation.value!==p))){
+        encryptedBackupStatus("Confirma a palavra-passe (mínimo 12 caracteres) e a disponibilidade de encriptação.");return null;
+      }
+      if(field)field.value="";if(confirmation)confirmation.value="";
+      return p;
+    }
+    function backupPayload(){
+      return {...snapshotAllData(),exportedAt:new Date().toISOString(),schemaVersion:2,backupType:"worktime-full-settings-and-records"};
+    }
+    async function exportEncryptedBackup(){
+      if(settingsDirty){encryptedBackupStatus("Guarda primeiro as definições.");return false;}
+      const password=backupPassphrase(true);if(!password)return false;
+      try{
+        encryptedBackupStatus("A encriptar...");
+        const data=await window.WTBackupCrypto.encrypt(backupPayload(),password);
+        return shareBackupFile(JSON.stringify(data),"worktime_encriptado_"+payrollToday()+".json","encryptedBackupStatus");
+      }catch(_){encryptedBackupStatus("Não foi possível criar a cópia encriptada. Os dados existentes não foram alterados.");return false;}
+    }
+    function localEncryptedBackups(){
+      try{
+        const rows=JSON.parse(localStorage.getItem(AUTO_BACKUP_KEY)||"[]");
+        if(!Array.isArray(rows))return [];
+        return rows.filter(row=>row&&typeof row.createdAt==="string"&&Number.isFinite(Date.parse(row.createdAt))&&
+          typeof row.day==="string"&&validCalendarDate(row.day)&&window.WTBackupCrypto&&window.WTBackupCrypto.isEncrypted(row.envelope)).slice(0,3);
+      }catch(_){return [];}
+    }
+    function autoBackupDue(rows,frequency,day){
+      if(!validCalendarDate(day))return false;
+      if(!rows.length)return true;
+      const gap=(Date.parse(day+"T00:00:00Z")-Date.parse(rows[0].day+"T00:00:00Z"))/86400000;
+      return gap >= (frequency==="weekly"?7:1);
+    }
+    function storeEncryptedLocalBackup(envelope,day,createdAt=new Date().toISOString()){
+      if(!window.WTBackupCrypto||!window.WTBackupCrypto.isEncrypted(envelope)||!validCalendarDate(day))return false;
+      const next=[{day,createdAt,envelope},...localEncryptedBackups()].slice(0,3);
+      try{localStorage.setItem(AUTO_BACKUP_KEY,JSON.stringify(next));return true;}catch(_){return false;}
+    }
+    async function runAutoBackup(force=false){
+      const session=autoBackupSession;
+      if(!session||autoBackupBusy||settingsDirty)return false;
+      const modal=document.getElementById("pinLockModal");
+      if(document.hidden||(modal&&!modal.classList.contains("hidden")))return false;
+      const day=payrollToday();
+      if(!force&&!autoBackupDue(localEncryptedBackups(),session.frequency,day))return false;
+      autoBackupBusy=true;
+      try{
+        const envelope=await window.WTBackupCrypto.encrypt(backupPayload(),session.password);
+        if(autoBackupSession!==session)return false;
+        if(!storeEncryptedLocalBackup(envelope,day))throw Error("Storage full");
+        encryptedBackupStatus("Cópia encriptada local criada: "+day+". Exporta para guardar fora da aplicação.");
+        renderEncryptedBackups();return true;
+      }catch(_){encryptedBackupStatus("Falha ao guardar a cópia automática. As versões anteriores foram mantidas.");return false;}
+      finally{autoBackupBusy=false;}
+    }
+    async function enableAutoBackup(){
+      if(settingsDirty){encryptedBackupStatus("Guarda primeiro as definições.");return;}
+      const password=backupPassphrase(true);if(!password)return;
+      const frequency=document.getElementById("autoBackupFrequency").value==="weekly"?"weekly":"daily";
+      autoBackupSession={password,frequency};
+      encryptedBackupStatus("Cópias automáticas ativas nesta sessão.");
+      await runAutoBackup(true);
+    }
+    function disableAutoBackup(){
+      autoBackupSession=null;encryptedBackupStatus("Cópias automáticas paradas. As cópias já criadas mantêm-se.");
+    }
+    async function restoreEncryptedEnvelope(envelope,password){
+      try{
+        const parsed=await window.WTBackupCrypto.decrypt(envelope,password);
+        return restoreParsedBackup(parsed,encryptedBackupStatus);
+      }catch(_){encryptedBackupStatus("Palavra-passe incorreta, ficheiro danificado ou formato incompatível. Nenhum registo alterado.");return false;}
+    }
+    function importEncryptedBackup(event){
+      const file=event.target.files&&event.target.files[0];event.target.value="";
+      if(!file)return;
+      const password=backupPassphrase(false);if(!password)return;
+      if(file.size>18*1024*1024){encryptedBackupStatus("Ficheiro demasiado grande.");return;}
+      const reader=new FileReader();
+      reader.onload=async e=>{
+        try{await restoreEncryptedEnvelope(JSON.parse(e.target.result),password);}
+        catch(_){encryptedBackupStatus("Ficheiro inválido. Nenhum registo alterado.");}
+      };
+      reader.onerror=()=>encryptedBackupStatus("Não foi possível ler o ficheiro.");
+      reader.readAsText(file);
+    }
+    function renderEncryptedBackups(){
+      const root=document.getElementById("autoBackupList");if(!root)return;
+      root.replaceChildren();
+      for(const row of localEncryptedBackups()){
+        const line=document.createElement("div");line.className="wt-layout-row flex-wrap";
+        const label=document.createElement("span");label.className="text-xs flex-1";label.textContent=new Date(row.createdAt).toLocaleString("pt-PT");
+        const exp=document.createElement("button");exp.type="button";exp.className="wt-button";exp.textContent="Exportar";
+        exp.addEventListener("click",()=>shareBackupFile(JSON.stringify(row.envelope),"worktime_encriptado_"+row.day+".json","encryptedBackupStatus"));
+        const restore=document.createElement("button");restore.type="button";restore.className="wt-button";restore.textContent="Restaurar";
+        restore.addEventListener("click",()=>{const password=backupPassphrase(false);if(password)restoreEncryptedEnvelope(row.envelope,password);});
+        line.append(label,exp,restore);root.append(line);
+      }
+    }
+    function initEncryptedBackups(){
+      renderEncryptedBackups();
+      if(typeof window.setInterval==="function")window.setInterval(()=>runAutoBackup(),15*60*1000);
+      document.addEventListener("visibilitychange",()=>{if(!document.hidden)runAutoBackup();});
     }
 
     function isPlainRecord(value) {
@@ -3490,6 +3624,16 @@
           show("Não foi possível ler o ficheiro JSON.");
           alert("O ficheiro não contém JSON válido."); return;
         }
+        restoreParsedBackup(parsed,show);
+      };
+      reader.onerror = () => {
+        show("Não foi possível ler o ficheiro.");
+        alert("Não foi possível ler o ficheiro.");
+      };
+      reader.readAsText(file);
+    }
+
+    function restoreParsedBackup(parsed,show) {
         if (!isValidWorkTimeBackup(parsed)) {
           show("Backup incompatível. Os teus registos não foram alterados.");
           alert("Backup inválido: é necessário conter configurações e registos compatíveis.");
@@ -3507,6 +3651,7 @@
           writeBackupState(parsed);
           show("✓ Backup restaurado: configurações, horários semanais, salários, férias, idioma, tema e registos. O PIN deste telemóvel permanece.");
           alert("Backup completo restaurado com sucesso. As configurações anteriores também foram substituídas pelas do backup.");
+          return true;
         } catch (_) {
           try {
             keys.forEach(key => {
@@ -3521,13 +3666,8 @@
           setSettingsSaveState(true);
           show("Falha na importação. Tentámos recuperar os dados anteriores.");
           alert("Não foi possível restaurar o backup. Os dados anteriores foram mantidos sempre que possível.");
+          return false;
         }
-      };
-      reader.onerror = () => {
-        show("Não foi possível ler o ficheiro.");
-        alert("Não foi possível ler o ficheiro.");
-      };
-      reader.readAsText(file);
     }
 
     // Relatório estático e auto-contido: o Android transforma-o em PDF
