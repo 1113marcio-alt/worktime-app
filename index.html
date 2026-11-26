@@ -1310,7 +1310,7 @@
     }
 
     function initApp() {
-      const today = new Date().toISOString().slice(0, 10);
+      const today = payrollToday();
       document.getElementById("entryDate").value = today;
       document.getElementById("currentMonthPicker").value = today.slice(0, 7);
 
@@ -2297,7 +2297,7 @@
     function saveEntry() {
       const date = document.getElementById("entryDate").value;
       const type = document.getElementById("entryType").value;
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(date || "")) {
+      if (!validCalendarDate(date)) {
         entrySaveVisual(false, "Escolhe uma data válida.", true);
         return false;
       }
@@ -2681,7 +2681,7 @@
 
     function fillStandardWeek() {
       const selected = document.getElementById("entryDate").value;
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(selected)) return;
+      if (!validCalendarDate(selected)) return;
       const monday = new Date(selected + "T12:00:00");
       const weekday = monday.getDay();
       monday.setDate(monday.getDate() - ((weekday + 6) % 7));
@@ -3372,7 +3372,7 @@
     }
 
     function renderAll() {
-      const monthPrefix = document.getElementById("currentMonthPicker").value || new Date().toISOString().slice(0, 7);
+      const monthPrefix = document.getElementById("currentMonthPicker").value || payrollToday().slice(0, 7);
       const d = calculateMonthData(monthPrefix);
 
       renderForecast(monthPrefix);
@@ -3565,6 +3565,7 @@
           return false;
         pendingVacationAuto = null;
         loadSettingsToInputs();
+        applyTheme();
         setSettingsSaveState(true, "Alterações não guardadas descartadas.");
       }
       ["home", "calendario", "ponto", "registo", "folha", "ferias", "config"].forEach(t => {
@@ -3899,9 +3900,9 @@
         if (!isValidWorkTimeBackup(parsed)) {
           show("Backup incompatível. Os teus registos não foram alterados.");
           alert("Backup inválido: é necessário conter configurações e registos compatíveis.");
-          return;
+          return false;
         }
-        if (!confirm("Importar este backup vai substituir os registos e configurações atuais. Já guardou uma cópia JSON do estado atual?")) return;
+        if (!confirm("Importar este backup vai substituir os registos e configurações atuais. Já guardou uma cópia externa do estado atual?")) return false;
         const keys = ["wt_settings", "wt_entries", "wt_shift_drafts", "wt_active_shift"];
         const before = Object.fromEntries(keys.map(key => [key, localStorage.getItem(key)]));
         const snapshot = snapshotAllData();
@@ -4012,6 +4013,7 @@
     async function printSalaryReport() {
       const status = document.getElementById("salaryPrintStatus");
       const show = message => { if(status) status.textContent=message; };
+      if(privacyMode){show("Desativa o modo de privacidade antes de exportar.");return false;}
       const month = document.getElementById("currentMonthPicker").value;
       try {
         const html = createSalaryReportHtml(month);
@@ -4110,7 +4112,7 @@
         gross.dataset.private=privacyMode?"1":"0";gross.dataset.saved=signature;
       }
       const plugins=window.Capacitor&&window.Capacitor.Plugins;
-      for(const id of ["receiptCamera","receiptGallery"])document.getElementById(id).disabled=privacyMode||!plugins||!plugins.Camera||!plugins.WorkTimeReceipt;
+      for(const id of ["receiptCamera","receiptGallery"])document.getElementById(id).disabled=privacyMode||month>payrollToday().slice(0,7)||!plugins||!plugins.Camera||!plugins.WorkTimeReceipt;
       for(const el of [gross,net,document.getElementById("receiptSave")])el.disabled=privacyMode||month>payrollToday().slice(0,7);
       const estimate=calculateMonthData(month);
       document.getElementById("receiptComparison").textContent=privacyMode?"Valores ocultos.":row?"Líquido real "+formatMoney(recordedActualNet(month)??row.net)+"; diferença face ao líquido estimado: "+formatMoney((recordedActualNet(month)??row.net)-estimate.finalNet)+".":"Sem recibo digitalizado guardado neste mês.";
@@ -4121,6 +4123,7 @@
       const plugins=window.Capacitor&&window.Capacitor.Plugins;
       if(!plugins||!plugins.Camera||!plugins.WorkTimeReceipt){receiptStatus("OCR indisponível. Podes preencher manualmente.");return false;}
       const month=document.getElementById("currentMonthPicker").value;
+      if(!validPayrollMonth(month)||month>payrollToday().slice(0,7))return false;
       receiptScanning=true;
       try{
         clearReceiptPreview();
@@ -4129,7 +4132,8 @@
         if(!photo.base64String)throw Error("Empty image");
         receiptStatus("A reconhecer texto no dispositivo...");
         const result=await plugins.WorkTimeReceipt.recognize({image:photo.base64String});
-        if(privacyMode||document.getElementById("currentMonthPicker").value!==month)return false;
+        const tab=document.getElementById("tab-folha");
+        if(privacyMode||document.getElementById("currentMonthPicker").value!==month||(tab&&tab.classList.contains("hidden")))return false;
         const text=String(result.text||"").slice(0,60000),suggestions=suggestReceiptAmounts(text);
         document.getElementById("receiptOcrText").value=text;
         document.getElementById("receiptOcrDetails").classList.toggle("hidden",!text);
@@ -4293,6 +4297,7 @@
     }
 
     function exportCSV() {
+      if(privacyMode){alert("Desativa o modo de privacidade antes de exportar.");return false;}
       const rows = [
         ["Data","Tipo","Horas Normais","Horas Extras","Horas Noturnas","Notas"].join(",")
       ];
