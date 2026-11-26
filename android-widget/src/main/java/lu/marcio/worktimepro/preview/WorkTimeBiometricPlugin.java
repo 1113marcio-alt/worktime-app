@@ -41,12 +41,15 @@ public class WorkTimeBiometricPlugin extends Plugin {
                     .setTitle("WorkTime Pro")
                     .setSubtitle("Confirma a tua identidade")
                     .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
-                    .setNegativeButton("Usar PIN", getActivity().getMainExecutor(), (dialog, which) -> {})
+                    .setNegativeButton("Usar PIN", getActivity().getMainExecutor(), (dialog, which) -> {
+                        if (authenticating) { authenticating = false; call.reject("Usar PIN."); }
+                    })
                     .build();
                 prompt.authenticate(new CancellationSignal(), getActivity().getMainExecutor(),
                     new BiometricPrompt.AuthenticationCallback() {
                         @Override
                         public void onAuthenticationSucceeded(BiometricPrompt.AuthenticationResult result) {
+                            if (!authenticating) return;
                             authenticating = false;
                             JSObject response = new JSObject();
                             response.put("authenticated", true);
@@ -55,6 +58,7 @@ public class WorkTimeBiometricPlugin extends Plugin {
 
                         @Override
                         public void onAuthenticationError(int code, CharSequence message) {
+                            if (!authenticating) return;
                             authenticating = false;
                             call.reject("Autenticação cancelada ou indisponível. Usa o PIN.");
                         }
