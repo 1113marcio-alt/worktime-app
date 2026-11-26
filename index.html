@@ -853,7 +853,12 @@
       overtimePct: 40,
       nightPct: 15,
       dailyPanier: 0.00,
-      vacAvgSupplement: 24.00,
+      vacAvgSupplement: 24.00, // Só para registos de férias antigos, sem novo campo.
+      yearEndBonusEnabled: true,
+      yearEndBonusPct: 8,
+      companyStartDate: "",
+      yearEndBonusTiers: [],
+      accentColor: "blue",
       taxSystem: "luxembourg",
       taxClass: "2",
       manualTaxRate: 0,
@@ -1206,6 +1211,24 @@
       document.getElementById("cfgNightPct").value = settings.nightPct;
       document.getElementById("cfgDailyPanier").value = settings.dailyPanier;
       document.getElementById("cfgVacAvgSupplement").value = settings.vacAvgSupplement;
+      const bonusEnabled = document.getElementById("cfgYearEndBonusEnabled");
+      if (bonusEnabled) {
+        bonusEnabled.checked = settings.yearEndBonusEnabled !== false;
+        document.getElementById("cfgYearEndBonusPct").value =
+          Number.isFinite(Number(settings.yearEndBonusPct)) ? settings.yearEndBonusPct : 8;
+        document.getElementById("cfgCompanyStartDate").value = settings.companyStartDate || "";
+        const tiers = Array.isArray(settings.yearEndBonusTiers)
+          ? settings.yearEndBonusTiers : [];
+        for (let i = 1; i <= 2; i++) {
+          const tier = tiers[i - 1];
+          document.getElementById("cfgYearEndBonusTierYears"+i).value =
+            tier ? tier.years : "";
+          document.getElementById("cfgYearEndBonusTierRate"+i).value =
+            tier ? tier.rate : "";
+        }
+      }
+      const accent = document.getElementById("cfgAccentColor");
+      if (accent) accent.value = allowedAccentColor(settings.accentColor);
       document.getElementById("cfgTaxSystem").value = settings.taxSystem || "luxembourg";
       document.getElementById("cfgManualSocialRate").value = Number(settings.manualSocialRate) || 0;
       document.getElementById("cfgTaxClass").value = settings.taxClass;
@@ -1286,6 +1309,41 @@
         }
       }
       const nextSettings = { ...settings, weeklySchedule };
+      // Guardar condições contratuais do prémio, se os novos campos existirem.
+      const bonusCheck = document.getElementById("cfgYearEndBonusEnabled");
+      if (bonusCheck) {
+        const base = document.getElementById("cfgYearEndBonusPct");
+        const amount = Number(base.value);
+        const rawStart = document.getElementById("cfgCompanyStartDate").value;
+        if (String(base.value).trim() === "" || !Number.isFinite(amount) ||
+            amount < 0 || amount > 100 ||
+            (rawStart && !validCalendarDate(rawStart))) {
+          setSettingsSaveState(false,"Confirma a percentagem e a data de entrada na empresa.",true);
+          return false;
+        }
+        const tiers = [];
+        for (let i = 1; i <= 2; i++) {
+          const yearsText = document.getElementById("cfgYearEndBonusTierYears"+i).value.trim();
+          const rateText = document.getElementById("cfgYearEndBonusTierRate"+i).value.trim();
+          if (!yearsText && !rateText) continue;
+          const years = Number(yearsText), rate = Number(rateText);
+          if (!yearsText || !rateText || !Number.isInteger(years) ||
+              years < 0 || years > 70 || !Number.isFinite(rate) ||
+              rate < 0 || rate > 100 || !rawStart ||
+              (tiers.length && years <= tiers[tiers.length - 1].years)) {
+            setSettingsSaveState(false,
+              "Confirma os escalões de antiguidade (anos crescentes, data e percentagens).",true);
+            return false;
+          }
+          tiers.push({years,rate});
+        }
+        nextSettings.yearEndBonusEnabled = bonusCheck.checked;
+        nextSettings.yearEndBonusPct = amount;
+        nextSettings.companyStartDate = rawStart;
+        nextSettings.yearEndBonusTiers = tiers;
+      }
+      const colorField = document.getElementById("cfgAccentColor");
+      if (colorField) nextSettings.accentColor = allowedAccentColor(colorField.value);
       if (pendingVacationAuto !== null)
         nextSettings.vacationAuto = pendingVacationAuto;
       nextSettings.hourlyRate = parseFloat(document.getElementById("cfgHourlyRate").value) || 0;
@@ -1855,11 +1913,29 @@
       renderAll();
     }
 
+    const ACCENT_COLORS = ["blue","teal","emerald","purple","orange","rose"];
+    function allowedAccentColor(color) {
+      return ACCENT_COLORS.includes(color) ? color : "blue";
+    }
+    function previewAccentColor() {
+      const field = document.getElementById("cfgAccentColor");
+      const color = allowedAccentColor(field ? field.value : settings.accentColor);
+      document.documentElement.setAttribute("data-wt-accent",color);
+      markSettingsDirty();
+    }
+
+    function validCalendarDate(value) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(value || "")) return false;
+      const [y,m,d] = value.split("-").map(Number);
+      const test = new Date(y,m-1,d,12);
+      return test.getFullYear() === y && test.getMonth() === m-1 && test.getDate() === d;
+    }
     function applyTheme() {
       const light = settings.theme === "light";
       document.documentElement.setAttribute("data-wt-theme", light ? "light" : "dark");
       document.documentElement.classList.toggle("dark", !light);
       document.documentElement.style.colorScheme = light ? "light" : "dark";
+      document.documentElement.setAttribute("data-wt-accent", allowedAccentColor(settings.accentColor));
       const button = document.getElementById("cfgThemeButton");
       if (button) button.textContent = light ? "🌙 Ativar modo escuro" : "☀️ Ativar modo claro";
     }
