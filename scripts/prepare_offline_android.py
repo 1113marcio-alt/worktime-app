@@ -50,8 +50,8 @@ if sw_path.is_file():
     if sw.count(needle) != 1:
         raise SystemExit("Service worker asset anchor missing")
     sw = sw.replace(needle, needle + ", './tailwind.generated.css'")
-    sw = sw.replace("worktime-pro-v2-1-pin-safety-20261126",
-                    "worktime-pro-v2-offline-20261125")
+    sw = sw.replace("worktime-pro-v2-2-backup-settings-pdf-20261126",
+                    "worktime-pro-v2-2-backup-settings-pdf-offline-20261126")
     sw_path.write_text(sw, encoding="utf-8")
 
 print("Offline Android assets prepared: local Tailwind CSS; no runtime CDN needed.")
