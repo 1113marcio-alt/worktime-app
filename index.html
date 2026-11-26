@@ -60,6 +60,34 @@
         background:var(--wt-page-background,#f3f7fd);
       }
     }
+
+    @media screen {
+      .wt-home-cards {display:flex;flex-direction:column;gap:20px}
+      .wt-home-cards > .hidden,.wt-home-user-hidden {display:none!important}
+      .wt-layout-row {display:flex;align-items:center;gap:8px;padding:8px;border:1px solid var(--wt-border);border-radius:12px}
+      .wt-layout-row input {width:20px;height:20px;accent-color:var(--wt-color,#3b82f6)}
+      .wt-layout-row button:disabled {opacity:.35}
+      .wt-layout-row button:focus-visible,.wt-layout-row input:focus-visible {outline:2px solid #6096ff;outline-offset:2px}
+      html[data-wt-style="minimal"] .wt-card,html[data-wt-style="minimal"] .wt-hero {box-shadow:none!important;border-radius:12px}
+      html[data-wt-style="minimal"] .wt-card {background:#152033!important}
+      html[data-wt-theme="light"][data-wt-style="minimal"] .wt-card {background:#fff!important}
+      html[data-wt-style="minimal"] .wt-hero::after {display:none}
+      html[data-wt-theme="dark"][data-wt-style="amoled"] .wt-card,
+      html[data-wt-theme="dark"][data-wt-style="amoled"] .wt-settings-group {background:#0b0b0d!important;box-shadow:none!important;border-color:#35353b!important}
+      html[data-wt-theme="dark"][data-wt-style="amoled"][data-wt-background="original"] body.wt-pro,
+      html[data-wt-theme="dark"][data-wt-style="amoled"][data-wt-background="original"] body.wt-pro::before {background:#000!important}
+      html[data-wt-theme="dark"][data-wt-style="amoled"] .wt-main-header,
+      html[data-wt-theme="dark"][data-wt-style="amoled"] .wt-bottom {background:#080809!important}
+      html[data-wt-theme="light"][data-wt-style="amoled"] .wt-card {background:#fff!important;box-shadow:none!important}
+      html[data-wt-style="glass"] .wt-card {background:linear-gradient(145deg,rgba(42,58,85,.94),rgba(18,29,48,.95))!important;border-color:#617696!important;box-shadow:0 9px 28px rgba(0,0,0,.22)!important;backdrop-filter:blur(12px)}
+      html[data-wt-theme="light"][data-wt-style="glass"] .wt-card {background:linear-gradient(145deg,rgba(255,255,255,.96),rgba(232,240,251,.96))!important;border-color:#b8c9e3!important;box-shadow:0 8px 24px rgba(38,62,102,.12)!important}
+      html[data-wt-text="large"] {font-size:17px}
+      html[data-wt-text="xl"] {font-size:18px}
+      html[data-wt-text="large"] .wt-note,html[data-wt-text="large"] .wt-kicker,html[data-wt-text="large"] .wt-stat-label {font-size:13px}
+      html[data-wt-text="xl"] .wt-note,html[data-wt-text="xl"] .wt-kicker,html[data-wt-text="xl"] .wt-stat-label {font-size:15px}
+      html[data-wt-text="xl"] .wt-stat-value {font-size:21px;white-space:normal;overflow-wrap:anywhere}
+      html[data-wt-text="xl"] .wt-balance-cell strong {white-space:normal;overflow-wrap:anywhere}
+    }
     @media print {
       .no-print { display: none !important; }
       body { background: white !important; color: black !important; }
@@ -110,7 +138,9 @@
         </div>
       </div>
 
-      <div class="wt-hero">
+      <button type="button" onclick="switchTab('config')" class="wt-button w-full no-print">⚙ Personalizar painel nas opções</button>
+      <div id="homeCards" class="wt-home-cards">
+      <div id="homeCardSalary" class="wt-hero">
         <div class="wt-flex"><span class="text-xs text-blue-100 font-semibold">💶 Líquido parcial, sem CIS</span><span class="wt-pill">Estimativa</span></div>
         <p id="homeNet" class="wt-hero-amount money-val">0,00 €</p>
         <p id="homeMonth" class="text-xs text-blue-200">Mês atual</p>
@@ -133,14 +163,14 @@
         <p id="homeAnnualBonusNote" class="wt-note">Apenas bruto registado, sem previsão de salários futuros.</p>
       </div>
 
-      <div class="wt-stat-grid">
+      <div id="homeCardHours" class="wt-stat-grid">
         <div class="wt-card wt-stat"><div class="wt-stat-icon">⏱</div><div class="wt-stat-label">Horas normais</div><div class="wt-stat-value" id="homeNormal">0 h</div></div>
         <div class="wt-card wt-stat"><div class="wt-stat-icon">⚡</div><div class="wt-stat-label">Horas extra</div><div class="wt-stat-value wt-accent-amber" id="homeOvertime">0 h</div></div>
         <div class="wt-card wt-stat"><div class="wt-stat-icon">🗓</div><div class="wt-stat-label">Dias trabalhados</div><div class="wt-stat-value wt-accent-cyan" id="homeWorkdays">0</div></div>
         <div class="wt-card wt-stat"><div class="wt-stat-icon">🌤</div><div class="wt-stat-label">Dias de férias</div><div class="wt-stat-value wt-accent-violet" id="homeVacationDays">0</div></div>
       </div>
 
-      <div class="space-y-3">
+      <div id="homeCardActions" class="space-y-3">
         <div class="wt-flex"><h3 class="wt-section-title">Acesso rápido</h3><span class="wt-kicker">Atalhos</span></div>
         <div class="wt-actions">
           <button type="button" onclick="switchTab('ponto')" class="wt-action"><span class="text-2xl">⏱</span><strong>Marcar ponto</strong><span>Entrada, pausa e saída</span></button>
@@ -150,13 +180,14 @@
         </div>
       </div>
 
-      <div class="wt-card">
+      <div id="homeCardChart" class="wt-card">
         <div class="wt-flex"><h3 class="wt-section-title">Horas trabalhadas</h3><span class="text-xs wt-muted">Semanas do mês</span></div>
         <div id="homeHoursChart" class="wt-chart" aria-label="Gráfico de horas por semana"></div>
       </div>
-      <div class="wt-card">
+      <div id="homeCardRecent" class="wt-card">
         <div class="wt-flex mb-3"><h3 class="wt-section-title">Atividade recente</h3><button type="button" onclick="switchTab('calendario')" class="text-xs text-blue-300 font-bold">Ver calendário</button></div>
         <div id="homeRecent"></div>
+      </div>
       </div>
       <p class="wt-note">Os valores salariais são estimativas. As regras fiscais e de compensação ainda não foram validadas para todos os países.</p>
     </section>
@@ -846,6 +877,21 @@
            <option value="graphite">Grafite</option>
          </select>
          <div id="cfgBackgroundPreview" aria-hidden="true"></div>
+         <label for="cfgVisualStyle" class="block text-xs text-slate-300">Estilo dos cartões</label>
+         <select id="cfgVisualStyle" onchange="previewVisualStyle()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm">
+           <option value="original">Premium original</option><option value="minimal">Minimalista</option><option value="amoled">AMOLED</option><option value="glass">Efeito vidro</option>
+         </select>
+         <label for="cfgTextSize" class="block text-xs text-slate-300">Tamanho do texto</label>
+         <select id="cfgTextSize" onchange="previewVisualStyle()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm">
+           <option value="normal">Normal</option><option value="large">Grande</option><option value="xl">Muito grande</option>
+         </select>
+         <p class="wt-note">AMOLED usa preto no fundo original em modo escuro; as cores de fundo personalizadas mantêm-se.</p>
+         <div class="border-t border-slate-700 pt-3 space-y-2">
+           <h4 class="font-bold text-sm">Personalizar painel inicial</h4>
+           <p class="wt-note">Escolhe os cartões visíveis e altera a ordem. Os atalhos ficam sempre disponíveis.</p>
+           <div id="cfgHomeLayout" class="space-y-2"></div>
+           <button type="button" class="wt-button w-full" onclick="resetHomeLayout()">Repor ordem original</button>
+         </div>
          <p class="text-xs text-slate-400">A cor de fundo é independente da cor principal e adapta-se ao modo claro ou escuro.</p>
          <p class="text-xs text-slate-400">A nova cor é mostrada antes de guardar. O widget nativo mantém a cor e o logótipo WT para continuar reconhecível.</p>
       </div>
@@ -941,6 +987,9 @@
       yearEndBonusPct: 8,
       companyStartDate: "",
       yearEndBonusTiers: [],
+      homeLayout: null,
+      visualStyle: "original",
+      textSize: "normal",
       payrollClosures: {},
       payrollHistory: [],
       payrollBaseline: null,
@@ -1325,6 +1374,12 @@
       if (accent) accent.value = allowedAccentColor(settings.accentColor);
       const background = document.getElementById("cfgBackgroundColor");
       if (background) background.value = allowedBackgroundColor(settings.backgroundColor);
+      const style = document.getElementById("cfgVisualStyle");
+      if(style)style.value=allowedVisualStyle(settings.visualStyle);
+      const textSize=document.getElementById("cfgTextSize");
+      if(textSize)textSize.value=allowedTextSize(settings.textSize);
+      homeLayoutDraft=normalizeHomeLayout(settings.homeLayout);
+      renderHomeLayoutEditor();
       document.getElementById("cfgTaxSystem").value = settings.taxSystem || "luxembourg";
       document.getElementById("cfgManualSocialRate").value = Number(settings.manualSocialRate) || 0;
       document.getElementById("cfgTaxClass").value = settings.taxClass;
@@ -1442,6 +1497,11 @@
       if (colorField) nextSettings.accentColor = allowedAccentColor(colorField.value);
       const backgroundField = document.getElementById("cfgBackgroundColor");
       if (backgroundField) nextSettings.backgroundColor = allowedBackgroundColor(backgroundField.value);
+      const styleField=document.getElementById("cfgVisualStyle");
+      if(styleField)nextSettings.visualStyle=allowedVisualStyle(styleField.value);
+      const textSizeField=document.getElementById("cfgTextSize");
+      if(textSizeField)nextSettings.textSize=allowedTextSize(textSizeField.value);
+      if(document.getElementById("cfgHomeLayout"))nextSettings.homeLayout=normalizeHomeLayout(homeLayoutDraft);
       if (pendingVacationAuto !== null)
         nextSettings.vacationAuto = pendingVacationAuto;
       nextSettings.hourlyRate = parseFloat(document.getElementById("cfgHourlyRate").value) || 0;
@@ -2081,6 +2141,76 @@
       const test = new Date(y,m-1,d,12);
       return test.getFullYear() === y && test.getMonth() === m-1 && test.getDate() === d;
     }
+    const HOME_CARDS=[
+      ["homeCardSalary","Resumo salarial"],["homeForecastPanel","Previsão salarial"],["homeAnnualBonusCard","Prémio anual"],
+      ["homeCardHours","Indicadores de horas"],["homeCardActions","Acesso rápido"],["homeCardChart","Gráfico semanal"],
+      ["homeCardRecent","Atividade recente"],["homeCardStats","Estatísticas mensais e anuais"]
+    ];
+    let homeLayoutDraft=null;
+    function normalizeHomeLayout(raw){
+      const allowed=new Set(HOME_CARDS.map(([id])=>id)), seen=new Set(), result=[];
+      if(Array.isArray(raw))for(const row of raw){
+        if(!row||!allowed.has(row.id)||seen.has(row.id))continue;
+        seen.add(row.id);result.push({id:row.id,visible:row.id==="homeCardActions"||row.visible!==false});
+      }
+      for(const [id] of HOME_CARDS)if(!seen.has(id))result.push({id,visible:true});
+      return result;
+    }
+    function moveHomeLayout(raw,id,delta){
+      const rows=normalizeHomeLayout(raw), index=rows.findIndex(row=>row.id===id), target=index+delta;
+      if(index>=0&&Number.isInteger(delta)&&target>=0&&target<rows.length){
+        [rows[index],rows[target]]=[rows[target],rows[index]];
+      }
+      return rows;
+    }
+    function renderHomeLayoutEditor(){
+      const root=document.getElementById("cfgHomeLayout");
+      if(!root)return;
+      const rows=normalizeHomeLayout(homeLayoutDraft);
+      const labels=Object.fromEntries(HOME_CARDS);
+      root.replaceChildren();
+      rows.forEach((row,i)=>{
+        const line=document.createElement("div");line.className="wt-layout-row";
+        const label=document.createElement("label");label.className="flex items-center gap-2 flex-1 text-sm";
+        const checkbox=document.createElement("input");checkbox.type="checkbox";checkbox.checked=row.visible;
+        checkbox.disabled=row.id==="homeCardActions";
+        checkbox.addEventListener("change",()=>{
+          homeLayoutDraft=normalizeHomeLayout(homeLayoutDraft).map(item=>item.id===row.id?{...item,visible:checkbox.checked}:item);
+          markSettingsDirty();
+        });
+        const name=document.createElement("span");name.textContent=labels[row.id];label.append(checkbox,name);line.append(label);
+        for(const [delta,symbol,description] of [[-1,"↑","Subir"],[1,"↓","Descer"]]){
+          const button=document.createElement("button");button.type="button";button.className="wt-cal-nav";
+          button.textContent=symbol;button.setAttribute("aria-label",description+" "+labels[row.id]);
+          button.disabled=delta<0?i===0:i===rows.length-1;
+          button.addEventListener("click",()=>{homeLayoutDraft=moveHomeLayout(homeLayoutDraft,row.id,delta);markSettingsDirty();renderHomeLayoutEditor();});
+          line.append(button);
+        }
+        root.append(line);
+      });
+      if(window.WTLocale)window.WTLocale.apply(settings.lang);
+    }
+    function resetHomeLayout(){homeLayoutDraft=normalizeHomeLayout(null);markSettingsDirty();renderHomeLayoutEditor();}
+    function renderHomeLayout(){
+      const root=document.getElementById("homeCards");if(!root)return;
+      const rows=normalizeHomeLayout(settings.homeLayout);
+      for(const [i,row] of rows.entries()){
+        const el=document.getElementById(row.id);if(!el||el.parentElement!==root)continue;
+        el.classList.toggle("wt-home-user-hidden",!row.visible);
+        if(root.children[i]!==el)root.insertBefore(el,root.children[i]||null);
+      }
+    }
+    function allowedVisualStyle(value){return ["original","minimal","amoled","glass"].includes(value)?value:"original";}
+    function allowedTextSize(value){return ["normal","large","xl"].includes(value)?value:"normal";}
+    function applyVisualStyle(style,size){
+      document.documentElement.setAttribute("data-wt-style",allowedVisualStyle(style));
+      document.documentElement.setAttribute("data-wt-text",allowedTextSize(size));
+    }
+    function previewVisualStyle(){
+      const style=document.getElementById("cfgVisualStyle"), size=document.getElementById("cfgTextSize");
+      applyVisualStyle(style?style.value:settings.visualStyle,size?size.value:settings.textSize);
+      markSettingsDirty();
+    }
     function applyTheme() {
       const light = settings.theme === "light";
       document.documentElement.setAttribute("data-wt-theme", light ? "light" : "dark");
@@ -2088,6 +2218,7 @@
       document.documentElement.style.colorScheme = light ? "light" : "dark";
       document.documentElement.setAttribute("data-wt-accent", allowedAccentColor(settings.accentColor));
       document.documentElement.setAttribute("data-wt-background", allowedBackgroundColor(settings.backgroundColor));
+      applyVisualStyle(settings.visualStyle,settings.textSize);
       const button = document.getElementById("cfgThemeButton");
       if (button) button.textContent = light ? "🌙 Ativar modo escuro" : "☀️ Ativar modo claro";
     }
@@ -2103,6 +2234,8 @@
           const background = document.getElementById("cfgBackgroundColor");
           if (accent) document.documentElement.setAttribute("data-wt-accent",allowedAccentColor(accent.value));
           if (background) document.documentElement.setAttribute("data-wt-background",allowedBackgroundColor(background.value));
+          const style=document.getElementById("cfgVisualStyle"), size=document.getElementById("cfgTextSize");
+          applyVisualStyle(style?style.value:settings.visualStyle,size?size.value:settings.textSize);
         }
         applyTranslations();
       } catch (_) {
@@ -2545,6 +2678,7 @@
 
       renderForecast(monthPrefix);
       renderPayrollClosure(monthPrefix,d);
+      renderHomeLayout();
       // Resumo Rápido
       document.getElementById("quickTotalHours").textContent = (d.normalH + d.extraH) + "h";
       document.getElementById("quickExtraHours").textContent = "+" + d.extraH + "h";
