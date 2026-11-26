@@ -4,7 +4,7 @@ Base preservada: WorkTime Pro 2, commit 4f8f8e8897e8ea0685dd94a23425c7c327bb2f58
 ## Fase 1 — Remuneração
 - [x] Histórico de taxas com data de início (inclui remuneração base, bónus horário, extra, noite e panier). Taxas anteriores à primeira data são uma estimativa, não dados inventados.
 - [x] Previsão do mês em curso, baseada no horário semanal e nos registos já existentes; não cria registos nem projeta novas horas extraordinárias.
-- [ ] Fecho/reabertura mensal: snapshot com bruto, líquido estimado, valores reais e identificação de alterações posteriores; preservar todos os registos. Definir e testar edição/eliminação/preenchimento de dias fechados, rascunhos e backups antes de concluir.
+- [x] Fecho/reabertura de meses terminados: snapshot de totais e parâmetros fiscais estimados, líquido real opcional, diferença no relatório PDF, bloqueio de edição/eliminação/preenchimento e aplicação de rascunhos, compatibilidade de backup. Não fecha com turnos pendentes. A taxa do prémio anual permanece configurável; a base usa bruto congelado dos meses fechados. Validação específica executada; confirmação integral no Actions pendente.
 - [ ] Confirmar testes integrais no Actions, APK e teste visual num Android. A fiscalidade mantém o modelo estimativo anterior; histórico fiscal e do contrato anual são melhorias separadas.
 
 ## Fase 2 — Interface e estatísticas
