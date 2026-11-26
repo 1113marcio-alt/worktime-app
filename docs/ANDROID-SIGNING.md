@@ -68,3 +68,17 @@ Compara a impressão digital SHA-256 de duas versões sucessivas. Devem ser igua
 O identificador Android da Preview mantém-se lu.marcio.worktimepro.preview. O identificador da app original lu.marcio.worktimepro e a branch main não são alterados por este processo.
 
 O backup JSON deverá incluir settings, entries, activeShift e shiftDrafts. Guarda-o fora da aplicação e confirma que podes abrir o ficheiro antes de qualquer reinstalação.
+
+## WorkTime Pro 3 Preview — canal de atualização
+
+A branch `worktime-pro-2` mantém o pacote Android `lu.marcio.worktimepro.preview`. A partir da fase 5, o código de versão é 100000 + GITHUB_RUN_NUMBER e o nome é 3.0-preview.N, tanto em DEBUG como na versão assinada. Os nomes de artefactos Actions antigos são mantidos por compatibilidade.
+
+Por defeito, as compilações apenas disponibilizam o artefacto Actions; não publicam releases. Depois de confirmar os testes, a assinatura permanente e o funcionamento no teu Android:
+
+1. Abre Actions → Build Android APK → Run workflow.
+2. Seleciona a branch worktime-pro-2 e ativa a opção `publish_preview` (publicação pública opcional no repositório).
+3. A publicação só ocorre se a compilação terminar com sucesso e existir o APK assinado, verificado por apksigner. É publicada como pré-release com tag `worktime-preview-v3-N` e o ficheiro `WorkTime-Pro-3-PREVIEW-SIGNED.apk`.
+4. Na app, Opções → Segurança → Atualizações da aplicação → Procurar atualizações. A consulta é manual e usa os metadados públicos das últimas 30 releases GitHub. Não envia registos, credenciais ou recibos. Se encontrar uma versão superior do canal Preview, abre a página oficial no navegador para descarregar.
+5. Guarda um backup externo, confirma a assinatura e instala pelo Android. Não desinstales para contornar um conflito de assinatura. Se a instalação atual for DEBUG, a primeira migração para uma chave permanente pode exigir reinstalação e recuperação do backup.
+
+A app não instala automaticamente nem contorna as verificações do Android. O SHA-256 da release, quando publicado, é metadado indicativo; não é uma verificação efetuada ao ficheiro descarregado pela app. Não foram publicados APKs nem configuradas chaves pela implementação desta funcionalidade.
