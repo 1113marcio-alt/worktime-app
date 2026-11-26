@@ -32,7 +32,7 @@ jobs:
           npm init -y
           npm install @capacitor/core@^8 @capacitor/cli@^8 @capacitor/android@^8 @capacitor/filesystem@^8 @capacitor/share@^8 tailwindcss@3.4.17
           mkdir -p www
-          cp index.html manifest.json sw.js pro-ui.css pro-ui.js country-rules.js wt-i18n.js wt-widget.js wt-icon.svg www/
+          cp index.html manifest.json sw.js pro-ui.css pro-ui.js country-rules.js wt-i18n.js wt-widget.js wt-icon.svg wt-pin.js www/
           # Gerar CSS offline e remover a dependência do CDN na WebView.
           ./node_modules/.bin/tailwindcss -c tailwind.config.cjs -i tailwind-input.css -o www/tailwind.generated.css --minify
           python3 scripts/prepare_offline_android.py
