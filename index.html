@@ -820,7 +820,7 @@
     function storedPinVerifier() {
       try {
         const raw = localStorage.getItem("wt_pin_verifier");
-        return raw === null ? null : JSON.parse(raw);
+        return raw === null ? null : (JSON.parse(raw) || {invalid:true});
       } catch (_) { return {invalid:true}; } // Fail closed if storage is damaged.
     }
 
