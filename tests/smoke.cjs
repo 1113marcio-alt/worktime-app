@@ -737,7 +737,7 @@ test("tempo enviado ao widget exclui pausa aberta e pausa concluída", async() =
 function manualDayFixture(app, date="2026-11-11") {
   const elements={};
   const ids=["entryDate","entryType","entryUseTimes","entryStartTime","entryEndTime",
-    "entryBreakMinutes","entryNextDay","entryNormal","entryExtra","entryNight",
+    "entryBreakMinutes","entryBreakScheduleHint","entryUseScheduledBreak","entryNextDay","entryNormal","entryExtra","entryNight",
     "entryIncludeBonus","entryNote","currentMonthPicker","manualClockPanel",
     "manualClockFields","manualTotalHint","entrySaveButton","entrySaveText",
     "entrySaveStatus","entryTimePreview","manualEntryCard",
@@ -1242,4 +1242,102 @@ test("limpar PIN guardado remove verificador após guardar a configuração",asy
   assert.equal(app.values.has("wt_pin_verifier"),false);
   assert.equal(app.evaluate("pinIsEnabled()"),false);
   assert.match(status.textContent,/desativado/i);
+});
+
+
+test("um novo registo assume automaticamente os 30 min de pausa do dia configurado", () => {
+  const schedule={
+    1:{enabled:true,start:"06:00",end:"14:30",breakMinutes:30},
+    2:{enabled:true,start:"06:00",end:"14:30",breakMinutes:30},
+    3:{enabled:true,start:"06:00",end:"14:30",breakMinutes:30},
+    4:{enabled:true,start:"06:00",end:"14:30",breakMinutes:30},
+    5:{enabled:true,start:"06:00",end:"14:30",breakMinutes:30},
+    6:{enabled:false,start:"08:00",end:"16:30",breakMinutes:30},
+    0:{enabled:false,start:"08:00",end:"16:30",breakMinutes:30}
+  };
+  const app=makeApp({weeklySchedule:schedule});
+  const e=manualDayFixture(app,"2026-11-25");
+  e.entryStartTime.value="06:00";e.entryEndTime.value="14:30";
+  app.ctx.loadManualEntryForDate("2026-11-25");
+  assert.equal(Number(e.entryBreakMinutes.value),30);
+  assert.match(e.entryBreakScheduleHint.textContent,/30 min aplicada automaticamente/);
+  assert.equal(e.entryUseScheduledBreak.disabled,false);
+  assert.equal(Number(e.entryNormal.value),8);
+  assert.equal(Number(e.entryExtra.value),0);
+  assert.equal(app.ctx.saveEntry(),true);
+  const saved=JSON.parse(app.values.get("wt_entries"))["2026-11-25"];
+  assert.equal(saved.manualTime.breakMinutes,30);
+  assert.equal(saved.manualTime.workedMinutes,480);
+  assert.equal(saved.normal,8);assert.equal(saved.extra,0);
+});
+
+test("06:00 às 16:30 desconta os 30 min programados e conta 2h extra",()=>{
+  const app=makeApp({weeklySchedule:{
+    3:{enabled:true,start:"06:00",end:"14:30",breakMinutes:30}
+  }});
+  const e=manualDayFixture(app,"2026-11-25");
+  e.entryStartTime.value="06:00";e.entryEndTime.value="16:30";
+  app.ctx.loadManualEntryForDate("2026-11-25");
+  assert.equal(e.entryBreakMinutes.value,30);
+  assert.equal(Number(e.entryNormal.value),8);
+  assert.equal(Number(e.entryExtra.value),2);
+  assert.match(e.entryTimePreview.textContent,/10h 00min/);
+  assert.equal(app.ctx.saveEntry(),true);
+  const row=JSON.parse(app.values.get("wt_entries"))["2026-11-25"];
+  assert.equal(row.manualTime.workedMinutes,600);
+  assert.equal(row.normal,8);assert.equal(row.extra,2);
+});
+
+test("uma pausa antiga de zero minutos mantém-se até o utilizador aplicar e guardar",()=>{
+  const old={"2026-11-25":{date:"2026-11-25",type:"work",
+    normal:8,extra:2.5,night:0,includeBonus:true,note:"Hora registada",
+    manualTime:{start:"2026-11-25T06:00:00.000Z",
+      end:"2026-11-25T16:30:00.000Z",startTime:"06:00",endTime:"16:30",
+      breakMinutes:0,nextDay:false,workedMinutes:630}
+  }};
+  const app=makeApp({weeklySchedule:{
+    3:{enabled:true,start:"06:00",end:"14:30",breakMinutes:30}
+  }},old);
+  const e=manualDayFixture(app,"2026-11-25");
+  app.ctx.loadManualEntryForDate("2026-11-25");
+  assert.equal(Number(e.entryBreakMinutes.value),0,"não corrigir silenciosamente 0 histórico");
+  assert.equal(e.entrySaveButton.disabled,true,"registo não alterado ainda");
+  assert.match(e.entryBreakScheduleHint.textContent,/horário semanal indica 30 min/);
+  assert.equal(app.ctx.applyScheduledBreak(),true);
+  assert.equal(Number(e.entryBreakMinutes.value),30);
+  assert.equal(Number(e.entryNormal.value),8);
+  assert.equal(Number(e.entryExtra.value),2);
+  assert.equal(e.entrySaveButton.disabled,false);
+  assert.equal(JSON.parse(app.values.get("wt_entries"))["2026-11-25"].extra,2.5,
+    "o registo antigo não é regravado automaticamente");
+  assert.equal(app.ctx.saveEntry(),true);
+  const saved=JSON.parse(app.values.get("wt_entries"))["2026-11-25"];
+  assert.equal(saved.manualTime.breakMinutes,30);
+  assert.equal(saved.extra,2);
+  assert.equal(e.entrySaveButton.disabled,true);
+});
+
+test("folgas sem horário ativo não recebem pausas predefinidas",()=>{
+  const app=makeApp({weeklySchedule:{
+    0:{enabled:false,start:"06:00",end:"14:30",breakMinutes:30}
+  }});
+  const e=manualDayFixture(app,"2026-11-22");
+  app.ctx.loadManualEntryForDate("2026-11-22");
+  assert.equal(e.entryBreakMinutes.value,0);
+  assert.equal(e.entryUseScheduledBreak.disabled,true);
+  assert.equal(app.ctx.applyScheduledBreak(),false);
+  assert.match(e.entryBreakScheduleHint.textContent,/Sem pausa predefinida/);
+});
+
+test("alterar a data utiliza a pausa específica do dia escolhido",()=>{
+  const app=makeApp({weeklySchedule:{
+    1:{enabled:true,start:"06:00",end:"14:30",breakMinutes:45},
+    3:{enabled:true,start:"06:00",end:"14:30",breakMinutes:30}
+  }});
+  const e=manualDayFixture(app,"2026-11-25");
+  app.ctx.loadManualEntryForDate("2026-11-25");
+  assert.equal(e.entryBreakMinutes.value,30);
+  app.ctx.loadManualEntryForDate("2026-11-23");
+  assert.equal(e.entryBreakMinutes.value,45);
+  assert.match(e.entryBreakScheduleHint.textContent,/45 min/);
 });
