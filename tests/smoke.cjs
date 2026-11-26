@@ -2424,3 +2424,11 @@ test("v3: privacidade bloqueia PDF antigo e CSV; importação inválida ou cance
   assert.equal(JSON.stringify(app.ctx.snapshotAllData()),before);
   assert.equal(app.ctx.validCalendarDate("2026-02-30"),false);
 });
+
+test("v3: principais controlos novos têm traduções nos cinco idiomas adicionais",()=>{
+  const ctx=vm.createContext({window:{}});
+  vm.runInContext(fs.readFileSync("wt-i18n.js","utf8"),ctx);
+  for(const lang of ["fr","en","de","es","lu"])for(const key of ["Histórico salarial","Fecho mensal de salários","Lembretes pessoais de entrada, pausa e saída","Backup encriptado e automático","Digitalizar recibo salarial","Relatórios profissionais PDF / Excel","Procurar atualizações"]){
+    assert.notEqual(ctx.window.WTLocale.tr(key,lang),key);
+  }
+});
