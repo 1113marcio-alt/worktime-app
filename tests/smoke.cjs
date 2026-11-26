@@ -293,17 +293,34 @@ test("mudança de empregador atualiza férias automáticas e mantém valores man
   assert.equal(app.evaluate("settings.annualVacation"),29);
 });
 
-test("o PIN é guardado separadamente de países e outros campos", () => {
+function setupPinSecurity(app) {
+  app.ctx.window.crypto=require("node:crypto").webcrypto;
+  app.ctx.window.btoa=btoa;
+  app.ctx.window.atob=atob;
+  app.ctx.TextEncoder=TextEncoder;
+  vm.runInContext(fs.readFileSync("wt-pin.js","utf8"),app.ctx);
+}
+
+test("PIN novo usa verificador criptográfico e não é guardado em texto", async() => {
   const app=makeApp({}, {});
+  setupPinSecurity(app);
   const status={textContent:"",className:""};
   const pin={value:"1234"};
   app.ctx.document.getElementById=id=>id==="cfgSecurityPin"?pin:id==="pinSaveStatus"?status:null;
-  app.ctx.savePin();
-  assert.equal(JSON.parse(app.values.get("wt_settings")).securityPin,"1234");
+  assert.equal(await app.ctx.savePin(),true);
+  const settings=JSON.parse(app.values.get("wt_settings"));
+  const verifier=JSON.parse(app.values.get("wt_pin_verifier"));
+  assert.equal(settings.securityPin,"");
+  assert.ok(!app.values.get("wt_settings").includes("1234"));
+  assert.equal(verifier.algorithm,"PBKDF2-SHA256");
+  assert.ok(verifier.iterations >= 100000);
+  assert.equal(await app.ctx.window.WTPin.verify("1234",verifier),true);
+  assert.equal(await app.ctx.window.WTPin.verify("2345",verifier),false);
   assert.ok(status.textContent.includes("guardado"));
+  assert.equal(pin.value,"");
   pin.value="12";
-  app.ctx.savePin();
-  assert.equal(JSON.parse(app.values.get("wt_settings")).securityPin,"1234");
+  assert.equal(await app.ctx.savePin(),false);
+  assert.equal(JSON.parse(app.values.get("wt_pin_verifier")).hash,verifier.hash);
 });
 
 test("a tradução de francês altera labels no dicionário e tem fallback seguro", () => {
