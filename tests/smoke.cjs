@@ -2432,3 +2432,33 @@ test("v3: principais controlos novos têm traduções nos cinco idiomas adiciona
     assert.notEqual(ctx.window.WTLocale.tr(key,lang),key);
   }
 });
+
+test("v3: recuperação anterior à importação encriptada mantém proteção e exige palavra-passe",async()=>{
+  const date="2026-11-25",original={[date]:{date,type:"work",normal:8,extra:0,night:0,note:"Dados originais privados"}};
+  const app=makeApp({hourlyRate:25},original);setupPinSecurity(app);app.ctx.TextDecoder=TextDecoder;
+  const crypto=app.ctx.window.WTBackupCrypto,password="test-passphrase-1234";
+  const incoming=await crypto.encrypt({settings:{hourlyRate:40},entries:{}},password);
+  assert.equal(await app.ctx.restoreEncryptedEnvelope(incoming,password),true);
+  const recovery=JSON.parse(app.values.get("wt_pre_import_backup"));
+  assert.equal(crypto.isEncrypted(recovery),true);
+  assert.ok(!JSON.stringify(recovery).includes("Dados originais privados"));
+  assert.equal(await app.ctx.restoreEncryptedPreviousState(recovery,"wrong-password-123"),false);
+  assert.equal(app.evaluate("settings.hourlyRate"),40);
+  assert.equal(await app.ctx.restoreEncryptedPreviousState(recovery,password),true);
+  assert.equal(app.evaluate("settings.hourlyRate"),25);
+  assert.deepEqual(JSON.parse(app.values.get("wt_entries")),original);
+});
+test("v3: restauro não substitui registos se mudarem durante a encriptação",async()=>{
+  const app=makeApp(),date="2026-11-26";
+  app.ctx.window.WTBackupCrypto={
+    isEncrypted:()=>true,
+    decrypt:async()=>({settings:{hourlyRate:99},entries:{}}),
+    encrypt:async()=>{
+      app.evaluate('entries["2026-11-26"]={date:"2026-11-26",type:"work",normal:8,extra:0,night:0};');
+      return {backupType:"worktime-encrypted-backup"};
+    }
+  };
+  assert.equal(await app.ctx.restoreEncryptedEnvelope({},"test-passphrase-1234"),false);
+  assert.equal(app.evaluate('entries["2026-11-26"].normal'),8);
+  assert.equal(app.values.get("wt_pre_import_backup"),undefined);
+});
