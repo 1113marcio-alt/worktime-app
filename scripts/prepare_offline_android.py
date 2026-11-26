@@ -46,11 +46,11 @@ html_path.write_text(html, encoding="utf-8")
 # generated Android assets; never cache an absent file on the hosted PWA.
 if sw_path.is_file():
     sw = sw_path.read_text(encoding="utf-8")
-    needle = "'./wt-icon.svg'"
+    needle = "'./wt-pin.js'"
     if sw.count(needle) != 1:
         raise SystemExit("Service worker asset anchor missing")
     sw = sw.replace(needle, needle + ", './tailwind.generated.css'")
-    sw = sw.replace("worktime-pro-v2-compact-wt-20261118",
+    sw = sw.replace("worktime-pro-v2-1-pin-safety-20261126",
                     "worktime-pro-v2-offline-20261125")
     sw_path.write_text(sw, encoding="utf-8")
 
