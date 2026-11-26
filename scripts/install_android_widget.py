@@ -36,6 +36,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(WorkTimeWidgetPlugin.class);
         registerPlugin(WorkTimePrintPlugin.class);
         registerPlugin(WorkTimeBiometricPlugin.class);
+        registerPlugin(WorkTimeReminderPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }
@@ -79,5 +80,7 @@ if not any(el.get(name_key) == ".WorkTimeWidgetProvider" for el in app.findall("
         name_key: "android.appwidget.provider",
         f"{{{NS}}}resource": "@xml/worktime_widget_info"
     })
+if not any(el.get(name_key) == ".WorkTimeReminderReceiver" for el in app.findall("receiver")):
+    ET.SubElement(app, "receiver", {name_key: ".WorkTimeReminderReceiver", f"{{{NS}}}exported": "false"})
 tree.write(manifest_file, encoding="utf-8", xml_declaration=True)
 print("Native WorkTime widget added to Preview APK; original app remains unchanged.")
