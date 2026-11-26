@@ -8,9 +8,9 @@ Base preservada: WorkTime Pro 2, commit 4f8f8e8897e8ea0685dd94a23425c7c327bb2f58
 - [ ] Confirmar testes integrais no Actions, APK e teste visual num Android. A fiscalidade mantém o modelo estimativo anterior; histórico fiscal e do contrato anual são melhorias separadas.
 
 ## Fase 2 — Interface e estatísticas
-- [ ] Painel inicial personalizável: ordenar e mostrar/ocultar cartões sem remover atalhos existentes.
-- [ ] Estatísticas mensais e anuais: distinguir valores efetivos, simulados, meses incompletos e dias sem registos.
-- [ ] Estilos de aparência: manter as cores de fundo, cores principais e temas existentes; acrescentar opções acessíveis e testar contrastes e navegação.
+- [x] Painel inicial personalizável: 8 cartões ordenáveis, mostrar/ocultar, atalhos obrigatoriamente visíveis, preferências e backup.
+- [x] Estatísticas mensais e anuais: totais e tabela de 12 meses, estimativas e valores reais dos fechos separados, registos futuros excluídos, dias previstos sem registo identificados usando horário atual.
+- [x] Estilos de aparência: Premium original, Minimalista, AMOLED, Efeito vidro e 3 tamanhos de texto, cores/temas preservados e preferências no backup. Testes específicos de estado e persistência executados; contraste visual e navegação no Android pendentes.
 
 ## Fase 3 — Gestão de trabalho
 - [ ] Calendário avançado: seleção de intervalos, pré-visualização, confirmação, não substituir registos sem consentimento, férias transitadas por ano.
