@@ -241,6 +241,23 @@
         <p id="selectedDayDetail" class="wt-note mt-2 mb-4">Sem registo</p>
         <button type="button" onclick="ProUI.openSelectedDay()" class="wt-button primary w-full">✏️ Abrir / registar este dia</button>
       </div>
+      <div class="wt-card space-y-3">
+        <h3 class="wt-section-title">Registar vários dias</h3>
+        <div class="grid grid-cols-2 gap-2">
+          <label class="text-xs">De<input id="rangeStart" type="date" onchange="previewCalendarRange()" class="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl p-2" /></label>
+          <label class="text-xs">Até<input id="rangeEnd" type="date" onchange="previewCalendarRange()" class="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl p-2" /></label>
+        </div>
+        <label class="block text-xs">Tipo de registo
+          <select id="rangeType" onchange="previewCalendarRange()" class="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm">
+            <option value="vacation">Férias</option><option value="sick">Baixa</option><option value="off">Folga</option>
+          </select>
+        </label>
+        <label class="flex gap-2 items-center text-sm"><input id="rangeWorkdays" type="checkbox" checked onchange="previewCalendarRange()" /> Apenas dias previstos de trabalho</label>
+        <p class="wt-note" id="rangePreview" aria-live="polite">Escolhe o intervalo.</p>
+        <div id="rangeDates" class="text-xs max-h-48 overflow-y-auto"></div>
+        <button type="button" id="rangeApply" disabled onclick="applyCalendarRange()" class="wt-button primary w-full">Confirmar registos</button>
+        <p class="wt-note">Os registos existentes, meses fechados e dias com turnos pendentes nunca são substituídos. Os feriados conhecidos não são descontados como férias. Confirma o horário e os feriados locais.</p>
+      </div>
       <p class="wt-note">Os feriados nacionais são apresentados para LU, PT e FR. Feriados locais e situações especiais exigem confirmação.</p>
     </section>
 
@@ -605,6 +622,13 @@
           </div>
         </div>
 
+        <div class="border border-slate-700 rounded-xl p-3 space-y-2">
+          <label for="vacCarryDays" class="block text-xs">Férias transitadas para <strong id="vacCarryYear"></strong> (dias confirmados)</label>
+          <input id="vacCarryDays" type="number" min="0" max="365" step="1" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2" />
+          <button type="button" onclick="saveVacationCarry()" class="wt-button w-full">Guardar férias transitadas</button>
+          <p class="wt-note" id="vacCarryStatus"></p>
+          <p class="wt-note">Indica apenas os dias confirmados pela empresa para este ano. Não são transferidos automaticamente nem incluídos como compensações de feriados.</p>
+        </div>
         <div class="bg-blue-950/40 border border-blue-800/50 p-3 rounded-xl text-xs space-y-1">
           <p class="font-bold text-blue-300">💡 Estimativa do valor do próximo dia de férias</p>
           <label class="block text-slate-300">Data de referência
@@ -1016,6 +1040,7 @@
       homeLayout: null,
       visualStyle: "original",
       textSize: "normal",
+      vacationCarryByYear: {},
       payrollClosures: {},
       payrollHistory: [],
       payrollBaseline: null,
@@ -2092,6 +2117,99 @@
       return true;
     }
 
+    function pendingCalendarDates(){
+      try{
+        const active=JSON.parse(localStorage.getItem("wt_active_shift")||"null");
+        const drafts=JSON.parse(localStorage.getItem("wt_shift_drafts")||"[]");
+        if(!Array.isArray(drafts))return null;
+        const result=new Set();
+        for(const shift of [active,...drafts].filter(Boolean)){
+          const date=new Date(shift.start);
+          const iso=validCalendarDate(shift.date)?shift.date:Number.isFinite(date.getTime())?
+            date.getFullYear()+"-"+String(date.getMonth()+1).padStart(2,"0")+"-"+String(date.getDate()).padStart(2,"0"):"";
+          if(!validCalendarDate(iso))return null;
+          result.add(iso);
+        }
+        return result;
+      }catch(_){return null;}
+    }
+    function calendarRangePlan(start,end,type,workdaysOnly=true){
+      if(!validCalendarDate(start)||!validCalendarDate(end)||start>end||!["vacation","sick","off"].includes(type))return null;
+      const dates=[], holidays=new Map(), pending=pendingCalendarDates();
+      if(!pending)return null;
+      let skipped=0,closed=0,existing=0,holiday=0,turns=0,nonwork=0,unverified=false;
+      for(let d=new Date(start+"T12:00:00"),i=0;;d.setDate(d.getDate()+1),i++){
+        const iso=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+        if(iso>end)break;
+        if(i>=366)return null;
+        const year=d.getFullYear();
+        if(!holidays.has(year)){
+          const info=window.WTCountryRules.holidays(year,settings.holidayCountry||"LU",settings.calendarRegion);
+          holidays.set(year,{dates:new Set(info.items.map(x=>x.date)),verified:info.verified===true});
+        }
+        const info=holidays.get(year);if(!info.verified)unverified=true;
+        const hours=scheduledLeaveHours(iso);
+        let reason="";
+        if(isPayrollMonthClosed(iso.slice(0,7))){reason="Mês fechado";closed++;}
+        else if(Object.prototype.hasOwnProperty.call(entries,iso)){reason="Registo existente";existing++;}
+        else if(pending.has(iso)){reason="Turno pendente";turns++;}
+        else if(type==="vacation"&&info.dates.has(iso)){reason="Feriado";holiday++;}
+        else if((workdaysOnly||type==="vacation")&&hours<=0){reason="Sem horário de trabalho";nonwork++;}
+        if(reason){skipped++;dates.push({date:iso,reason,entry:null});continue;}
+        const entry={date:iso,type,normal:type==="sick"?hours:0,extra:0,night:0,includeBonus:false,note:"Registo por intervalo"};
+        if(type==="vacation"){
+          const sample=threeMonthWorkAverage(iso);
+          Object.assign(entry,{paidLeaveHours:hours,vacSupplementPerDay:Math.round(sample.avgPerDay*100)/100,
+            vacSupplementHoursBase:hours,vacSupplementSampleDays:sample.days,vacSupplementSampleFrom:sample.from,vacSupplementEstimated:true});
+        }
+        dates.push({date:iso,reason:"",entry});
+      }
+      return {dates,count:dates.length-skipped,skipped,closed,existing,holiday,turns,nonwork,unverified};
+    }
+    function rangeInputs(){
+      return [document.getElementById("rangeStart").value,document.getElementById("rangeEnd").value,
+        document.getElementById("rangeType").value,document.getElementById("rangeWorkdays").checked];
+    }
+    function previewCalendarRange(){
+      const status=document.getElementById("rangePreview");if(!status)return;
+      const plan=calendarRangePlan(...rangeInputs()), list=document.getElementById("rangeDates"), button=document.getElementById("rangeApply");
+      list.replaceChildren();button.disabled=!plan||!plan.count;
+      if(!plan){status.textContent="Escolhe datas válidas (máximo 366 dias).";return;}
+      status.textContent=plan.count+" a criar • "+plan.skipped+" ignorado(s). "+(plan.unverified?"Calendário de feriados não verificado.":"");
+      for(const row of plan.dates){const p=document.createElement("p");p.textContent=row.date+" — "+(row.reason||"Novo registo");list.append(p);}
+    }
+    function commitCalendarRange(start,end,type,workdaysOnly=true){
+      const plan=calendarRangePlan(start,end,type,workdaysOnly);
+      if(!plan||!plan.count)return false;
+      const next={...entries};for(const row of plan.dates)if(row.entry)next[row.date]=row.entry;
+      try{localStorage.setItem("wt_entries",JSON.stringify(next));}catch(_){return false;}
+      entries=next;return plan;
+    }
+    function applyCalendarRange(){
+      const args=rangeInputs(),plan=calendarRangePlan(...args);
+      if(!plan||!plan.count)return;
+      if(!confirm("Criar "+plan.count+" registo(s)? "+plan.skipped+" dia(s) serão ignorados. Nenhum registo existente será substituído."))return;
+      const result=commitCalendarRange(...args);
+      if(!result){alert("Não foi possível guardar. Os registos anteriores foram mantidos.");return;}
+      renderAll();previewCalendarRange();alert(result.count+" registo(s) guardado(s).");
+    }
+    function vacationCarry(year,source=settings){
+      const value=isPlainRecord(source.vacationCarryByYear)?source.vacationCarryByYear[String(year)]:undefined;
+      return Number.isInteger(value)&&value>=0&&value<=365?value:0;
+    }
+    function setVacationCarry(year,days){
+      if(!/^\d{4}$/.test(String(year))||!Number.isInteger(days)||days<0||days>365)return false;
+      const next={...settings,vacationCarryByYear:{...(isPlainRecord(settings.vacationCarryByYear)?settings.vacationCarryByYear:{}),[year]:days}};
+      try{localStorage.setItem("wt_settings",JSON.stringify(next));}catch(_){return false;}
+      settings=next;return true;
+    }
+    function saveVacationCarry(){
+      const year=document.getElementById("currentMonthPicker").value.slice(0,4);
+      const field=document.getElementById("vacCarryDays");
+      if(!field.value.trim()||!setVacationCarry(year,Number(field.value))){alert("Indica um número inteiro entre 0 e 365 dias.");return;}
+      renderAll();document.getElementById("vacCarryStatus").textContent="Férias transitadas guardadas.";
+    }
+
     function fillStandardWeek() {
       const selected = document.getElementById("entryDate").value;
       if (!/^\d{4}-\d{2}-\d{2}$/.test(selected)) return;
@@ -2784,6 +2902,7 @@
       renderPayrollClosure(monthPrefix,d);
       renderHomeLayout();
       renderStatistics(monthPrefix);
+      previewCalendarRange();
       // Resumo Rápido
       document.getElementById("quickTotalHours").textContent = (d.normalH + d.extraH) + "h";
       document.getElementById("quickExtraHours").textContent = "+" + d.extraH + "h";
@@ -2882,9 +3001,12 @@
       document.getElementById("holidayScopeNotice").textContent =
         calendarCountry==="LU" ? "Compensações potenciais apenas; dependem do dia normal de trabalho e do descanso concedido. Não somadas automaticamente às férias."
         : "Feriados nacionais. Regras regionais/municipais e compensatórias não incluídas automaticamente.";
-      document.getElementById("vacTotalAllowed").textContent = settings.annualVacation + " d";
+      const carry=vacationCarry(year);
+      document.getElementById("vacTotalAllowed").textContent = (Number(settings.annualVacation)+carry) + " d";
+      const carryField=document.getElementById("vacCarryDays");
+      if(carryField){carryField.value=String(carry);document.getElementById("vacCarryYear").textContent=String(year);document.getElementById("vacCarryStatus").textContent="Direito anual "+settings.annualVacation+" + transitados "+carry+" − férias registadas "+allVacUsed+"."; }
       document.getElementById("vacCompensatory").textContent = "+" + compDays + " pot.";
-      document.getElementById("vacRemaining").textContent = (settings.annualVacation - allVacUsed) + " d";
+      document.getElementById("vacRemaining").textContent = (Number(settings.annualVacation) + carry - allVacUsed) + " d";
       const referenceInput = document.getElementById("vacReferenceDate");
       let reference = referenceInput && validCalendarDate(referenceInput.value)
         ? referenceInput.value : "";
@@ -3062,6 +3184,7 @@
           entry[field] === undefined || (typeof entry[field] === "number" && Number.isFinite(entry[field])))
       );
       if (!validEntries) return false;
+      if("vacationCarryByYear" in value.settings && (!isPlainRecord(value.settings.vacationCarryByYear)||!Object.entries(value.settings.vacationCarryByYear).every(([y,n])=>/^\d{4}$/.test(y)&&Number.isInteger(n)&&n>=0&&n<=365)))return false;
       if ("payrollClosures" in value.settings && (!isPlainRecord(value.settings.payrollClosures) || !Object.keys(value.settings.payrollClosures).every(month=>!!payrollClosure(month,value.settings)))) return false;
       const validShift = shift => isPlainRecord(shift) &&
         typeof shift.start === "string" && !Number.isNaN(Date.parse(shift.start)) &&
