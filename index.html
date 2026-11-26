@@ -27,6 +27,39 @@
   </script>
   <style>
     body { -webkit-tap-highlight-color: transparent; font-family: system-ui, -apple-system, sans-serif; }
+
+    /* Independent background palette; cards and semantic status colors retain their contrast. */
+    @media screen {
+      html[data-wt-background="neutral"] { --wt-page-background:#111315; }
+      html[data-wt-theme="light"][data-wt-background="neutral"] { --wt-page-background:#f0f1f3; }
+      html[data-wt-background="navy"] { --wt-page-background:#102744; }
+      html[data-wt-theme="light"][data-wt-background="navy"] { --wt-page-background:#e0ebfa; }
+      html[data-wt-background="teal"] { --wt-page-background:#103235; }
+      html[data-wt-theme="light"][data-wt-background="teal"] { --wt-page-background:#e0f3f2; }
+      html[data-wt-background="forest"] { --wt-page-background:#182e25; }
+      html[data-wt-theme="light"][data-wt-background="forest"] { --wt-page-background:#e4f1e6; }
+      html[data-wt-background="violet"] { --wt-page-background:#2b2040; }
+      html[data-wt-theme="light"][data-wt-background="violet"] { --wt-page-background:#eee5fa; }
+      html[data-wt-background="sand"] { --wt-page-background:#30271e; }
+      html[data-wt-theme="light"][data-wt-background="sand"] { --wt-page-background:#f5ebdc; }
+      html[data-wt-background="rose"] { --wt-page-background:#38232f; }
+      html[data-wt-theme="light"][data-wt-background="rose"] { --wt-page-background:#f9e7ef; }
+      html[data-wt-background="graphite"] { --wt-page-background:#25282e; }
+      html[data-wt-theme="light"][data-wt-background="graphite"] { --wt-page-background:#e1e4e9; }
+      html[data-wt-background]:not([data-wt-background="original"]) body.wt-pro {
+        background:var(--wt-page-background) !important;
+      }
+      html[data-wt-background]:not([data-wt-background="original"]) body.wt-pro::before {
+        background:var(--wt-page-background) !important;
+      }
+      #cfgBackgroundPreview {
+        background:var(--wt-page-background,#080e1d);
+        border:1px solid #64748b; border-radius:10px; height:28px;
+      }
+      html[data-wt-theme="light"] #cfgBackgroundPreview {
+        background:var(--wt-page-background,#f3f7fd);
+      }
+    }
     @media print {
       .no-print { display: none !important; }
       body { background: white !important; color: black !important; }
@@ -770,7 +803,22 @@
           <option value="orange">🟠 Laranja</option>
           <option value="rose">🌹 Rosa</option>
         </select>
-        <p class="text-xs text-slate-400">A nova cor é mostrada antes de guardar. O widget nativo mantém a cor e o logótipo WT para continuar reconhecível.</p>
+        <label class="block text-xs text-slate-300" for="cfgBackgroundColor">Cor de fundo da aplicação</label>
+         <select id="cfgBackgroundColor" onchange="previewBackgroundColor()"
+           class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm">
+           <option value="original">Fundo original</option>
+           <option value="neutral">Cinza / preto</option>
+           <option value="navy">Azul-marinho</option>
+           <option value="teal">Verde-água</option>
+           <option value="forest">Verde-floresta</option>
+           <option value="violet">Roxo</option>
+           <option value="sand">Bege / castanho</option>
+           <option value="rose">Rosa</option>
+           <option value="graphite">Grafite</option>
+         </select>
+         <div id="cfgBackgroundPreview" aria-hidden="true"></div>
+         <p class="text-xs text-slate-400">A cor de fundo é independente da cor principal e adapta-se ao modo claro ou escuro.</p>
+         <p class="text-xs text-slate-400">A nova cor é mostrada antes de guardar. O widget nativo mantém a cor e o logótipo WT para continuar reconhecível.</p>
       </div>
 
       <!-- 6. Dados e Backup: guardar JSON e restaurar JSON são ações diferentes. -->
@@ -865,6 +913,7 @@
       companyStartDate: "",
       yearEndBonusTiers: [],
       accentColor: "blue",
+      backgroundColor: "original",
       taxSystem: "luxembourg",
       taxClass: "2",
       manualTaxRate: 0,
@@ -1239,6 +1288,8 @@
       }
       const accent = document.getElementById("cfgAccentColor");
       if (accent) accent.value = allowedAccentColor(settings.accentColor);
+      const background = document.getElementById("cfgBackgroundColor");
+      if (background) background.value = allowedBackgroundColor(settings.backgroundColor);
       document.getElementById("cfgTaxSystem").value = settings.taxSystem || "luxembourg";
       document.getElementById("cfgManualSocialRate").value = Number(settings.manualSocialRate) || 0;
       document.getElementById("cfgTaxClass").value = settings.taxClass;
@@ -1354,6 +1405,8 @@
       }
       const colorField = document.getElementById("cfgAccentColor");
       if (colorField) nextSettings.accentColor = allowedAccentColor(colorField.value);
+      const backgroundField = document.getElementById("cfgBackgroundColor");
+      if (backgroundField) nextSettings.backgroundColor = allowedBackgroundColor(backgroundField.value);
       if (pendingVacationAuto !== null)
         nextSettings.vacationAuto = pendingVacationAuto;
       nextSettings.hourlyRate = parseFloat(document.getElementById("cfgHourlyRate").value) || 0;
@@ -1959,6 +2012,17 @@
       markSettingsDirty();
     }
 
+    const BACKGROUND_COLORS = ["original","neutral","navy","teal","forest","violet","sand","rose","graphite"];
+    function allowedBackgroundColor(color) {
+      return BACKGROUND_COLORS.includes(color) ? color : "original";
+    }
+    function previewBackgroundColor() {
+      const field = document.getElementById("cfgBackgroundColor");
+      const color = allowedBackgroundColor(field ? field.value : settings.backgroundColor);
+      document.documentElement.setAttribute("data-wt-background",color);
+      markSettingsDirty();
+    }
+
     function validCalendarDate(value) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(value || "")) return false;
       const [y,m,d] = value.split("-").map(Number);
@@ -1971,6 +2035,7 @@
       document.documentElement.classList.toggle("dark", !light);
       document.documentElement.style.colorScheme = light ? "light" : "dark";
       document.documentElement.setAttribute("data-wt-accent", allowedAccentColor(settings.accentColor));
+      document.documentElement.setAttribute("data-wt-background", allowedBackgroundColor(settings.backgroundColor));
       const button = document.getElementById("cfgThemeButton");
       if (button) button.textContent = light ? "🌙 Ativar modo escuro" : "☀️ Ativar modo claro";
     }
@@ -1980,6 +2045,13 @@
       try {
         localStorage.setItem("wt_settings", JSON.stringify(settings));
         applyTheme();
+        // Preserve previews if the mode is changed before saving other settings.
+        if (settingsDirty) {
+          const accent = document.getElementById("cfgAccentColor");
+          const background = document.getElementById("cfgBackgroundColor");
+          if (accent) document.documentElement.setAttribute("data-wt-accent",allowedAccentColor(accent.value));
+          if (background) document.documentElement.setAttribute("data-wt-background",allowedBackgroundColor(background.value));
+        }
         applyTranslations();
       } catch (_) {
         alert("Não foi possível guardar a preferência de aparência.");
