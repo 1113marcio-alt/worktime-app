@@ -300,6 +300,11 @@
         <p id="driverStatus" class="wt-note" aria-live="polite"></p>
         <div id="driverList" class="space-y-2"></div>
       </details>
+      <div class="wt-card space-y-2">
+        <h3 class="wt-section-title">Avisos pessoais</h3>
+        <div id="personalWorkAlerts" class="space-y-1 text-sm" aria-live="polite"></div>
+        <p class="wt-note">Consulta ao abrir a app; não é um aviso legal de condução ou descanso.</p>
+      </div>
       <div class="wt-card">
         <div class="wt-flex"><h3 class="wt-section-title">Turnos por guardar</h3><span class="wt-pill"><span id="draftCount">0</span> rascunhos</span></div>
         <div id="clockDraftList" class="mt-2"></div>
@@ -743,6 +748,27 @@
           <p id="notificationStatus" class="wt-note" aria-live="polite"></p>
         </div>
 
+        <details class="wt-card space-y-3">
+          <summary class="wt-section-title">Lembretes pessoais de entrada e saída</summary>
+          <p class="wt-note">Notificações silenciosas nos dias escolhidos, sem marcar o ponto automaticamente. Horas aproximadas: o Android pode adiar alarmes. Após reiniciar o telemóvel ou forçar a paragem da aplicação, abre-a novamente para reprogramar.</p>
+          <div class="grid grid-cols-2 gap-2">
+            <label class="text-xs">Entrada<input id="reminderEntry" type="time" value="05:00" class="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl p-2" /></label>
+            <label class="text-xs">Saída<input id="reminderExit" type="time" value="16:00" class="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl p-2" /></label>
+          </div>
+          <div class="flex flex-wrap gap-3 text-xs" aria-label="Dias dos lembretes">
+            <label class="flex items-center gap-1"><input type="checkbox" id="reminderDay0" /> Dom</label>
+            <label class="flex items-center gap-1"><input type="checkbox" id="reminderDay1" checked/> Seg</label>
+            <label class="flex items-center gap-1"><input type="checkbox" id="reminderDay2" checked/> Ter</label>
+            <label class="flex items-center gap-1"><input type="checkbox" id="reminderDay3" checked/> Qua</label>
+            <label class="flex items-center gap-1"><input type="checkbox" id="reminderDay4" checked/> Qui</label>
+            <label class="flex items-center gap-1"><input type="checkbox" id="reminderDay5" checked/> Sex</label>
+            <label class="flex items-center gap-1"><input type="checkbox" id="reminderDay6" /> Sáb</label>
+          </div>
+          <button type="button" id="reminderSave" onclick="configurePersonalReminders(true)" class="wt-button primary w-full">Ativar / atualizar lembretes</button>
+          <button type="button" id="reminderDisable" onclick="configurePersonalReminders(false)" class="wt-button w-full">Desativar lembretes</button>
+          <p id="personalReminderStatus" class="wt-note" aria-live="polite"></p>
+          <p class="wt-note">Configuração e autorização locais deste telemóvel. Os lembretes não consultam o teu salário nem verificam automaticamente se estás a conduzir. Consulta-os apenas quando estiveres em segurança.</p>
+        </details>
         <p class="wt-note" id="widgetStatus" aria-live="polite">Se não aparecer o aviso: mantém premida uma zona vazia do ecrã inicial → Widgets → WorkTime Pro 2 Preview.</p>
       </div>
 
@@ -1266,10 +1292,80 @@
       if (window.ProUI) window.ProUI.init();
       initEncryptedBackups();
       refreshBiometricUI();
+      initPersonalReminders();
 
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('sw.js').catch(() => {});
       }
+    }
+
+    function personalReminderPlugin(){
+      return window.Capacitor&&window.Capacitor.Plugins&&window.Capacitor.Plugins.WorkTimeReminder;
+    }
+    function personalReminderStatus(message){
+      const el=document.getElementById("personalReminderStatus");if(el)el.textContent=message;
+    }
+    function reminderDaysMask(days){
+      if(!Array.isArray(days))return 0;
+      return days.slice(0,7).reduce((mask,enabled,index)=>enabled===true?mask|(1<<index):mask,0);
+    }
+    function validPersonalReminderConfig(config){
+      return !!config&&typeof config.enabled==="boolean"&&Number.isInteger(config.days)&&config.days>=0&&config.days<=127&&
+        (!config.enabled||(config.days>0&&parseClockMinutes(config.entry)!==null&&parseClockMinutes(config.exit)!==null));
+    }
+    async function refreshPersonalReminders(load=false){
+      const plugin=personalReminderPlugin(), button=document.getElementById("reminderSave"), off=document.getElementById("reminderDisable");
+      if(!button||!off)return;
+      button.disabled=true;off.disabled=true;
+      if(!plugin){personalReminderStatus("Lembretes nativos disponíveis apenas na APK Android compatível.");return;}
+      try{
+        const status=await plugin.getStatus();
+        if(load){
+          if(parseClockMinutes(status.entry)!==null)document.getElementById("reminderEntry").value=status.entry;
+          if(parseClockMinutes(status.exit)!==null)document.getElementById("reminderExit").value=status.exit;
+          for(let i=0;i<7;i++)document.getElementById("reminderDay"+i).checked=!!(status.days&(1<<i));
+        }
+        button.disabled=status.available!==true||status.allowed!==true;off.disabled=status.enabled!==true;
+        personalReminderStatus(status.allowed!==true?"Autoriza primeiro as notificações nas definições do Android.":status.enabled?"Lembretes configurados neste dispositivo. Horas aproximadas.":"Lembretes desativados.");
+      }catch(_){personalReminderStatus("Não foi possível consultar os lembretes Android.");}
+    }
+    async function configurePersonalReminders(enabled){
+      const plugin=personalReminderPlugin();if(!plugin)return false;
+      const config={enabled,entry:document.getElementById("reminderEntry").value,exit:document.getElementById("reminderExit").value,
+        days:reminderDaysMask(Array.from({length:7},(_,i)=>document.getElementById("reminderDay"+i).checked))};
+      if(!validPersonalReminderConfig(config)){personalReminderStatus("Escolhe horários e pelo menos um dia.");return false;}
+      try{await plugin.configure(config);await refreshPersonalReminders(true);return true;}
+      catch(_){personalReminderStatus("Não foi possível configurar. Confirma a autorização Android e tenta novamente.");return false;}
+    }
+    function initPersonalReminders(){
+      refreshPersonalReminders(true);
+      const plugin=personalReminderPlugin();if(plugin&&plugin.reschedule)plugin.reschedule().catch(()=>{});
+      if(typeof window.addEventListener==="function")window.addEventListener("focus",()=>{refreshPersonalReminders(false);renderPersonalWorkAlerts();});
+    }
+    function personalWorkAlerts(today=payrollToday()){
+      if(!validCalendarDate(today))return {missing:[],vacation:null,pending:0};
+      const missing=[], holidayCache=new Map(), pending=pendingCalendarDates();
+      for(let i=1;i<=7;i++){
+        const d=new Date(today+"T12:00:00");d.setDate(d.getDate()-i);
+        const date=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+        const year=d.getFullYear();
+        if(!holidayCache.has(year))holidayCache.set(year,new Set(window.WTCountryRules.holidays(year,settings.holidayCountry||"LU",settings.calendarRegion).items.map(row=>row.date)));
+        if(!entries[date]&&!isPayrollMonthClosed(date.slice(0,7))&&(!pending||!pending.has(date))&&scheduledLeaveHours(date)>0&&!holidayCache.get(year).has(date))missing.push(date);
+      }
+      const limit=new Date(today+"T12:00:00");limit.setDate(limit.getDate()+14);
+      const until=limit.getFullYear()+"-"+String(limit.getMonth()+1).padStart(2,"0")+"-"+String(limit.getDate()).padStart(2,"0");
+      const vacation=Object.values(entries).filter(e=>e&&e.type==="vacation"&&e.date>=today&&e.date<=until).map(e=>e.date).sort()[0]||null;
+      let drafts=0;try{const rows=JSON.parse(localStorage.getItem("wt_shift_drafts")||"[]");if(Array.isArray(rows))drafts=rows.length;}catch(_){}
+      return {missing,vacation,pending:drafts};
+    }
+    function renderPersonalWorkAlerts(){
+      const root=document.getElementById("personalWorkAlerts");if(!root)return;
+      const result=personalWorkAlerts(), messages=[];
+      if(result.missing.length)messages.push("Dias previstos sem registo nos últimos 7 dias: "+result.missing.join(", ")+".");
+      if(result.pending)messages.push(result.pending+" turno(s) por confirmar.");
+      if(result.vacation)messages.push("Próximas férias registadas: "+result.vacation+".");
+      if(!messages.length)messages.push("Sem avisos nos registos atuais.");
+      root.replaceChildren();for(const message of messages){const line=document.createElement("p");line.textContent=message;root.append(line);}
     }
 
     function biometricPlugin(){
@@ -3178,6 +3274,7 @@
       previewCalendarRange();
       renderDriverActivities();
       renderBankHours();
+      renderPersonalWorkAlerts();
       // Resumo Rápido
       document.getElementById("quickTotalHours").textContent = (d.normalH + d.extraH) + "h";
       document.getElementById("quickExtraHours").textContent = "+" + d.extraH + "h";
