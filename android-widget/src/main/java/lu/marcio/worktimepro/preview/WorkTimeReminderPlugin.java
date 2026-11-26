@@ -19,8 +19,10 @@ public class WorkTimeReminderPlugin extends Plugin {
         String entry = call.getString("entry", "");
         String exit = call.getString("exit", "");
         int days = call.getInt("days", 0);
+        boolean pauseEnabled = Boolean.TRUE.equals(call.getBoolean("pauseEnabled", false));
+        String pause = call.getString("pause", "12:00");
         if (enabled && (!WorkTimeReminderReceiver.validTime(entry) ||
-            !WorkTimeReminderReceiver.validTime(exit) || days < 1 || days > 127)) {
+            !WorkTimeReminderReceiver.validTime(exit) || (pauseEnabled && !WorkTimeReminderReceiver.validTime(pause)) || days < 1 || days > 127)) {
             call.reject("Horários inválidos."); return;
         }
         Context context = getContext();
@@ -33,8 +35,10 @@ public class WorkTimeReminderPlugin extends Plugin {
         String oldEntry = prefs.getString("entry", "");
         String oldExit = prefs.getString("exit", "");
         int oldDays = prefs.getInt("days", 0);
+        boolean oldPauseEnabled = prefs.getBoolean("pauseEnabled", false);
+        String oldPause = prefs.getString("pause", "12:00");
         if (!prefs.edit().putBoolean("enabled", enabled).putString("entry", entry)
-            .putString("exit", exit).putInt("days", days).commit()) {
+            .putString("exit", exit).putInt("days", days).putBoolean("pauseEnabled", pauseEnabled).putString("pause", pause).commit()) {
             call.reject("Não foi possível guardar."); return;
         }
         try {
@@ -42,7 +46,7 @@ public class WorkTimeReminderPlugin extends Plugin {
             call.resolve();
         } catch (Exception error) {
             prefs.edit().putBoolean("enabled", oldEnabled).putString("entry", oldEntry)
-                .putString("exit", oldExit).putInt("days", oldDays).commit();
+                .putString("exit", oldExit).putInt("days", oldDays).putBoolean("pauseEnabled", oldPauseEnabled).putString("pause", oldPause).commit();
             try { WorkTimeReminderReceiver.schedule(context); } catch (Exception ignored) {}
             call.reject("Não foi possível programar os lembretes.", error);
         }
@@ -60,6 +64,8 @@ public class WorkTimeReminderPlugin extends Plugin {
         result.put("entry", prefs.getString("entry", "05:00"));
         result.put("exit", prefs.getString("exit", "16:00"));
         result.put("days", prefs.getInt("days", 62));
+        result.put("pauseEnabled", prefs.getBoolean("pauseEnabled", false));
+        result.put("pause", prefs.getString("pause", "12:00"));
         call.resolve(result);
     }
 
