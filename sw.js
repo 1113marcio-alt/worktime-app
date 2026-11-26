@@ -1,4 +1,4 @@
-const CACHE_NAME = 'worktime-pro-v2-2-backup-settings-pdf-20261126';
+const CACHE_NAME = 'worktime-pro-v2-3-leave-bonus-colors-20261126';
 const ASSETS = ['./', './index.html', './manifest.json', './pro-ui.css', './pro-ui.js', './country-rules.js', './wt-i18n.js', './wt-widget.js', './wt-icon.svg', './wt-pin.js'];
 
 self.addEventListener('install', event => {
