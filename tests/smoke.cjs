@@ -1570,3 +1570,40 @@ test("calendário seleciona primeiro toque e identifica o segundo em 480ms",()=>
   assert.ok(proSource.includes("if (isSecondCalendarTap(iso)) openDate(iso)"));
   assert.ok(proSource.includes("btn.ondblclick = () => openDate(iso)"));
 });
+
+
+test("configurações vazias não apagam o salário e o botão permanece azul",()=>{
+  const app=makeApp({hourlyRate:25,nightPct:15});
+  const ui=settingsEditFixture(app);
+  ui.elements.cfgHourlyRate.value="";
+  app.ctx.markSettingsDirty();
+  assert.equal(app.ctx.saveSettings(),false);
+  assert.equal(app.evaluate("settings.hourlyRate"),25);
+  assert.equal(app.values.get("wt_settings"),JSON.stringify({hourlyRate:25,nightPct:15}));
+  assert.equal(ui.button.disabled,false);
+  assert.match(ui.status.textContent,/cfgHourlyRate/);
+});
+
+test("falha de armazenamento preserva valores editados até ser possível guardar",()=>{
+  const app=makeApp({hourlyRate:25});
+  const ui=settingsEditFixture(app);
+  const previous=app.ctx.localStorage.setItem;
+  app.ctx.localStorage.setItem=()=>{throw Error("Sem espaço");};
+  assert.equal(app.ctx.saveSettings(),false);
+  assert.equal(ui.elements.cfgHourlyRate.value,"29.50");
+  assert.equal(app.evaluate("settings.hourlyRate"),25);
+  assert.equal(ui.button.disabled,false);
+  assert.match(ui.status.textContent,/continuam no formulário/);
+  app.ctx.localStorage.setItem=previous;
+  assert.equal(app.ctx.saveSettings(),true);
+  assert.equal(app.evaluate("settings.hourlyRate"),29.5);
+  assert.equal(ui.button.disabled,true);
+});
+
+test("a impressão nativa usa a Activity UI thread mesmo com a WebView fora do ecrã",()=>{
+  const java=fs.readFileSync(
+    "android-widget/src/main/java/lu/marcio/worktimepro/preview/WorkTimePrintPlugin.java","utf8");
+  assert.ok(java.includes("getActivity().runOnUiThread(() -> {"));
+  assert.ok(!java.includes("loaded.post("));
+  assert.ok(java.includes("delegate.onFinish()"));
+});
