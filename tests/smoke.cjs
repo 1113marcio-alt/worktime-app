@@ -2462,3 +2462,20 @@ test("v3: restauro não substitui registos se mudarem durante a encriptação",a
   assert.equal(app.evaluate('entries["2026-11-26"].normal'),8);
   assert.equal(app.values.get("wt_pre_import_backup"),undefined);
 });
+
+test("v3: verificação de backup simples ou encriptado não substitui dados",async()=>{
+  const date="2026-11-25",original={[date]:{date,type:"work",normal:8,extra:0,night:0}};
+  const app=makeApp({hourlyRate:25},original);setupPinSecurity(app);app.ctx.TextDecoder=TextDecoder;
+  const incoming={settings:{hourlyRate:30},entries:{"2026-10-01":{date:"2026-10-01",type:"work",normal:7,extra:0,night:0}},shiftDrafts:[],activeShift:null};
+  const before=JSON.stringify(app.ctx.snapshotAllData()),storage=JSON.stringify([...app.values.entries()]);
+  const result=await app.ctx.verifyBackupPayload(incoming);
+  assert.equal(result.entries,1);assert.equal(result.first,"2026-10-01");assert.equal(result.last,"2026-10-01");
+  assert.equal(result.settingsCount,1);assert.equal(result.drafts,0);assert.equal(result.activeShift,false);assert.equal(result.encrypted,false);
+  const password="test-passphrase-1234",encrypted=await app.ctx.window.WTBackupCrypto.encrypt(incoming,password);
+  assert.equal((await app.ctx.verifyBackupPayload(encrypted,password)).encrypted,true);
+  assert.equal(await app.ctx.verifyBackupPayload(encrypted,"wrong-passphrase-123"),null);
+  assert.equal(await app.ctx.verifyBackupPayload({settings:{},entries:[]}),null);
+  assert.equal((await app.ctx.verifyBackupPayload({settings:{},entries:{}})).drafts,null);
+  assert.equal(JSON.stringify(app.ctx.snapshotAllData()),before);
+  assert.equal(JSON.stringify([...app.values.entries()]),storage);
+});
