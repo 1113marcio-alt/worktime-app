@@ -279,6 +279,26 @@
         </div>
         <button type="button" id="clockDiscard" class="text-xs text-rose-300 mt-5 underline" onclick="ProUI.discardActive()" hidden>Anular turno em curso</button>
       </div>
+      <details class="wt-card space-y-3" id="driverPanel">
+        <summary class="wt-section-title">🚚 Modo motorista — diário de atividades</summary>
+        <p class="wt-note">Regista as atividades com o veículo parado e em segurança. Diário pessoal complementar; não substitui o tacógrafo nem altera automaticamente o salário ou o relógio de ponto.</p>
+        <label class="block text-xs">Data<input id="driverDate" type="date" onchange="renderDriverActivities()" class="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl p-2" /></label>
+        <label class="block text-xs">Atividade
+          <select id="driverKind" class="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl p-2">
+            <option value="drive">Condução</option><option value="load">Carga</option><option value="unload">Descarga</option><option value="other">Outros trabalhos</option><option value="available">Disponibilidade</option><option value="rest">Pausa / descanso</option>
+          </select>
+        </label>
+        <div class="grid grid-cols-2 gap-2">
+          <label class="text-xs">Início<input id="driverStart" type="time" class="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl p-2" /></label>
+          <label class="text-xs">Fim<input id="driverEnd" type="time" class="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl p-2" /></label>
+        </div>
+        <label class="flex items-center gap-2 text-xs"><input type="checkbox" id="driverNextDay" /> Termina no dia seguinte</label>
+        <label class="block text-xs">Nota (opcional)<input type="text" maxlength="250" id="driverNote" class="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl p-2" /></label>
+        <button type="button" onclick="saveDriverActivity()" class="wt-button primary w-full">Guardar atividade</button>
+        <div id="driverTotals" class="wt-stats-summary"></div>
+        <p id="driverStatus" class="wt-note" aria-live="polite"></p>
+        <div id="driverList" class="space-y-2"></div>
+      </details>
       <div class="wt-card">
         <div class="wt-flex"><h3 class="wt-section-title">Turnos por guardar</h3><span class="wt-pill"><span id="draftCount">0</span> rascunhos</span></div>
         <div id="clockDraftList" class="mt-2"></div>
@@ -1040,6 +1060,7 @@
       homeLayout: null,
       visualStyle: "original",
       textSize: "normal",
+      driverActivities: [],
       vacationCarryByYear: {},
       payrollClosures: {},
       payrollHistory: [],
@@ -2117,6 +2138,90 @@
       return true;
     }
 
+    const DRIVER_KINDS={drive:"Condução",load:"Carga",unload:"Descarga",other:"Outros trabalhos",available:"Disponibilidade",rest:"Pausa / descanso"};
+    function validDriverActivity(row){
+      if(!isPlainRecord(row)||typeof row.id!=="string"||!row.id||!validCalendarDate(row.date)||
+        !Object.prototype.hasOwnProperty.call(DRIVER_KINDS,row.kind)||typeof row.note!=="string"||row.note.length>250)return false;
+      const start=Date.parse(row.start),end=Date.parse(row.end);
+      return Number.isFinite(start)&&Number.isFinite(end)&&end>start&&end-start<=25*3600000;
+    }
+    function driverActivities(source=settings){
+      return Array.isArray(source.driverActivities)?source.driverActivities.filter(validDriverActivity):[];
+    }
+    function driverLocalDay(date){
+      return date.getFullYear()+"-"+String(date.getMonth()+1).padStart(2,"0")+"-"+String(date.getDate()).padStart(2,"0");
+    }
+    function createDriverActivity(date,kind,startClock,endClock,nextDay=false,note="",now=new Date()){
+      if(!validCalendarDate(date)||!Object.prototype.hasOwnProperty.call(DRIVER_KINDS,kind)||
+        parseClockMinutes(startClock)===null||parseClockMinutes(endClock)===null)return null;
+      const start=new Date(date+"T"+startClock+":00"), end=new Date(date+"T"+endClock+":00");
+      if(nextDay)end.setDate(end.getDate()+1);
+      if(!Number.isFinite(start.getTime())||!Number.isFinite(end.getTime())||end<=start||end-start>25*3600000||end>now)return null;
+      // Reject local times silently normalized through a DST gap.
+      if(start.getHours()*60+start.getMinutes()!==parseClockMinutes(startClock)||end.getHours()*60+end.getMinutes()!==parseClockMinutes(endClock))return null;
+      const finishDay=driverLocalDay(new Date(end.getTime()-1));
+      if(isPayrollMonthClosed(date.slice(0,7))||isPayrollMonthClosed(finishDay.slice(0,7)))return null;
+      const rows=driverActivities();
+      if(rows.some(row=>Date.parse(row.start)<end.getTime()&&Date.parse(row.end)>start.getTime()))return null;
+      return {id:"driver-"+Date.now()+"-"+Math.random().toString(36).slice(2,10),date,kind,start:start.toISOString(),end:end.toISOString(),note:String(note).trim().slice(0,250)};
+    }
+    function storeDriverActivities(rows){
+      const next={...settings,driverActivities:rows};
+      try{localStorage.setItem("wt_settings",JSON.stringify(next));}catch(_){return false;}
+      settings=next;return true;
+    }
+    function addDriverActivity(date,kind,start,end,nextDay,note,now=new Date()){
+      const row=createDriverActivity(date,kind,start,end,nextDay,note,now);
+      return row&&storeDriverActivities([...driverActivities(),row])?row:null;
+    }
+    function removeDriverActivity(id){
+      const rows=driverActivities(),row=rows.find(item=>item.id===id);
+      if(!row||isPayrollMonthClosed(row.date.slice(0,7))||
+        isPayrollMonthClosed(driverLocalDay(new Date(Date.parse(row.end)-1)).slice(0,7)))return false;
+      return storeDriverActivities(rows.filter(item=>item.id!==id));
+    }
+    function driverDaySummary(date){
+      if(!validCalendarDate(date))return null;
+      const from=new Date(date+"T00:00:00"),to=new Date(from);to.setDate(to.getDate()+1);
+      const minutes=Object.fromEntries(Object.keys(DRIVER_KINDS).map(k=>[k,0])),rows=[];
+      for(const row of driverActivities()){
+        const overlap=Math.max(0,Math.min(Date.parse(row.end),to.getTime())-Math.max(Date.parse(row.start),from.getTime()));
+        if(overlap){minutes[row.kind]+=overlap/60000;rows.push(row);}
+      }
+      rows.sort((a,b)=>a.start.localeCompare(b.start));
+      return {rows,minutes,work:minutes.drive+minutes.load+minutes.unload+minutes.other,availability:minutes.available,rest:minutes.rest};
+    }
+    function saveDriverActivity(){
+      const value=id=>document.getElementById(id).value;
+      const row=addDriverActivity(value("driverDate"),value("driverKind"),value("driverStart"),value("driverEnd"),document.getElementById("driverNextDay").checked,value("driverNote"));
+      if(!row){alert("Atividade inválida, futura, sobreposta ou num mês fechado. Confirma as horas; os dados anteriores foram mantidos.");return;}
+      document.getElementById("driverNote").value="";
+      renderDriverActivities();document.getElementById("driverStatus").textContent="Atividade guardada.";
+    }
+    function renderDriverActivities(){
+      const field=document.getElementById("driverDate");if(!field)return;
+      if(!field.value)field.value=payrollToday();
+      const summary=driverDaySummary(field.value),list=document.getElementById("driverList"),totals=document.getElementById("driverTotals");
+      if(!summary)return;
+      const duration=minutes=>Math.floor(minutes/60)+"h "+String(Math.round(minutes%60)).padStart(2,"0")+"m";
+      totals.replaceChildren();
+      for(const [label,value] of [["Trabalho total",summary.work],["Condução",summary.minutes.drive],["Carga",summary.minutes.load],["Descarga",summary.minutes.unload],["Outros trabalhos",summary.minutes.other],["Disponibilidade",summary.availability],["Pausa / descanso",summary.rest]]){
+        const cell=document.createElement("div"),name=document.createElement("span"),amount=document.createElement("strong");name.textContent=label;amount.textContent=duration(value);cell.append(name,amount);totals.append(cell);
+      }
+      list.replaceChildren();
+      for(const row of summary.rows){
+        const line=document.createElement("div");line.className="wt-layout-row";
+        const text=document.createElement("span");text.className="flex-1 text-sm";
+        const stamp=iso=>new Date(iso).toLocaleString("pt-PT",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+        text.textContent=DRIVER_KINDS[row.kind]+" • "+stamp(row.start)+" – "+stamp(row.end)+(row.note?" • "+row.note:"");
+        const del=document.createElement("button");del.type="button";del.className="wt-button danger";del.textContent="Apagar";
+        del.addEventListener("click",()=>{if(confirm("Apagar esta atividade?")){if(removeDriverActivity(row.id))renderDriverActivities();else alert("Não foi possível apagar. Confirma se o mês está fechado.");}});
+        line.append(text,del);list.append(line);
+      }
+      document.getElementById("driverStatus").textContent=summary.rows.length?"Diário independente do cálculo salarial.":"Sem atividades neste dia.";
+      if(window.WTLocale)window.WTLocale.apply(settings.lang);
+    }
+
     function pendingCalendarDates(){
       try{
         const active=JSON.parse(localStorage.getItem("wt_active_shift")||"null");
@@ -2903,6 +3008,7 @@
       renderHomeLayout();
       renderStatistics(monthPrefix);
       previewCalendarRange();
+      renderDriverActivities();
       // Resumo Rápido
       document.getElementById("quickTotalHours").textContent = (d.normalH + d.extraH) + "h";
       document.getElementById("quickExtraHours").textContent = "+" + d.extraH + "h";
@@ -3184,6 +3290,7 @@
           entry[field] === undefined || (typeof entry[field] === "number" && Number.isFinite(entry[field])))
       );
       if (!validEntries) return false;
+      if("driverActivities" in value.settings && (!Array.isArray(value.settings.driverActivities)||!value.settings.driverActivities.every(validDriverActivity)))return false;
       if("vacationCarryByYear" in value.settings && (!isPlainRecord(value.settings.vacationCarryByYear)||!Object.entries(value.settings.vacationCarryByYear).every(([y,n])=>/^\d{4}$/.test(y)&&Number.isInteger(n)&&n>=0&&n<=365)))return false;
       if ("payrollClosures" in value.settings && (!isPlainRecord(value.settings.payrollClosures) || !Object.keys(value.settings.payrollClosures).every(month=>!!payrollClosure(month,value.settings)))) return false;
       const validShift = shift => isPlainRecord(shift) &&
