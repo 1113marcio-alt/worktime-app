@@ -2120,3 +2120,12 @@ test("v3: calendário, motorista e banco não alteram dados se a gravação falh
   assert.equal(app.ctx.setBankHours(date,1,"2026-11-26"),false);
   assert.equal(JSON.stringify(app.ctx.snapshotAllData()),before);
 });
+
+test("v3: backup do motorista rejeita atividades sobrepostas e IDs duplicados",()=>{
+  const app=makeApp(), row={id:"x",date:"2026-11-23",kind:"drive",start:"2026-11-23T08:00:00Z",end:"2026-11-23T10:00:00Z",note:""};
+  const valid=rows=>app.ctx.isValidWorkTimeBackup({settings:{driverActivities:rows},entries:{}});
+  assert.equal(valid([row]),true);
+  assert.equal(valid([row,{...row,id:"y"}]),false);
+  assert.equal(valid([row,{...row,start:"2026-11-23T10:00:00Z",end:"2026-11-23T11:00:00Z"}]),false);
+  assert.equal(valid([row,{...row,id:"y",start:"2026-11-23T10:00:00Z",end:"2026-11-23T11:00:00Z"}]),true);
+});
