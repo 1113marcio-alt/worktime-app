@@ -640,6 +640,13 @@
             <input id="cfgVacAvgSupplement" type="hidden" aria-label="Suplemento antigo apenas para registos legados" />
           </div>
         </div>
+        <div class="border-t border-slate-700 pt-3 space-y-2">
+          <h4 class="font-bold text-sm">Histórico salarial</h4>
+          <label for="cfgPayEffectiveDate" class="block text-xs text-slate-300">Data de início das novas taxas (opcional)</label>
+          <input id="cfgPayEffectiveDate" type="date" onchange="markSettingsDirty()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
+          <p class="wt-note">Altera as taxas acima e guarda. Sem data, uma alteração começa hoje. Para corrigir uma taxa antiga, indica a data de início. Antes da primeira data, são usadas as taxas existentes antes da ativação (estimativa).</p>
+          <div id="payHistoryList" class="space-y-1 text-xs"></div>
+        </div>
       </div>
 
       <!-- 1A. Prémio contratual anual, independente do salário mensal. -->
@@ -912,6 +919,8 @@
       yearEndBonusPct: 8,
       companyStartDate: "",
       yearEndBonusTiers: [],
+      payrollHistory: [],
+      payrollBaseline: null,
       accentColor: "blue",
       backgroundColor: "original",
       taxSystem: "luxembourg",
@@ -1270,6 +1279,9 @@
       document.getElementById("cfgNightPct").value = settings.nightPct;
       document.getElementById("cfgDailyPanier").value = settings.dailyPanier;
       document.getElementById("cfgVacAvgSupplement").value = settings.vacAvgSupplement;
+      const effectiveDate = document.getElementById("cfgPayEffectiveDate");
+      if (effectiveDate) { effectiveDate.value = ""; effectiveDate.max = payrollToday(); }
+      renderPayrollHistory();
       const bonusEnabled = document.getElementById("cfgYearEndBonusEnabled");
       if (bonusEnabled) {
         bonusEnabled.checked = settings.yearEndBonusEnabled !== false;
@@ -1420,6 +1432,15 @@
       nextSettings.nightPct = nightInput.trim() !== "" && Number.isFinite(nightPct) && nightPct >= 0 && nightPct <= 100
         ? nightPct : nextSettings.nightPct;
       nextSettings.dailyPanier = parseFloat(document.getElementById("cfgDailyPanier").value) || 0;
+      const effectiveDate = document.getElementById("cfgPayEffectiveDate");
+      if (effectiveDate) {
+        const revised = updatePayrollHistory(settings, nextSettings, effectiveDate.value);
+        if (!revised) {
+          setSettingsSaveState(false,"Escolhe uma data salarial válida, não posterior a hoje.",true);
+          return false;
+        }
+        Object.assign(nextSettings,revised);
+      }
       nextSettings.vacAvgSupplement = parseFloat(document.getElementById("cfgVacAvgSupplement").value) || 0;
       nextSettings.taxSystem = document.getElementById("cfgTaxSystem").value;
       nextSettings.taxClass = document.getElementById("cfgTaxClass").value;
@@ -2069,6 +2090,64 @@
       return { pensionRate: 0.08, depAllowance: 675.94 };
     }
 
+    // Versioned contractual remuneration. Tax profiles are still estimated using current settings.
+    const PAYROLL_RATE_KEYS = ["hourlyRate","hourlyBonus","overtimePct","nightPct","dailyPanier"];
+    function payrollToday() {
+      const now = new Date();
+      return now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0");
+    }
+    function payrollRates(source, fallback=defaultSettings) {
+      return Object.fromEntries(PAYROLL_RATE_KEYS.map(key=>{
+        const limit = key.endsWith("Pct") ? 100 : 10000;
+        const value = source && source[key];
+        const number = value === null || value === undefined || value === "" ? NaN : Number(value);
+        return [key,Number.isFinite(number) && number>=0 && number<=limit ? number : Number(fallback[key])||0];
+      }));
+    }
+    function validPayrollHistory(source) {
+      const fallback=payrollRates(source);
+      const unique=new Map();
+      if(Array.isArray(source.payrollHistory)) for(const row of source.payrollHistory) {
+        if(!row || !validCalendarDate(row.from) || !row.rates ||
+          !PAYROLL_RATE_KEYS.every(key=>typeof row.rates[key]==="number" && Number.isFinite(row.rates[key]) &&
+          row.rates[key]>=0 && row.rates[key]<=(key.endsWith("Pct")?100:10000))) continue;
+        unique.set(row.from,{from:row.from,rates:payrollRates(row.rates,fallback)});
+      }
+      return [...unique.values()].sort((a,b)=>a.from.localeCompare(b.from));
+    }
+    function payRatesForDate(date,source=settings) {
+      const history=validPayrollHistory(source);
+      const current=payrollRates(source);
+      let result=history.length ? payrollRates(source.payrollBaseline,current) : current;
+      for(const row of history) { if(row.from>date) break; result=row.rates; }
+      return result;
+    }
+    function updatePayrollHistory(previous,next,rawDate,today=payrollToday()) {
+      const before=payrollRates(previous), after=payrollRates(next);
+      const history=validPayrollHistory(previous);
+      const changed=PAYROLL_RATE_KEYS.some(key=>before[key]!==after[key]);
+      if(!changed && !rawDate) return {};
+      const from=rawDate || today;
+      if(!validCalendarDate(from) || from>today) return null;
+      const baseline=history.length ? payrollRates(previous.payrollBaseline,before) : before;
+      const rows=history.filter(row=>row.from!==from);
+      rows.push({from,rates:after});
+      rows.sort((a,b)=>a.from.localeCompare(b.from));
+      const latest=rows.filter(row=>row.from<=today).pop();
+      return {payrollBaseline:baseline,payrollHistory:rows,...(latest?latest.rates:baseline)};
+    }
+    function renderPayrollHistory() {
+      const el=document.getElementById("payHistoryList");
+      if(!el) return;
+      const rows=validPayrollHistory(settings);
+      el.textContent=rows.length ? "" : "Ainda sem histórico. As taxas atuais continuam a ser usadas.";
+      rows.slice().reverse().forEach(row=>{
+        const line=document.createElement("p");
+        line.textContent=row.from+" • "+formatMoney(row.rates.hourlyRate)+"/h • Bónus "+formatMoney(row.rates.hourlyBonus)+"/h • Extra "+row.rates.overtimePct+"% • Noite "+row.rates.nightPct+"% • Panier "+formatMoney(row.rates.dailyPanier);
+        el.appendChild(line);
+      });
+    }
+
     // Para cada data, usar os três meses imediatamente anteriores sem
     // utilizar dias futuros ou outros dias de férias no numerador.
     // Amostra parcial é admitida (por ex. 7 ou 30 dias), mas identificada.
@@ -2087,11 +2166,10 @@
         typeof e.date === "string" && e.date >= from && e.date < referenceDate &&
         (Number(e.normal)||0)+(Number(e.extra)||0) > 0);
       let variableGross = 0;
-      const rate = Number(settings.hourlyRate)||0;
-      const ot = (Number(settings.overtimePct)||0)/100;
-      const night = (Number(settings.nightPct)||0)/100;
-      const bonus = Number(settings.hourlyBonus)||0;
       sample.forEach(e => {
+        const rates = payRatesForDate(e.date);
+        const rate = rates.hourlyRate, ot = rates.overtimePct/100,
+          night = rates.nightPct/100, bonus = rates.hourlyBonus;
         const overtimeHours = Math.max(0,Number(e.extra)||0);
         const nightHours = Math.max(0,Number(e.night)||0);
         // Extra base + majoração, suplemento noturno e bónus em horas extras.
@@ -2158,12 +2236,11 @@
         selectedYear === todayYear ? date : year+"-01-00";
       const jobs = Object.values(entries).filter(e => e && typeof e.date==="string" &&
         e.date.startsWith(year+"-") && e.date <= cutoff);
-      const hourRate = Number(settings.hourlyRate)||0;
-      const hourlyBonus = Number(settings.hourlyBonus)||0;
-      const extraPct = (Number(settings.overtimePct)||0)/100;
-      const nightPct = (Number(settings.nightPct)||0)/100;
       let gross = 0;
       for (const e of jobs) {
+        const rates=payRatesForDate(e.date);
+        const hourRate=rates.hourlyRate, hourlyBonus=rates.hourlyBonus,
+          extraPct=rates.overtimePct/100, nightPct=rates.nightPct/100;
         if (e.type === "work") {
           const norm = Math.max(0,Number(e.normal)||0),
             extra = Math.max(0,Number(e.extra)||0),
@@ -2189,44 +2266,47 @@
 
     function calculateMonthData(monthPrefix) {
       let normalH = 0, extraH = 0, nightH = 0, bonusH = 0, workDays = 0, vacDays = 0, vacPaidHours = 0;
-      let vacationGross = 0;
+      let vacationGross = 0, normalGross=0, extraBaseGross=0, extraMajorationGross=0,
+        nightGross=0, bonusGross=0, panierGross=0;
       const monthEntries = Object.values(entries)
         .filter(e => e.date.startsWith(monthPrefix))
         .sort((a, b) => b.date.localeCompare(a.date));
 
       monthEntries.forEach(e => {
+        const rates=payRatesForDate(e.date);
         if (e.type === "work") {
+          normalGross += e.normal*rates.hourlyRate;
+          extraBaseGross += e.extra*rates.hourlyRate;
+          extraMajorationGross += e.extra*rates.hourlyRate*rates.overtimePct/100;
+          nightGross += e.night*rates.hourlyRate*rates.nightPct/100;
           normalH += e.normal;
           extraH += e.extra;
           nightH += e.night;
           if (e.includeBonus) {
             bonusH += (e.normal + e.extra);
             workDays += 1;
+            bonusGross += (e.normal+e.extra)*rates.hourlyBonus;
+            panierGross += rates.dailyPanier;
           }
         } else if (e.type === "vacation" || e.type === "holiday") {
           vacDays += 1;
           const paid = paidHoursForEntry(e);
           vacPaidHours += paid;
-          vacationGross += paid * (Number(settings.hourlyRate)+Number(settings.hourlyBonus)) +
+          vacationGross += paid * (rates.hourlyRate+rates.hourlyBonus) +
             paidVacationSupplement(e);
         } else if (e.type === "sick") {
           normalH += e.normal;
+          normalGross += e.normal*rates.hourlyRate;
         }
       });
 
       const rate = settings.hourlyRate;
-      const normalGross = normalH * rate;
-      const extraBaseGross = extraH * rate;
-      const extraMajorationGross = extraBaseGross * (settings.overtimePct / 100);
       const extraTotalGross = extraBaseGross + extraMajorationGross;
-      const nightGross = nightH * rate * (settings.nightPct / 100);
-      const bonusGross = bonusH * settings.hourlyBonus;
       // vacDailyBase continua a referência legada de 8h do painel.
       // O cálculo real usa as horas pagas gravadas em cada dia.
       const vacDailyBase = (8 * rate) + (8 * settings.hourlyBonus) + settings.vacAvgSupplement;
       // A média é capturada separadamente em cada férias; somar no loop.
       // 'vacAvgSupplement' preserva apenas os dias antigos sem cálculo automático.
-      const panierGross = workDays * settings.dailyPanier;
 
       const totalGross = normalGross + extraTotalGross + nightGross + bonusGross + vacationGross + panierGross;
 
@@ -2290,13 +2370,16 @@
       }
 
       // Aba Folha de Salário
-      document.getElementById("lblNormalBreakdown").textContent = `Horas Normais (${d.normalH}h × ${settings.hourlyRate.toFixed(2)} €)`;
+      const hasHistory=validPayrollHistory(settings).length>0;
+      document.getElementById("lblNormalBreakdown").textContent = hasHistory
+        ? `Horas Normais (${d.normalH}h • taxas por data)`
+        : `Horas Normais (${d.normalH}h × ${settings.hourlyRate.toFixed(2)} €)`;
       document.getElementById("valNormalGross").textContent = formatMoney(d.normalGross);
-      document.getElementById("lblExtraBreakdown").textContent = `Horas Extras +${settings.overtimePct}% (${d.extraH}h • regras fiscais ${d.country})`;
+      document.getElementById("lblExtraBreakdown").textContent = hasHistory ? `Horas Extras (${d.extraH}h • taxas por data)` : `Horas Extras +${settings.overtimePct}% (${d.extraH}h • regras fiscais ${d.country})`;
       document.getElementById("valExtraGross").textContent = formatMoney(d.extraTotalGross);
-      document.getElementById("lblNightBreakdown").textContent = `Suplemento Noturno +${settings.nightPct}% (${d.nightH}h)`;
+      document.getElementById("lblNightBreakdown").textContent = hasHistory ? `Suplemento Noturno (${d.nightH}h • taxas por data)` : `Suplemento Noturno +${settings.nightPct}% (${d.nightH}h)`;
       document.getElementById("valNightGross").textContent = formatMoney(d.nightGross);
-      document.getElementById("lblBonusBreakdown").textContent = `Bónus Horário (${settings.hourlyBonus.toFixed(2)} €/h)`;
+      document.getElementById("lblBonusBreakdown").textContent = hasHistory ? "Bónus Horário (taxas por data)" : `Bónus Horário (${settings.hourlyBonus.toFixed(2)} €/h)`;
       document.getElementById("valBonusGross").textContent = formatMoney(d.bonusGross);
       document.getElementById("lblVacationBreakdown").textContent = `Férias / Feriados (${d.vacDays} dias • ${d.vacPaidHours.toFixed(2)}h pagas, estimativa)`;
       document.getElementById("valVacationGross").textContent = formatMoney(d.vacationGross);
@@ -2375,7 +2458,7 @@
       const average = threeMonthWorkAverage(reference);
       const paid = scheduledLeaveHours(reference);
       document.getElementById("vacDailyValue").textContent =
-        formatMoney(paid * (Number(settings.hourlyRate)+Number(settings.hourlyBonus))+
+        formatMoney(paid * (payRatesForDate(reference).hourlyRate+payRatesForDate(reference).hourlyBonus)+
           (paid > 0 ? average.avgPerDay : 0));
       const info = document.getElementById("vacThreeMonthInfo");
       if (info) info.textContent = average.days
@@ -2399,7 +2482,7 @@
         "Base: "+formatMoney(annual.gross)+" brutos de "+annual.days+
         " registo(s) até "+annual.asOf+". Sem o próprio prémio ou panier. "+
         (annual.years !== null ? annual.years+" ano(s) de antiguidade. " : "")+
-        "Valores estimados com as taxas atuais; não substituem o contrato nem o recibo.";
+        "Valores estimados com as taxas registadas por data (ou atuais sem histórico); não substituem o contrato nem o recibo.";
       const homeAnnual = document.getElementById("homeAnnualBonusValue");
       if (homeAnnual) homeAnnual.textContent=formatMoney(annual.bonus);
       const homeRate = document.getElementById("homeAnnualBonusRate");
