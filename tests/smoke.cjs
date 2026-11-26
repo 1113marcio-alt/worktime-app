@@ -120,7 +120,7 @@ test("o novo relógio e o calendário têm JavaScript válido e todos os ecrãs 
   assert.ok(source.includes('src="pro-ui.js"'));
   assert.ok(source.includes('href="pro-ui.css"'));
   assert.ok(fs.readFileSync("sw.js", "utf8").includes("./pro-ui.js"));
-  assert.ok(fs.readFileSync(".github/workflows/apk.yml", "utf8").includes("pro-ui.css pro-ui.js country-rules.js wt-i18n.js wt-widget.js wt-icon.svg www/"));
+  assert.ok(fs.readFileSync(".github/workflows/apk.yml", "utf8").includes("pro-ui.css pro-ui.js country-rules.js wt-i18n.js wt-widget.js wt-icon.svg wt-pin.js www/"));
 });
 
 test("o relógio contabiliza pausas e turnos que passam da meia-noite", () => {
@@ -1219,7 +1219,7 @@ test("PIN migrado mantém-se ativo após importar backup legado com outro PIN",a
   })}]}});
   assert.equal(JSON.parse(app.values.get("wt_settings")).securityPin,"");
   assert.equal(JSON.parse(app.values.get("wt_settings")).hourlyRate,51);
-  assert.deepEqual(JSON.parse(app.values.get("wt_pin_verifier")),verifier);
+  assert.equal(app.values.get("wt_pin_verifier"),JSON.stringify(verifier));
   assert.equal(await app.ctx.window.WTPin.verify("2222",verifier),true);
 });
 
