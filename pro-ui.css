@@ -233,3 +233,51 @@ html[data-wt-theme="light"] #settingsSaveStatus {color:#344b73;}
   .wt-settings-save-button {min-height:38px;}
 }
 @media print {.wt-settings-savebar{display:none!important;}}
+
+/* WorkTime Pro 2.2: six selectable accents, affecting only the app.
+   The native home widget and original WT launcher logo stay recognizable. */
+html[data-wt-accent="blue"] {--wt-color:#3b82f6;--wt-soft-color:#a7c5ff;--wt-dark-color:#203b78;--wt-hero-halo:rgba(59,130,246,.36);}
+html[data-wt-accent="teal"] {--wt-color:#0891b2;--wt-soft-color:#84e5e6;--wt-dark-color:#0e505f;--wt-hero-halo:rgba(8,145,178,.31);}
+html[data-wt-accent="emerald"] {--wt-color:#059669;--wt-soft-color:#a7f3d0;--wt-dark-color:#115544;--wt-hero-halo:rgba(5,150,105,.30);}
+html[data-wt-accent="purple"] {--wt-color:#7c3aed;--wt-soft-color:#ddd6fe;--wt-dark-color:#4c1d95;--wt-hero-halo:rgba(124,58,237,.34);}
+html[data-wt-accent="orange"] {--wt-color:#ea580c;--wt-soft-color:#fed7aa;--wt-dark-color:#803b16;--wt-hero-halo:rgba(234,88,12,.32);}
+html[data-wt-accent="rose"] {--wt-color:#db2777;--wt-soft-color:#fbcfe8;--wt-dark-color:#831843;--wt-hero-halo:rgba(219,39,119,.32);}
+html[data-wt-accent]:not([data-wt-accent="blue"]) .wt-button.primary,
+html[data-wt-accent]:not([data-wt-accent="blue"]) .wt-settings-save-button:not(.wt-settings-saved),
+html[data-wt-accent]:not([data-wt-accent="blue"]) #backupExportButton {
+  background:var(--wt-color)!important;border-color:var(--wt-color)!important;
+  color:#fff!important;
+}
+html[data-wt-accent]:not([data-wt-accent="blue"]) .wt-nav-item.active,
+html[data-wt-accent]:not([data-wt-accent="blue"]) .wt-day.wt-selected{
+  background:var(--wt-dark-color)!important;color:#fff!important;
+}
+html[data-wt-accent]:not([data-wt-accent="blue"]) .wt-hero,
+html[data-wt-accent]:not([data-wt-accent="blue"]) .wt-clock-card {
+  background:radial-gradient(circle at 88% 6%,var(--wt-hero-halo),transparent 53%),
+    linear-gradient(135deg,var(--wt-dark-color),#101a31 77%)!important;
+  border-color:var(--wt-color)!important;
+}
+html[data-wt-accent]:not([data-wt-accent="blue"]) .wt-pill,
+html[data-wt-accent]:not([data-wt-accent="blue"]) .wt-stat-icon {
+  background:var(--wt-hero-halo)!important;color:var(--wt-soft-color)!important;
+}
+html[data-wt-accent]:not([data-wt-accent="blue"]) .wt-chart-fill {
+  background:linear-gradient(180deg,var(--wt-soft-color),var(--wt-color))!important;
+}
+html[data-wt-accent]:not([data-wt-accent="blue"]) .wt-main-header {
+  border-bottom-color:var(--wt-color)!important;
+}
+html[data-wt-accent]:not([data-wt-accent="blue"]) .text-blue-400,
+html[data-wt-accent]:not([data-wt-accent="blue"]) .text-blue-300,
+html[data-wt-accent]:not([data-wt-accent="blue"]) .text-sky-300 {
+  color:var(--wt-soft-color)!important;
+}
+html[data-wt-theme="light"][data-wt-accent]:not([data-wt-accent="blue"]) .wt-hero,
+html[data-wt-theme="light"][data-wt-accent]:not([data-wt-accent="blue"]) .wt-clock-card {
+  background:linear-gradient(135deg,#f6f9ff,var(--wt-hero-halo))!important;
+  color:#162949!important;
+}
+html[data-wt-theme="light"][data-wt-accent]:not([data-wt-accent="blue"]) .wt-pill{
+  color:var(--wt-dark-color)!important;
+}
