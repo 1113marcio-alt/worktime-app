@@ -1342,3 +1342,223 @@ test("alterar a data utiliza a pausa específica do dia escolhido",()=>{
   assert.equal(e.entryBreakMinutes.value,45);
   assert.match(e.entryBreakScheduleHint.textContent,/45 min/);
 });
+
+
+function settingsEditFixture(app) {
+  const values={
+    cfgHourlyRate:"29.50",cfgHourlyBonus:"2.60",
+    cfgOvertimePct:"40",cfgNightPct:"15",
+    cfgDailyPanier:"4",cfgVacAvgSupplement:"18",
+    cfgTaxSystem:"luxembourg",cfgTaxClass:"2",
+    cfgManualTaxRate:"0",cfgManualSocialRate:"0",cfgCisCredit:"50",
+    cfgLang:"fr",cfgStartScreen:"ponto",
+    cfgHolidayCountry:"LU",cfgEmployerCountry:"LU",
+    cfgResidenceCountry:"PT",cfgCalendarRegion:"",cfgAnnualVacation:"26"
+  };
+  const elements={};
+  const cls=()=>({toggle(){},contains(){return false;}});
+  for(const [id,value] of Object.entries(values))
+    elements[id]={value,classList:cls()};
+  elements.cfgSyncCalendarWithEmployer={checked:true};
+  const button={disabled:true,textContent:"",classList:cls()};
+  const status={textContent:"",className:""};
+  elements.settingsSaveButton=button;
+  elements.settingsSaveStatus=status;
+  elements.weeklyScheduleGrid={children:Array.from({length:7},()=>({}))};
+  for(let d=0;d<=6;d++){
+    const on=d>=1&&d<=5;
+    elements["weekEnabled"+d]={checked:on};
+    elements["weekStart"+d]={value:on?"06:00":"08:00"};
+    elements["weekEnd"+d]={value:on?"14:30":"16:30"};
+    elements["weekBreak"+d]={value:"30"};
+  }
+  app.ctx.document.getElementById=id=>elements[id]||null;
+  return {elements,button,status};
+}
+
+test("opções têm um botão fixo Guardar e abandoná-las requer confirmação",()=>{
+  assert.ok(source.includes('id="settingsSaveButton"'));
+  assert.ok(source.includes('id="settingsSaveStatus"'));
+  assert.ok(source.includes('id="settingsSaveBar"'));
+  assert.ok(!source.includes('onchange="saveSettings()"'),
+    "as configurações comuns só são guardadas depois do clique");
+  assert.ok(fs.readFileSync("pro-ui.css","utf8").includes(
+    "position:fixed;"));
+  const app=makeApp({hourlyRate:20});
+  const ui=settingsEditFixture(app);
+  app.ctx.markSettingsDirty();
+  assert.equal(ui.button.disabled,false);
+  assert.match(ui.button.textContent,/Guardar alterações/);
+  assert.equal(app.evaluate("settings.hourlyRate"),20);
+  assert.equal(app.ctx.saveSettings(),true);
+  assert.equal(JSON.parse(app.values.get("wt_settings")).hourlyRate,29.5);
+  assert.equal(JSON.parse(app.values.get("wt_settings")).residenceCountry,"PT");
+  assert.equal(JSON.parse(app.values.get("wt_settings")).weeklySchedule["1"].breakMinutes,30);
+  assert.equal(JSON.parse(app.values.get("wt_settings")).weeklySchedule["1"].start,"06:00");
+  assert.equal(ui.button.disabled,true);
+  assert.match(ui.button.textContent,/guardadas/);
+});
+
+test("backup completo repõe horário semanal, salário, idioma, país, férias e tema",()=>{
+  const settings={
+    hourlyRate:34.20,hourlyBonus:3,lang:"fr",theme:"light",
+    employerCountry:"LU",residenceCountry:"PT",holidayCountry:"FR",
+    syncCalendarWithEmployer:false,calendarRegion:"Grand Est",
+    annualVacation:27,vacationAuto:false,taxClass:"1a",
+    manualTaxRate:7,manualSocialRate:2,
+    startScreen:"calendario",widgetEnabled:false,
+    weeklySchedule:{1:{enabled:true,start:"06:00",end:"14:30",breakMinutes:30},
+      2:{enabled:true,start:"07:00",end:"16:30",breakMinutes:60}}
+  };
+  const original={"2026-11-11":{
+    date:"2026-11-11",type:"work",normal:8,extra:0,
+    manualTime:{startTime:"06:00",endTime:"14:30",breakMinutes:30}
+  }};
+  const app=makeApp(settings,original);
+  const backup=JSON.parse(JSON.stringify(app.ctx.snapshotAllData()));
+  assert.equal(backup.settings.theme,"light");
+  assert.equal(backup.settings.lang,"fr");
+  assert.equal(backup.settings.weeklySchedule["2"].breakMinutes,60);
+  assert.ok(!("securityPin" in backup.settings));
+  const different={settings:{
+    hourlyRate:9,lang:"en",theme:"dark",annualVacation:22,
+    employerCountry:"PT",residenceCountry:"LU",
+    weeklySchedule:{1:{enabled:true,start:"09:00",end:"15:00",breakMinutes:0}}
+  },entries:{}};
+  app.ctx.writeBackupState(different);
+  assert.equal(app.evaluate("settings.hourlyRate"),9);
+  app.ctx.writeBackupState(backup);
+  const restored=JSON.parse(app.values.get("wt_settings"));
+  assert.equal(restored.hourlyRate,34.2);
+  assert.equal(restored.hourlyBonus,3);
+  assert.equal(restored.lang,"fr");
+  assert.equal(restored.theme,"light");
+  assert.equal(restored.employerCountry,"LU");
+  assert.equal(restored.residenceCountry,"PT");
+  assert.equal(restored.holidayCountry,"FR");
+  assert.equal(restored.calendarRegion,"Grand Est");
+  assert.equal(restored.annualVacation,27);
+  assert.equal(restored.vacationAuto,false);
+  assert.equal(restored.taxClass,"1a");
+  assert.equal(restored.startScreen,"calendario");
+  assert.equal(restored.weeklySchedule["1"].start,"06:00");
+  assert.equal(restored.weeklySchedule["2"].end,"16:30");
+  assert.equal(restored.weeklySchedule["2"].breakMinutes,60);
+  assert.equal(JSON.parse(app.values.get("wt_entries"))["2026-11-11"].manualTime.breakMinutes,30);
+});
+
+test("importar backup não muda PIN nem ativa widget/notificação sem consentimento",()=>{
+  const app=makeApp({
+    securityPin:"1234",widgetEnabled:false,shiftNotifications:false
+  });
+  app.ctx.writeBackupState({settings:{
+    securityPin:"9999",widgetEnabled:true,shiftNotifications:true,
+    hourlyRate:33,lang:"es"
+  },entries:{}});
+  const restored=JSON.parse(app.values.get("wt_settings"));
+  assert.equal(restored.securityPin,"1234");
+  assert.equal(restored.widgetEnabled,false);
+  assert.equal(restored.shiftNotifications,false);
+  assert.equal(restored.hourlyRate,33);
+  assert.equal(restored.lang,"es");
+});
+
+test("erro a meio da importação reverte configurações e registos",()=>{
+  const oldEntries={"2026-11-18":{
+    date:"2026-11-18",type:"work",normal:8,extra:1,night:0
+  }};
+  const app=makeApp({hourlyRate:27,lang:"pt"},oldEntries);
+  const beforeSettings=app.values.get("wt_settings");
+  const beforeEntries=app.values.get("wt_entries");
+  const setter=app.ctx.localStorage.setItem;
+  let rejected=false;
+  app.ctx.localStorage.setItem=(key,val)=>{
+    if(key==="wt_entries"&&!rejected){rejected=true;throw Error("Sem espaço");}
+    setter(key,val);
+  };
+  const imported={settings:{hourlyRate:89,lang:"de"},
+    entries:{"2026-11-20":{date:"2026-11-20",type:"work",normal:9,extra:0,night:0}}};
+  app.ctx.importBackupJSON({target:{files:[{content:JSON.stringify(imported)}]}});
+  assert.equal(app.values.get("wt_settings"),beforeSettings);
+  assert.equal(app.values.get("wt_entries"),beforeEntries);
+  assert.equal(app.evaluate("settings.hourlyRate"),27);
+  assert.ok(app.notices.some(t=>t.includes("Não foi possível restaurar")));
+});
+
+test("restauro usa uma única escolha JSON e CSV encontra-se nos relatórios",()=>{
+  assert.ok(source.includes('id="backupExportButton"'));
+  assert.ok(source.includes('id="backupRestoreButton"'));
+  assert.ok(source.includes('id="backupImportFile"'));
+  assert.ok(source.includes('id="salaryExportCsv"'));
+  assert.ok(source.includes('id="backupImportFile" type="file"'));
+  assert.ok(!source.includes("Nenhum ficheiro selecionado"));
+  const app=makeApp();
+  let clicks=0;
+  app.ctx.document.getElementById=id=>
+    id==="backupImportFile"?{click:()=>clicks++}:null;
+  assert.equal(app.ctx.chooseBackupJSON(),true);
+  assert.equal(clicks,1);
+});
+
+test("Android tem plugin nativo de impressão e PDF a partir do relatório salarial",()=>{
+  const java=fs.readFileSync(
+    "android-widget/src/main/java/lu/marcio/worktimepro/preview/WorkTimePrintPlugin.java","utf8");
+  const injector=fs.readFileSync("scripts/install_android_widget.py","utf8");
+  assert.match(java,/PrintManager/);
+  assert.match(java,/createPrintDocumentAdapter/);
+  assert.match(java,/getSystemService\(Context.PRINT_SERVICE\)/);
+  assert.match(java,/setJavaScriptEnabled\(false\)/);
+  assert.match(java,/setBlockNetworkLoads\(true\)/);
+  assert.ok(injector.includes("registerPlugin(WorkTimePrintPlugin.class)"));
+  assert.ok(source.includes('onclick="printSalaryReport()"'));
+  assert.ok(source.includes('id="salaryPrintStatus"'));
+  assert.ok(!source.includes('onclick="window.print()"'));
+});
+
+test("relatório de salário inclui o mês e protege notas contra HTML injetado",()=>{
+  const app=makeApp({hourlyRate:25,employerCountry:"LU"},{
+    "2026-11-25":{date:"2026-11-25",type:"work",normal:8,extra:2,
+      night:0,note:'<img src=x onerror="alert(1)">'}
+  });
+  const html=app.evaluate('createSalaryReportHtml("2026-11")');
+  assert.match(html,/Relatório mensal/);
+  assert.match(html,/2026-11-25/);
+  assert.match(html,/Horas extra/);
+  assert.match(html,/TOTAL BRUTO ESTIMADO/);
+  assert.ok(html.includes("&lt;img src=x"));
+  assert.ok(!html.includes("<img src=x"));
+  assert.ok(html.includes("default-src 'none'"));
+  assert.ok(!html.includes("https://cdn."));
+});
+
+test("PDF abre diálogo nativo do Samsung, sem indicar falsamente que já foi guardado",async()=>{
+  const app=makeApp({},{"2026-11-18":{
+    date:"2026-11-18",type:"work",normal:8,extra:0,night:0
+  }});
+  const status={textContent:""};
+  let printed=null;
+  app.ctx.document.getElementById=id=>id==="salaryPrintStatus"?status:
+    id==="currentMonthPicker"?{value:"2026-11"}:null;
+  app.ctx.window.Capacitor={getPlatform:()=> "android",Plugins:{
+    WorkTimePrint:{print:async data=>{printed=data;}}
+  }};
+  assert.equal(await app.ctx.printSalaryReport(),true);
+  assert.equal(printed.jobName,"WorkTime Pro - 2026-11");
+  assert.match(printed.html,/2026-11/);
+  assert.match(status.textContent,/Escolhe/);
+  assert.ok(!status.textContent.includes("PDF guardado"));
+});
+
+test("calendário seleciona primeiro toque e identifica o segundo em 480ms",()=>{
+  const ctx=vm.createContext({window:{},Date,Intl,console});
+  vm.runInContext(proSource,ctx);
+  const tap=ctx.window.ProUI.helpers.isSecondCalendarTap;
+  assert.equal(tap("2026-11-25",1000),false);
+  assert.equal(tap("2026-11-25",1290),true);
+  assert.equal(tap("2026-11-25",3000),false);
+  assert.equal(tap("2026-11-26",3150),false);
+  assert.equal(tap("2026-11-26",3650),false);
+  assert.equal(tap("2026-11-26",3700),true);
+  assert.ok(proSource.includes("if (isSecondCalendarTap(iso)) openDate(iso)"));
+  assert.ok(proSource.includes("btn.ondblclick = () => openDate(iso)"));
+});
