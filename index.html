@@ -900,7 +900,8 @@
       const status = document.getElementById("settingsSaveStatus");
       if (button) {
         button.disabled = saved;
-        button.classList.toggle("wt-settings-saved", saved);
+        if (button.classList && typeof button.classList.toggle === "function")
+          button.classList.toggle("wt-settings-saved", saved);
         button.textContent = saved ? "✓ Configurações guardadas" : "💾 Guardar alterações";
       }
       if (status) {
