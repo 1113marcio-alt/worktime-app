@@ -31,12 +31,7 @@ content += """
 // Configured solely for the temporary GitHub Actions workspace.
 // Credentials come from GitHub Actions encrypted secrets at build time.
 android {
-    // Each GitHub run gets a monotonic versionCode, so future signed APKs
-    // are recognized by Android as updates rather than a downgrade.
-    defaultConfig {
-        versionCode = Integer.parseInt(System.getenv('GITHUB_RUN_NUMBER') ?: '1')
-        versionName = "2.0." + (System.getenv('GITHUB_RUN_NUMBER') ?: '1')
-    }
+    // Version comes from configure_android_preview_version.py, for debug AND signed builds.
     signingConfigs {
         worktimePreviewRelease {
             storeFile file(System.getenv('WORKTIME_KEYSTORE_PATH'))
