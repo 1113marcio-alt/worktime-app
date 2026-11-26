@@ -497,6 +497,19 @@
           <div class="wt-balance-cell"><span>Bónus</span><strong class="money-val" id="salaryPreviewBonus">0,00 €</strong></div>
         </div>
       </div>
+      <details class="wt-card space-y-3" id="receiptPanel">
+        <summary class="wt-section-title">Digitalizar recibo salarial</summary>
+        <p class="wt-note">Mês selecionado: <strong id="receiptMonth"></strong>. Reconhecimento local de texto de fotografias; confirma os números no recibo original. Não é uma validação fiscal.</p>
+        <div class="grid grid-cols-2 gap-2"><button type="button" id="receiptCamera" class="wt-button" onclick="scanSalaryReceipt('CAMERA')">Fotografar</button><button type="button" id="receiptGallery" class="wt-button" onclick="scanSalaryReceipt('PHOTOS')">Escolher foto</button></div>
+        <label class="block text-xs">Bruto real (€; opcional)<input id="receiptGross" type="text" inputmode="decimal" maxlength="30" class="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl p-2" /></label>
+        <label class="block text-xs">Líquido real recebido (€)<input id="receiptNet" type="text" inputmode="decimal" maxlength="30" class="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl p-2" /></label>
+        <details id="receiptOcrDetails" class="hidden"><summary class="text-xs">Texto reconhecido (temporário)</summary><textarea id="receiptOcrText" readonly rows="5" class="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl p-2 text-xs"></textarea></details>
+        <p id="receiptComparison" class="wt-note"></p>
+        <button type="button" id="receiptSave" onclick="saveSalaryReceipt()" class="wt-button primary w-full">Confirmar e guardar valores</button>
+        <button type="button" onclick="clearReceiptPreview()" class="wt-button w-full">Limpar pré-visualização</button>
+        <p id="receiptStatus" class="wt-note" aria-live="polite"></p>
+        <p class="wt-note">A app guarda só os valores confirmados, não anexa a imagem nem o texto do recibo ao backup. A câmara pode usar ficheiros temporários Android. Se não houver OCR, introduz os números manualmente.</p>
+      </details>
       <details class="wt-card space-y-3" id="bankHoursPanel">
         <summary class="wt-section-title">Banco de horas</summary>
         <div id="bankTotals" class="wt-stats-summary"></div>
@@ -1130,6 +1143,7 @@
       homeLayout: null,
       visualStyle: "original",
       textSize: "normal",
+      receiptsByMonth: {},
       driverActivities: [],
       vacationCarryByYear: {},
       payrollClosures: {},
@@ -3009,7 +3023,8 @@
         const data=calculateMonthData(month,entries,false);
         if(!data.monthEntries.length)return false;
         const totals=Object.fromEntries([...PAYROLL_SNAPSHOT_NUMBERS,...PAYROLL_SNAPSHOT_TEXT,...PAYROLL_SNAPSHOT_FLAGS].map(key=>[key,data[key]]));
-        row={status:"closed",closedAt:new Date().toISOString(),actualNet,totals};
+        const receipt=salaryReceipt(month);
+        row={status:"closed",closedAt:new Date().toISOString(),actualNet:actualNet===null&&receipt?receipt.net:actualNet,totals};
         if(!payrollClosure(month,{payrollClosures:{[month]:row}}))return false;
       } else {
         if(!old||old.status!=="closed")return false;
@@ -3052,7 +3067,8 @@
         :month>=payrollToday().slice(0,7)?"O mês só pode ser fechado depois de terminar.":"Confirma os registos e o recibo antes de fechar.";
       const input=document.getElementById("payrollActualNet");
       if(input.dataset.month!==month||closed){
-        input.value=row && row.actualNet!==null?String(row.actualNet):"";
+        const actual=closed?row.actualNet:recordedActualNet(month)??(row?row.actualNet:null);
+        input.value=actual!==null?String(actual):"";
         input.dataset.month=month;
       }
       input.disabled=closed;
@@ -3217,9 +3233,10 @@
           if(!Object.prototype.hasOwnProperty.call(recorded,date)&&scheduledLeaveHours(date)>0&&!holidayDates.has(date))missing++;
         }
       }
-      const status=future?"future":closure?"closed":count?"open":"empty";
+      const actualNet=future?null:recordedActualNet(month);
+      const status=future?"future":closure?"closed":count||actualNet!==null?"open":"empty";
       return {month,status,count,futureEntries,missing,workdays,vacation,sick,holidays,off,hours,extra,night,
-        gross:data?data.totalGross:null,net:data?data.finalNet:null,actualNet:closure?closure.actualNet:null};
+        gross:data?data.totalGross:null,net:data?data.finalNet:null,actualNet};
     }
     function yearStatistics(year,asOf=payrollToday()){
       if(!/^\d{4}$/.test(String(year))||!validCalendarDate(asOf))return null;
@@ -3286,6 +3303,7 @@
       renderDriverActivities();
       renderBankHours();
       renderPersonalWorkAlerts();
+      renderReceipt(monthPrefix);
       // Resumo Rápido
       document.getElementById("quickTotalHours").textContent = (d.normalH + d.extraH) + "h";
       document.getElementById("quickExtraHours").textContent = "+" + d.extraH + "h";
@@ -3684,6 +3702,7 @@
           entry[field] === undefined || (typeof entry[field] === "number" && Number.isFinite(entry[field])))
       );
       if (!validEntries) return false;
+      if("receiptsByMonth" in value.settings&&(!isPlainRecord(value.settings.receiptsByMonth)||!Object.entries(value.settings.receiptsByMonth).every(([month,row])=>validPayrollMonth(month)&&validSalaryReceipt(row))))return false;
       if(!Object.values(value.entries).every(validBankEntry)||!bankLedger(value.entries).valid)return false;
       if("driverActivities" in value.settings && !validDriverActivities(value.settings.driverActivities))return false;
       if("vacationCarryByYear" in value.settings && (!isPlainRecord(value.settings.vacationCarryByYear)||!Object.entries(value.settings.vacationCarryByYear).every(([y,n])=>/^\d{4}$/.test(y)&&Number.isInteger(n)&&n>=0&&n<=365)))return false;
@@ -3870,6 +3889,8 @@
         lines.push(["MÊS FECHADO EM",text(closure.closedAt.slice(0,10))]);
         if(closure.actualNet!==null)lines.push(["LÍQUIDO REAL RECEBIDO",money(closure.actualNet)],["Diferença real − estimativa",money(closure.actualNet-d.finalNet)]);
       }
+      if(!d.closed&&recordedActualNet(month)!==null)lines.push(["LÍQUIDO REAL RECEBIDO",money(recordedActualNet(month))],["Diferença real − estimativa",money(recordedActualNet(month)-d.finalNet)]);
+      const receipt=salaryReceipt(month);if(receipt&&receipt.gross!==null)lines.push(["BRUTO REAL DO RECIBO",money(receipt.gross)]);
       if (annualPremium.enabled)
         lines.push(["PRÉMIO ANUAL ACUMULADO (separado do salário mensal)",
           money(annualPremium.bonus)]);
@@ -3938,6 +3959,116 @@
       }
     }
 
+    function parseReceiptAmount(raw){
+      if(typeof raw!=="string")return null;
+      const text=raw.trim().replace(/[\u00a0\u202f]/g," ").replace(/\s*(?:€|EUR)$/i,"").trim();
+      if(!text)return null;
+      let normalized;
+      if(/^\d{1,8}(?:[.,]\d{1,2})?$/.test(text))normalized=text.replace(",",".");
+      else if(/^\d{1,3}(?:[. ]\d{3})+,\d{2}$/.test(text))normalized=text.replace(/[. ]/g,"").replace(",",".");
+      else if(/^\d{1,3}(?:[, ]\d{3})+\.\d{2}$/.test(text))normalized=text.replace(/[, ]/g,"");
+      else return null;
+      const value=Number(normalized);
+      return Number.isFinite(value)&&value>=0&&value<=10000000?Math.round(value*100)/100:null;
+    }
+    function suggestReceiptAmounts(text){
+      const gross=new Set(),net=new Set();
+      const labels={
+        gross:/^\s*(?:total\s+brut|salaire\s+brut|brut\s+total|total\s+bruto|sal[aá]rio\s+bruto|vencimento\s+bruto|gross\s+pay|total\s+gross|bruttolohn|gesamtbrutto)\s*[:\-]?\s*/i,
+        net:/^\s*(?:net\s+[àa]\s+payer|net\s+[àa]\s+verser|net\s+pay[eé]|l[ií]quido\s+a\s+receber|total\s+l[ií]quido|net\s+pay|nettolohn|auszahlungsbetrag)\s*[:\-]?\s*/i
+      };
+      for(const line of String(text||"").slice(0,60000).split(/\r?\n/)){
+        for(const [name,pattern] of Object.entries(labels)){
+          const match=line.match(pattern);if(!match)continue;
+          // Require the entire remainder to be one amount; ambiguous columns
+          // or "avant impôt" are left for manual confirmation.
+          const amount=parseReceiptAmount(line.slice(match[0].length));
+          if(amount!==null)(name==="gross"?gross:net).add(amount);
+        }
+      }
+      return {gross:gross.size===1?[...gross][0]:null,net:net.size===1?[...net][0]:null};
+    }
+    function validSalaryReceipt(row){
+      const amount=v=>typeof v==="number"&&Number.isFinite(v)&&v>=0&&v<=10000000&&Math.abs(v*100-Math.round(v*100))<1e-5;
+      return isPlainRecord(row)&&(row.gross===null||amount(row.gross))&&amount(row.net)&&typeof row.savedAt==="string"&&Number.isFinite(Date.parse(row.savedAt));
+    }
+    function salaryReceipt(month,source=settings){
+      if(!validPayrollMonth(month)||!isPlainRecord(source.receiptsByMonth))return null;
+      const row=source.receiptsByMonth[month];return validSalaryReceipt(row)?row:null;
+    }
+    function recordedActualNet(month){
+      const closure=payrollClosure(month);
+      if(closure&&closure.status==="closed")return closure.actualNet;
+      const receipt=salaryReceipt(month);return receipt?receipt.net:null;
+    }
+    function setSalaryReceipt(month,gross,net,today=payrollToday()){
+      if(!validPayrollMonth(month)||!validCalendarDate(today)||month>today.slice(0,7))return false;
+      const row={gross,net,savedAt:new Date().toISOString()};
+      if(!validSalaryReceipt(row))return false;
+      const old=payrollClosure(month);
+      const next={...settings,receiptsByMonth:{...(isPlainRecord(settings.receiptsByMonth)?settings.receiptsByMonth:{}),[month]:row}};
+      // Real receipt data may be corrected explicitly without changing the
+      // immutable salary estimate or daily entries of a closed month.
+      if(old&&old.status==="closed")next.payrollClosures={...settings.payrollClosures,[month]:{...old,actualNet:net}};
+      try{localStorage.setItem("wt_settings",JSON.stringify(next));}catch(_){return false;}
+      settings=next;return true;
+    }
+    function receiptStatus(message){const el=document.getElementById("receiptStatus");if(el)el.textContent=message;}
+    function clearReceiptPreview(){
+      const text=document.getElementById("receiptOcrText"),details=document.getElementById("receiptOcrDetails");
+      if(text)text.value="";if(details){details.open=false;details.classList.add("hidden");}
+    }
+    function renderReceipt(month){
+      const field=document.getElementById("receiptMonth");if(!field)return;
+      const row=salaryReceipt(month),gross=document.getElementById("receiptGross"),net=document.getElementById("receiptNet");
+      if(field.textContent!==month||privacyMode||gross.dataset.private==="1"){
+        clearReceiptPreview();field.textContent=month;
+        gross.value=privacyMode?"":row&&row.gross!==null?String(row.gross.toFixed(2)):"";
+        const actual=recordedActualNet(month);
+        net.value=privacyMode||actual===null?"":actual.toFixed(2);
+        gross.dataset.private=privacyMode?"1":"0";
+      }
+      const plugins=window.Capacitor&&window.Capacitor.Plugins;
+      for(const id of ["receiptCamera","receiptGallery"])document.getElementById(id).disabled=privacyMode||!plugins||!plugins.Camera||!plugins.WorkTimeReceipt;
+      for(const el of [gross,net,document.getElementById("receiptSave")])el.disabled=privacyMode||month>payrollToday().slice(0,7);
+      const estimate=calculateMonthData(month);
+      document.getElementById("receiptComparison").textContent=privacyMode?"Valores ocultos.":row?"Líquido real "+formatMoney(recordedActualNet(month)??row.net)+"; diferença face ao líquido estimado: "+formatMoney((recordedActualNet(month)??row.net)-estimate.finalNet)+".":"Sem recibo digitalizado guardado neste mês.";
+    }
+    let receiptScanning=false;
+    async function scanSalaryReceipt(source){
+      if(privacyMode||receiptScanning||!["CAMERA","PHOTOS"].includes(source))return false;
+      const plugins=window.Capacitor&&window.Capacitor.Plugins;
+      if(!plugins||!plugins.Camera||!plugins.WorkTimeReceipt){receiptStatus("OCR indisponível. Podes preencher manualmente.");return false;}
+      const month=document.getElementById("currentMonthPicker").value;
+      receiptScanning=true;
+      try{
+        clearReceiptPreview();
+        receiptStatus("A abrir fotografia...");
+        const photo=await plugins.Camera.getPhoto({source,resultType:"base64",quality:90,width:2600,height:3200,correctOrientation:true,saveToGallery:false});
+        if(!photo.base64String)throw Error("Empty image");
+        receiptStatus("A reconhecer texto no dispositivo...");
+        const result=await plugins.WorkTimeReceipt.recognize({image:photo.base64String});
+        if(privacyMode||document.getElementById("currentMonthPicker").value!==month)return false;
+        const text=String(result.text||"").slice(0,60000),suggestions=suggestReceiptAmounts(text);
+        document.getElementById("receiptOcrText").value=text;
+        document.getElementById("receiptOcrDetails").classList.toggle("hidden",!text);
+        if(suggestions.gross!==null)document.getElementById("receiptGross").value=suggestions.gross.toFixed(2);
+        if(suggestions.net!==null)document.getElementById("receiptNet").value=suggestions.net.toFixed(2);
+        receiptStatus("Confirma ou corrige ambos os valores no recibo original. Nada foi guardado.");return true;
+      }catch(_){receiptStatus("Leitura cancelada ou indisponível. Introduz os valores manualmente.");return false;}
+      finally{receiptScanning=false;}
+    }
+    function saveSalaryReceipt(){
+      if(privacyMode||settingsDirty)return false;
+      const month=document.getElementById("currentMonthPicker").value;
+      const grossField=document.getElementById("receiptGross"),netField=document.getElementById("receiptNet");
+      const gross=parseReceiptAmount(grossField.value),net=parseReceiptAmount(netField.value);
+      if((grossField.value.trim()&&gross===null)||net===null){receiptStatus("Introduz valores monetários válidos.");return false;}
+      if(!confirm("Confirmas os valores reais do recibo de "+month+"? As estimativas e os horários não serão alterados."))return false;
+      if(!setSalaryReceipt(month,gross,net)){receiptStatus("Não foi possível guardar os valores.");return false;}
+      clearReceiptPreview();renderAll();receiptStatus("Valores confirmados guardados.");return true;
+    }
+
     // Shared report model: no write operations, no invented pay for missing months.
     function reportModel(period,reference,asOf=payrollToday()){
       if(!validCalendarDate(asOf)||!["week","month","year"].includes(period))return null;
@@ -3975,7 +4106,7 @@
       return {period,start,end,heading,summary,rows,monthly};
     }
     const REPORT_ENTRY_HEADERS=["Data","Tipo","Normais (h)","Extra (h)","Noite (h)","Banco + (h)","Banco − (h)","Notas"];
-    const REPORT_MONTH_HEADERS=["Mês","Estado","Registos","Trabalho (h)","Bruto est. (€)","Líquido est. (€)","Real (€)","Dias sem registo"];
+    const REPORT_MONTH_HEADERS=["Mês","Estado","Registos","Trabalho (h)","Bruto est. (€)","Líquido est. (€)","Líquido real (€)","Dias sem registo"];
     function reportSheets(model){
       return [{name:"Resumo",rows:[["WorkTime Pro — "+model.heading],["Simulação pessoal; não é recibo oficial. Valores em EUR; horas decimais."],["Indicador","Valor"],...model.summary]},
         {name:"Registos",rows:[REPORT_ENTRY_HEADERS,...model.rows]},
