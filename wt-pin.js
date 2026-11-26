@@ -76,7 +76,7 @@
     return root.btoa(s);
   }
   function decode(value,max){
-    if(typeof value!=="string"||value.length>Math.ceil(max/3)*4||!/^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value))throw Error("Invalid backup encoding");
+    if(typeof value!=="string"||value.length>Math.ceil(max/3)*4||value.length%4!==0||/[^A-Za-z0-9+/=]/.test(value)||/=/.test(value.replace(/={1,2}$/,"")))throw Error("Invalid backup encoding");
     const binary=root.atob(value);
     if(binary.length>max)throw Error("Backup exceeds size limit");
     return Uint8Array.from(binary,c=>c.charCodeAt(0));
