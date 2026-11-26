@@ -1829,3 +1829,50 @@ test("fundo independente: pré-visualização, gravação e restauro",()=>{
     assert.ok(source.includes('data-wt-theme="light"][data-wt-background="'+color+'"'));
   }
 });
+
+test("v3: histórico salarial conserva bruto antigo e usa taxas por dia",()=>{
+  const dates=["2026-10-30","2026-11-02","2026-11-16"];
+  const entries=Object.fromEntries(dates.map(date=>[date,{date,type:"work",normal:8,extra:2,night:1,includeBonus:true}]));
+  const base={hourlyRate:20,hourlyBonus:2,overtimePct:40,nightPct:15,dailyPanier:4};
+  const app=makeApp(base,entries);
+  const before=app.evaluate("settings");
+  const changes=app.ctx.updatePayrollHistory(before,{...before,hourlyRate:25,hourlyBonus:3,dailyPanier:5},"2026-11-15","2026-11-26");
+  app.ctx.writeBackupState({settings:{...before,...changes},entries});
+  const close=(a,b)=>assert.ok(Math.abs(a-b)<1e-7,`${a} ≠ ${b}`);
+  close(app.ctx.calculateMonthData("2026-10").totalGross,243);
+  close(app.ctx.calculateMonthData("2026-11").totalGross,551.75);
+  close(app.ctx.threeMonthWorkAverage("2026-11-20").variableGross,205.75);
+  close(app.ctx.annualRecordedBonus("2026","2026-11-26").gross,781.75);
+  const backup=app.ctx.snapshotAllData();
+  app.ctx.writeBackupState({settings:base,entries});
+  assert.equal(app.ctx.payRatesForDate("2026-11-16").hourlyRate,20);
+  app.ctx.writeBackupState(backup);
+  assert.equal(app.ctx.payRatesForDate("2026-11-16").hourlyRate,25);
+  assert.equal(app.ctx.updatePayrollHistory(before,before,"2026-12-01","2026-11-26"),null);
+  const current=app.evaluate("settings");
+  const revised=app.ctx.updatePayrollHistory(current,{...current,hourlyRate:22},"2026-11-05","2026-11-26");
+  assert.equal(revised.hourlyRate,25);
+  assert.equal(app.ctx.payRatesForDate("2026-11-06",{...current,...revised}).hourlyRate,22);
+});
+
+test("v3: Guardar alterações regista data salarial, mantém registos e aceita backups antigos",()=>{
+  const app=makeApp({hourlyRate:20});
+  const ui=settingsEditFixture(app);
+  ui.elements.cfgPayEffectiveDate={value:"2026-01-01"};
+  assert.equal(app.ctx.saveSettings(),true);
+  const saved=JSON.parse(app.values.get("wt_settings"));
+  assert.equal(saved.payrollHistory[0].from,"2026-01-01");
+  assert.equal(saved.payrollHistory[0].rates.hourlyRate,29.5);
+  assert.equal(saved.payrollBaseline.hourlyRate,20);
+  assert.equal(app.ctx.payRatesForDate("2025-12-31").hourlyRate,20);
+  assert.equal(app.ctx.payRatesForDate("2026-01-01").hourlyRate,29.5);
+  ui.elements.cfgPayEffectiveDate.value="2099-01-01";
+  assert.equal(app.ctx.saveSettings(),false);
+  assert.deepEqual(JSON.parse(app.values.get("wt_settings")),saved);
+});
+
+test("v3: histórico inválido importado não é usado nos cálculos",()=>{
+  const app=makeApp({hourlyRate:25,payrollHistory:[{from:"2026-02-30",rates:{hourlyRate:1}},{from:"2026-01-01",rates:{hourlyRate:-99}}]});
+  assert.equal(app.ctx.validPayrollHistory(app.evaluate("settings")).length,0);
+  assert.equal(app.ctx.payRatesForDate("2026-11-01").hourlyRate,25);
+});
