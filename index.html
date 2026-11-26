@@ -2268,7 +2268,19 @@
       const jobs = Object.values(entries).filter(e => e && typeof e.date==="string" &&
         e.date.startsWith(year+"-") && e.date <= cutoff);
       let gross = 0;
+      // Months already closed contribute their frozen gross (excluding panier).
+      // Only use a whole-month snapshot when the entire month precedes the cutoff.
+      const frozenMonths=new Set();
       for (const e of jobs) {
+        const month=e.date.slice(0,7);
+        if((month<cutoff.slice(0,7) || (cutoff.endsWith("-12-31") && month===cutoff.slice(0,7))) && isPayrollMonthClosed(month)){
+          if(!frozenMonths.has(month)){
+            const totals=payrollClosure(month).totals;
+            gross+=totals.totalGross-totals.panierGross;
+            frozenMonths.add(month);
+          }
+          continue;
+        }
         const rates=payRatesForDate(e.date);
         const hourRate=rates.hourlyRate, hourlyBonus=rates.hourlyBonus,
           extraPct=rates.overtimePct/100, nightPct=rates.nightPct/100;
