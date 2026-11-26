@@ -889,6 +889,50 @@
       });
     }
 
+    // Um botão visível em todas as secções das opções. As opções
+    // de segurança e os botões nativos mantêm os seus próprios comandos.
+    let settingsDirty = false;
+    let pendingVacationAuto = null;
+
+    function setSettingsSaveState(saved, message, error) {
+      settingsDirty = !saved;
+      const button = document.getElementById("settingsSaveButton");
+      const status = document.getElementById("settingsSaveStatus");
+      if (button) {
+        button.disabled = saved;
+        button.classList.toggle("wt-settings-saved", saved);
+        button.textContent = saved ? "✓ Configurações guardadas" : "💾 Guardar alterações";
+      }
+      if (status) {
+        status.textContent = message || (saved
+          ? "Todas as alterações foram gravadas."
+          : "Alterações por guardar. Carrega no botão azul para confirmar.");
+        status.className = "text-[11px] " + (error ? "text-rose-300"
+          : saved ? "text-emerald-300" : "text-amber-200");
+      }
+    }
+
+    function markSettingsDirty() {
+      setSettingsSaveState(false);
+    }
+
+    function initSettingsEditor() {
+      const root = document.getElementById("tab-config");
+      if (!root || root.dataset.saveReady) return;
+      root.dataset.saveReady = "1";
+      const onEdited = event => {
+        const id = event.target && event.target.id || "";
+        if (!(id.startsWith("cfg") || id.startsWith("week"))) return;
+        // Estes têm aplicação direta ou autenticação separada.
+        if (["cfgSecurityPin", "cfgWidgetEnabled", "cfgShiftNotifications"].includes(id)) return;
+        markSettingsDirty();
+      };
+      root.addEventListener("input", onEdited);
+      root.addEventListener("change", onEdited);
+      setSettingsSaveState(true,
+        "Ao alterar campos, o botão ficará azul. PIN, widget, notificações e tema têm comandos próprios.");
+    }
+
     function initApp() {
       const today = new Date().toISOString().slice(0, 10);
       document.getElementById("entryDate").value = today;
@@ -902,6 +946,7 @@
       initManualEntryEditor();
       loadSettingsToInputs();
       organizeSettings();
+      initSettingsEditor();
       renderAll();
       if (window.ProUI) window.ProUI.init();
 
@@ -1117,9 +1162,42 @@
       applyTranslations();
     }
 
+    function editedWeeklySchedule() {
+      const grid = document.getElementById("weeklyScheduleGrid");
+      if (!grid || !grid.children || grid.children.length < 7)
+        return settings.weeklySchedule || defaultSettings.weeklySchedule;
+      const next = {};
+      for (const { day } of WEEKDAYS) {
+        const enabled = document.getElementById("weekEnabled" + day);
+        const start = document.getElementById("weekStart" + day);
+        const end = document.getElementById("weekEnd" + day);
+        const pause = document.getElementById("weekBreak" + day);
+        if (!enabled || !start || !end || !pause) return null;
+        const raw = String(pause.value).trim(), minutes = Number(raw);
+        const slot = {
+          enabled: !!enabled.checked,
+          start: start.value, end: end.value,
+          breakMinutes: minutes
+        };
+        if (raw === "" || !Number.isInteger(minutes) || minutes < 0 || minutes > 1439 ||
+            (slot.enabled && hoursForSchedule(slot) === null)) return null;
+        next[day] = slot;
+      }
+      return next;
+    }
+
     function saveSettings() {
-      // Preparar cópia: um erro no armazenamento não deve alterar a configuração em memória.
-      const nextSettings = { ...settings };
+      // Guardar todas as definições e o horário semanal num único registo:
+      // não deixar o salário atualizado com o horário anterior ou vice-versa.
+      const weeklySchedule = editedWeeklySchedule();
+      if (!weeklySchedule) {
+        setSettingsSaveState(false,
+          "Verifica os horários: entrada, saída e pausas dos dias selecionados.", true);
+        return false;
+      }
+      const nextSettings = { ...settings, weeklySchedule };
+      if (pendingVacationAuto !== null)
+        nextSettings.vacationAuto = pendingVacationAuto;
       nextSettings.hourlyRate = parseFloat(document.getElementById("cfgHourlyRate").value) || 0;
       nextSettings.hourlyBonus = parseFloat(document.getElementById("cfgHourlyBonus").value) || 0;
       const extraInput = document.getElementById("cfgOvertimePct").value;
@@ -1157,73 +1235,63 @@
         return false;
       }
       settings = nextSettings;
+      pendingVacationAuto = null;
       loadSettingsToInputs();
       renderAll();
+      setSettingsSaveState(true, "✓ Definições e horário semanal guardados com sucesso.");
       return true;
     }
 
     function changeEmployerCountry() {
       const country = document.getElementById("cfgEmployerCountry").value;
-      const baseline = window.WTCountryRules && WTCountryRules.legalLeave(country);
-      settings.employerCountry = country;
-      if (settings.syncCalendarWithEmployer !== false) {
-        settings.holidayCountry = country;
-        document.getElementById("cfgHolidayCountry").value = country;
-      }
-      if (settings.vacationAuto !== false && baseline !== null) {
-        settings.annualVacation = baseline;
-        document.getElementById("cfgAnnualVacation").value = baseline;
-      }
-      // País do calendário e país de residência continuam independentes.
-      saveSettings();
+      const calendarSync = document.getElementById("cfgSyncCalendarWithEmployer").checked;
+      const minimum = window.WTCountryRules && WTCountryRules.legalLeave(country);
+      if (calendarSync) document.getElementById("cfgHolidayCountry").value = country;
+      if ((pendingVacationAuto === null ? settings.vacationAuto !== false
+            : pendingVacationAuto) && minimum !== null && minimum !== undefined)
+        document.getElementById("cfgAnnualVacation").value = minimum;
+      markSettingsDirty();
     }
 
     function changeCalendarCountry() {
       const calendar = document.getElementById("cfgHolidayCountry").value;
       const employer = document.getElementById("cfgEmployerCountry").value;
-      // Uma escolha do calendário não pode alterar silenciosamente o regime
-      // fiscal ou os direitos laborais. Permitir alinhar ambos com aprovação.
-      if (calendar !== employer &&
-        confirm("Queres utilizar " + calendar +
+      if (calendar !== employer && confirm("Queres utilizar " + calendar +
           " também como país do empregador para atualizar impostos e férias? " +
           "OK = atualizar todos. Cancelar = alterar apenas os feriados.")) {
         document.getElementById("cfgEmployerCountry").value = calendar;
         document.getElementById("cfgSyncCalendarWithEmployer").checked = true;
-        settings.syncCalendarWithEmployer = true;
-        const minimum = window.WTCountryRules && WTCountryRules.legalLeave(calendar);
-        if (settings.vacationAuto !== false && minimum !== null && minimum !== undefined) {
-          settings.annualVacation = minimum;
-          document.getElementById("cfgAnnualVacation").value = minimum;
-        }
-        saveSettings();
-        return;
+        changeEmployerCountry();
+      } else {
+        document.getElementById("cfgSyncCalendarWithEmployer").checked = false;
+        markSettingsDirty();
       }
-      document.getElementById("cfgSyncCalendarWithEmployer").checked = false;
-      settings.syncCalendarWithEmployer = false;
-      saveSettings();
     }
 
     function saveVacationOverride() {
-      const number = Number(document.getElementById("cfgAnnualVacation").value);
-      if (!Number.isFinite(number) || number < 0 || number > 365) {
+      const field = document.getElementById("cfgAnnualVacation");
+      const value = Number(field.value);
+      if (field.value.trim() === "" || !Number.isFinite(value) ||
+          value < 0 || value > 365) {
         alert("Introduz um número de dias válido.");
-        return;
+        return false;
       }
-      settings.vacationAuto = false;
-      saveSettings();
+      pendingVacationAuto = false;
+      markSettingsDirty();
+      return true;
     }
 
     function resetVacationEntitlement() {
-      const baseline = window.WTCountryRules && WTCountryRules.legalLeave(settings.employerCountry || "LU");
+      const country = document.getElementById("cfgEmployerCountry").value || "LU";
+      const baseline = window.WTCountryRules && WTCountryRules.legalLeave(country);
       if (baseline === null || baseline === undefined) {
         alert("Ainda não foi verificado o mínimo legal deste país. Introduz o valor do contrato.");
-        return;
+        return false;
       }
-      settings.vacationAuto = true;
-      settings.annualVacation = baseline;
-      localStorage.setItem("wt_settings", JSON.stringify(settings));
-      loadSettingsToInputs();
-      renderAll();
+      document.getElementById("cfgAnnualVacation").value = baseline;
+      pendingVacationAuto = true;
+      markSettingsDirty();
+      return true;
     }
 
     async function savePin() {
@@ -1921,6 +1989,14 @@
     }
 
     function switchTab(tab) {
+      const config = document.getElementById("tab-config");
+      if (tab !== "config" && config && !config.classList.contains("hidden") && settingsDirty) {
+        if (!confirm("Tens alterações nas definições por guardar. Sair sem as guardar?"))
+          return false;
+        pendingVacationAuto = null;
+        loadSettingsToInputs();
+        setSettingsSaveState(true, "Alterações não guardadas descartadas.");
+      }
       ["home", "calendario", "ponto", "registo", "folha", "ferias", "config"].forEach(t => {
         document.getElementById("tab-" + t).classList.toggle("hidden", t !== tab);
       });
