@@ -4,6 +4,12 @@ on:
   push:
     branches: [ main, worktime-pro-2 ]
   workflow_dispatch:
+    inputs:
+      publish_preview:
+        description: 'Publicar Preview assinada no GitHub Releases (após testes)'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build-apk:
@@ -44,7 +50,7 @@ jobs:
           # A branch de testes usa um identificador diferente para nunca substituir
           # a aplicação principal ou o seu armazenamento Android.
           if [ "$GITHUB_REF_NAME" = "worktime-pro-2" ]; then
-            APP_NAME="WorkTime Pro 2 Preview"
+            APP_NAME="WorkTime Pro 3 Preview"
             APP_ID="lu.marcio.worktimepro.preview"
           else
             APP_NAME="WorkTime Pro"
@@ -60,6 +66,7 @@ jobs:
         run: |
           python3 scripts/install_android_widget.py
           python3 scripts/install_android_receipt.py
+          python3 scripts/configure_android_preview_version.py
 
       # Nunca imprimir senhas/chaves nem publicar o ficheiro .jks como artefacto.
       # Sem os quatro segredos é apenas um APK DEBUG de teste, sem assinatura estável.
@@ -124,3 +131,26 @@ jobs:
           name: ${{ github.ref_name == 'worktime-pro-2' && 'WorkTime-Pro-2-Preview-APK' || 'WorkTime-Pro-Android-APK' }}
           path: dist/*.apk
           if-no-files-found: error
+
+  publish-signed-preview:
+    if: github.event_name == 'workflow_dispatch' && github.ref_name == 'worktime-pro-2' && inputs.publish_preview == true
+    needs: build-apk
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Obter APK da compilação validada
+        uses: actions/download-artifact@v4
+        with:
+          name: WorkTime-Pro-2-Preview-APK
+          path: dist
+      - name: Publicar apenas a Preview assinada
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s dist/WorkTime-Pro-2-PREVIEW-SIGNED.apk || { echo "::error::A publicação exige a chave permanente. APK DEBUG não será publicada."; exit 1; }
+          cp dist/WorkTime-Pro-2-PREVIEW-SIGNED.apk dist/WorkTime-Pro-3-PREVIEW-SIGNED.apk
+          tag="worktime-preview-v3-${GITHUB_RUN_NUMBER}"
+          gh release create "$tag" dist/WorkTime-Pro-3-PREVIEW-SIGNED.apk --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --title "WorkTime Pro 3 Preview $GITHUB_RUN_NUMBER" --notes "Preview Android assinada. Confirma a compatibilidade da assinatura e guarda um backup externo antes de atualizar."
