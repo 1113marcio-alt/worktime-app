@@ -7,6 +7,17 @@
   const DRAFTS_KEY = "wt_shift_drafts";
   const $ = id => document.getElementById(id);
   let calendarSelected = null;
+  let previousCalendarTap = {date:"", at:0};
+  // Mantém o estado fora de cada botão: o calendário recria o HTML depois
+  // do primeiro toque, mas o segundo toque deve continuar a ser reconhecido.
+  function isSecondCalendarTap(iso,at) {
+    const now = typeof at === "number" ? at : Date.now();
+    const second = previousCalendarTap.date === iso &&
+      now >= previousCalendarTap.at && now - previousCalendarTap.at <= 480;
+    previousCalendarTap = second ? {date:"",at:0} : {date:iso,at:now};
+    return second;
+  }
+
   let activeTab = "home";
 
   function getStored(key, fallback) {
@@ -238,7 +249,12 @@
         marker.className = "wt-dot " + (entry ? entry.type : "holiday");
         btn.appendChild(marker);
       }
-      btn.onclick = () => { calendarSelected = iso; renderCalendar(); };
+      btn.onclick = () => {
+        if (isSecondCalendarTap(iso)) openDate(iso);
+        else { calendarSelected = iso; renderCalendar(); }
+      };
+      // Para rato/desktop, usar também o evento de duplo clique.
+      btn.ondblclick = () => openDate(iso);
       grid.appendChild(btn);
     }
     const legend = $("calendarSummary");
@@ -578,6 +594,6 @@
     init, render, onTabChange, stepMonth, openDate, openSelectedDay, setHistoryFilter,
     primaryClockAction, finishShift, discardActive, applyDraft, discardDraft,
     // Pure helpers exported for automated tests.
-    helpers: { localDateKey, timeWorkedSeconds, timeParts, historyRows }
+    helpers: { localDateKey, timeWorkedSeconds, timeParts, historyRows, isSecondCalendarTap }
   };
 }());
