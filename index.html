@@ -1046,6 +1046,9 @@
           <label class="block text-xs">Palavra-passe<input id="encryptedBackupPassword" type="password" autocomplete="new-password" maxlength="1024" class="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl p-2" /></label>
           <label class="block text-xs">Confirmar palavra-passe (para criar cópias)<input id="encryptedBackupConfirm" type="password" autocomplete="new-password" maxlength="1024" class="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl p-2" /></label>
           <button type="button" onclick="exportEncryptedBackup()" class="wt-button primary w-full">Exportar backup encriptado</button>
+          <button type="button" onclick="createLocalBackupNow()" class="wt-button w-full">Criar cópia local agora</button>
+          <button type="button" onclick="restorePreviousState()" class="wt-button w-full">Recuperar estado anterior à importação</button>
+          <p class="wt-note">Ao importar um backup encriptado, a cópia de recuperação anterior é protegida com a palavra-passe desse ficheiro. Para a recuperar, introduz essa mesma palavra-passe acima.</p>
           <button type="button" onclick="document.getElementById('encryptedBackupFile').click()" class="wt-button w-full">Restaurar ficheiro encriptado</button>
           <input id="encryptedBackupFile" type="file" accept=".json,application/json" class="hidden" onchange="importEncryptedBackup(event)" />
           <label class="block text-xs">Frequência das cópias locais
@@ -3731,11 +3734,31 @@
     function disableAutoBackup(){
       autoBackupSession=null;encryptedBackupStatus("Cópias automáticas paradas. As cópias já criadas mantêm-se.");
     }
+    async function createLocalBackupNow(){
+      if(settingsDirty||autoBackupBusy){encryptedBackupStatus("Guarda as definições e aguarda a operação de backup atual.");return false;}
+      const password=backupPassphrase(true);if(!password)return false;
+      autoBackupBusy=true;
+      try{
+        const data=await window.WTBackupCrypto.encrypt(backupPayload(),password);
+        if(!storeEncryptedLocalBackup(data,payrollToday()))throw Error("Storage full");
+        encryptedBackupStatus("Cópia local encriptada criada. Exporta-a para guardar fora da aplicação.");
+        renderEncryptedBackups();return true;
+      }catch(_){encryptedBackupStatus("Falha na cópia local. As versões anteriores foram mantidas.");return false;}
+      finally{autoBackupBusy=false;}
+    }
     async function restoreEncryptedEnvelope(envelope,password){
       try{
         const parsed=await window.WTBackupCrypto.decrypt(envelope,password);
-        return restoreParsedBackup(parsed,encryptedBackupStatus);
-      }catch(_){encryptedBackupStatus("Palavra-passe incorreta, ficheiro danificado ou formato incompatível. Nenhum registo alterado.");return false;}
+        if(!isValidWorkTimeBackup(parsed)){encryptedBackupStatus("Backup incompatível. Nenhum registo alterado.");return false;}
+        if(settingsDirty){encryptedBackupStatus("Guarda primeiro as definições.");return false;}
+        const snapshot=JSON.stringify(snapshotAllData());
+        const recovery=await window.WTBackupCrypto.encrypt(JSON.parse(snapshot),password);
+        // Never replace state if a shift or entry changed during encryption.
+        if(settingsDirty||JSON.stringify(snapshotAllData())!==snapshot){
+          encryptedBackupStatus("Os dados mudaram durante a preparação. Repete o restauro.");return false;
+        }
+        return restoreParsedBackup(parsed,encryptedBackupStatus,recovery);
+      }catch(_){encryptedBackupStatus("Palavra-passe incorreta, ficheiro danificado ou falha de encriptação. Nenhum registo alterado.");return false;}
     }
     function importEncryptedBackup(event){
       const file=event.target.files&&event.target.files[0];event.target.value="";
@@ -3854,15 +3877,34 @@
       if (!saved) { alert("Ainda não existe uma cópia de recuperação de importação."); return; }
       let parsed;
       try { parsed = JSON.parse(saved); } catch (_) { alert("Cópia de recuperação inválida."); return; }
-      if (!isValidWorkTimeBackup(parsed)) { alert("Cópia de recuperação inválida."); return; }
-      if (!confirm("Repor os dados anteriores à última importação? Exporte um backup dos dados atuais antes de continuar.")) return;
+      if(window.WTBackupCrypto&&window.WTBackupCrypto.isEncrypted(parsed)){
+        const password=backupPassphrase(false);
+        if(!password){alert("Introduz a palavra-passe do backup importado na secção Backup encriptado.");return false;}
+        return restoreEncryptedPreviousState(parsed,password);
+      }
+      return applyPreviousState(parsed);
+    }
+    async function restoreEncryptedPreviousState(envelope,password){
+      try{
+        const snapshot=JSON.stringify(snapshotAllData());
+        const parsed=await window.WTBackupCrypto.decrypt(envelope,password);
+        if(settingsDirty||JSON.stringify(snapshotAllData())!==snapshot){encryptedBackupStatus("Os dados mudaram. Repete a recuperação.");return false;}
+        return applyPreviousState(parsed);
+      }catch(_){encryptedBackupStatus("Não foi possível recuperar: confirma a palavra-passe.");return false;}
+    }
+    function applyPreviousState(parsed){
+      if (!isValidWorkTimeBackup(parsed)) { alert("Cópia de recuperação inválida."); return false; }
+      if(settingsDirty){alert("Guarda primeiro as definições.");return false;}
+      if (!confirm("Repor os dados anteriores à última importação? Exporte um backup dos dados atuais antes de continuar.")) return false;
       try {
         writeBackupState(parsed);
         const status = document.getElementById("backupImportStatus");
         if (status) status.textContent = "✓ Estado anterior recuperado, incluindo as configurações.";
         alert("Estado anterior à importação recuperado, incluindo as configurações.");
+        return true;
       } catch (_) {
-        alert("Não foi possível recuperar automaticamente. Utilize o backup JSON guardado.");
+        alert("Não foi possível recuperar automaticamente. Utilize o backup externo guardado.");
+        return false;
       }
     }
 
@@ -3896,12 +3938,13 @@
       reader.readAsText(file);
     }
 
-    function restoreParsedBackup(parsed,show) {
+    function restoreParsedBackup(parsed,show,recoveryEnvelope=null) {
         if (!isValidWorkTimeBackup(parsed)) {
           show("Backup incompatível. Os teus registos não foram alterados.");
           alert("Backup inválido: é necessário conter configurações e registos compatíveis.");
           return false;
         }
+        if(settingsDirty){show("Guarda primeiro as definições.");return false;}
         if (!confirm("Importar este backup vai substituir os registos e configurações atuais. Já guardou uma cópia externa do estado atual?")) return false;
         const keys = ["wt_settings", "wt_entries", "wt_shift_drafts", "wt_active_shift"];
         const before = Object.fromEntries(keys.map(key => [key, localStorage.getItem(key)]));
@@ -3910,7 +3953,8 @@
         const entriesBefore = entries;
         try {
           // Gravar a cópia anterior primeiro, antes de substituir quaisquer dados.
-          localStorage.setItem("wt_pre_import_backup", JSON.stringify(snapshot));
+          if(recoveryEnvelope!==null&&(!window.WTBackupCrypto||!window.WTBackupCrypto.isEncrypted(recoveryEnvelope)))throw Error("Invalid recovery envelope");
+          localStorage.setItem("wt_pre_import_backup", JSON.stringify(recoveryEnvelope===null?snapshot:recoveryEnvelope));
           writeBackupState(parsed);
           show("✓ Backup restaurado: configurações, horários semanais, salários, férias, idioma, tema e registos. O PIN deste telemóvel permanece.");
           alert("Backup completo restaurado com sucesso. As configurações anteriores também foram substituídas pelas do backup.");
