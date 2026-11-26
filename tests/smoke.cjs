@@ -2377,6 +2377,16 @@ test("v3: scripts de OCR e versão executam num projeto Android isolado",()=>{
     assert.equal(build.split("com.google.mlkit:text-recognition:16.0.1").length-1,1);
     assert.match(build,/versionCode 100230/);
     assert.match(build,/versionName "3\.0-preview\.230"/);
+    fs.writeFileSync(gradle,build+"\nandroid { buildTypes { } }\n");
+    const key=path.join(tmp,"fixture.jks");fs.writeFileSync(key,"fake key for script test only");
+    const signed=spawnSync("python3",[path.resolve("scripts/configure_android_release_signing.py")],{cwd:tmp,env:{...process.env,GITHUB_RUN_NUMBER:"230",WORKTIME_KEYSTORE_PATH:key,WORKTIME_KEYSTORE_PASSWORD:"fixture",WORKTIME_KEY_ALIAS:"fixture",WORKTIME_KEY_PASSWORD:"fixture"},encoding:"utf8"});
+    assert.equal(signed.status,0,signed.error?.message||signed.stderr);
+    const signedGradle=fs.readFileSync(gradle,"utf8");
+    assert.equal((signedGradle.match(/^\s*versionCode\s+\d+/gm)||[]).length,1);
+    assert.match(signedGradle,/versionCode 100230/);
+    assert.ok(!signedGradle.includes("versionCode ="));
+    assert.match(signedGradle,/versionName "3\.0-preview\.230"/);
+
   }finally{fs.rmSync(tmp,{recursive:true,force:true});}
 });
 
