@@ -89,6 +89,12 @@
         </div>
       </div>
 
+      <div id="homeAnnualBonusCard" class="wt-card space-y-1">
+        <p class="wt-kicker">Prémio anual acumulado (contratual)</p>
+        <div class="wt-flex"><strong id="homeAnnualBonusValue" class="text-xl font-bold text-sky-300 money-val">0,00 €</strong><span id="homeAnnualBonusRate" class="wt-pill">8%</span></div>
+        <p id="homeAnnualBonusNote" class="wt-note">Apenas bruto registado, sem previsão de salários futuros.</p>
+      </div>
+
       <div class="wt-stat-grid">
         <div class="wt-card wt-stat"><div class="wt-stat-icon">⏱</div><div class="wt-stat-label">Horas normais</div><div class="wt-stat-value" id="homeNormal">0 h</div></div>
         <div class="wt-card wt-stat"><div class="wt-stat-icon">⚡</div><div class="wt-stat-label">Horas extra</div><div class="wt-stat-value wt-accent-amber" id="homeOvertime">0 h</div></div>
@@ -935,11 +941,11 @@
       const parent = document.getElementById("tab-config");
       if (!parent || parent.querySelector(".wt-settings-group")) return;
       const blocks = [...parent.children].filter(node =>
-        node.tagName === "DIV" && node.querySelector("h3") && node.querySelector("h3").textContent.trim().match(/^(1|2|3|4|4A|4B|5|6|7)\./));
+        node.tagName === "DIV" && node.querySelector("h3") && node.querySelector("h3").textContent.trim().match(/^(1A|4A|4B|1|2|3|4|5|6|7)\./));
       const findBlock = prefix => blocks.find(node => node.querySelector("h3").textContent.trim().startsWith(prefix));
       const groups = [
         { title: "⏱️ Horários, países e calendário", subtitles: ["4B.", "4A.", "4.", "3."] },
-        { title: "💶 Salário, taxas e impostos", subtitles: ["1.", "2."] },
+        { title: "💶 Salário, taxas e impostos", subtitles: ["1.", "1A.", "2."] },
         { title: "💾 Dados e segurança", subtitles: ["6.", "7."] },
         { title: "🎨 Aparência", subtitles: ["5."] }
       ];
@@ -1155,9 +1161,13 @@
       input.value = preserveExisting && sameType
         ? paidHoursForEntry(existing)
         : scheduledLeaveHours(date);
-      hint.textContent = legacy && preserveExisting
-        ? "Registo antigo: preservadas 8h para não modificar salários anteriores. Podes corrigir este valor."
-        : "Horas sugeridas pelo horário do dia. Dias sem trabalho programado recebem 0h; confirma o recibo e o contrato.";
+      const sample = threeMonthWorkAverage(date);
+      const stats = " Suplemento variável: "+formatMoney(sample.avgPerDay)+
+        " por dia ("+sample.days+" dia(s) trabalhado(s) registado(s) na janela de 3 meses"+
+        (sample.partial ? ", histórico parcial" : "")+").";
+      hint.textContent = (legacy && preserveExisting
+        ? "Registo antigo: preservadas 8h para não modificar salários anteriores."
+        : "Horas sugeridas pelo horário do dia; confirma o contrato.") + stats;
     }
 
     function renderWeeklySchedule() {
@@ -2280,7 +2290,54 @@
       document.getElementById("vacTotalAllowed").textContent = settings.annualVacation + " d";
       document.getElementById("vacCompensatory").textContent = "+" + compDays + " pot.";
       document.getElementById("vacRemaining").textContent = (settings.annualVacation - allVacUsed) + " d";
-      document.getElementById("vacDailyValue").textContent = formatMoney(d.vacDailyBase);
+      const referenceInput = document.getElementById("vacReferenceDate");
+      let reference = referenceInput && validCalendarDate(referenceInput.value)
+        ? referenceInput.value : "";
+      if (!reference) {
+        const now = new Date();
+        now.setDate(now.getDate()+1);
+        reference = now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0")+
+          "-"+String(now.getDate()).padStart(2,"0");
+        if (referenceInput) referenceInput.value = reference;
+      }
+      const average = threeMonthWorkAverage(reference);
+      const paid = scheduledLeaveHours(reference);
+      document.getElementById("vacDailyValue").textContent =
+        formatMoney(paid * (Number(settings.hourlyRate)+Number(settings.hourlyBonus))+
+          (paid > 0 ? average.avgPerDay : 0));
+      const info = document.getElementById("vacThreeMonthInfo");
+      if (info) info.textContent = average.days
+        ? "Média de "+formatMoney(average.avgPerDay)+" por dia, baseada em "+
+          average.days+" dia(s) trabalhado(s) desde "+average.from+" até "+reference+
+          " (exclui o dia das férias). "+
+          (average.partial ? "Histórico parcial: a estimativa melhora com novos registos." :
+            "Janela temporal de três meses, com dias efetivamente registados.")
+        : "Ainda não há dias de trabalho nos três meses anteriores. Suplemento provisório: 0 € (não os 24 € antigos).";
+      const annual = annualRecordedBonus(String(year));
+      const bonusBox = document.getElementById("annualBonusPanel");
+      if (bonusBox) bonusBox.classList.toggle("hidden",!annual.enabled);
+      const annualValue = document.getElementById("annualBonusValue");
+      if (annualValue) annualValue.textContent = formatMoney(annual.bonus);
+      const annualRate = document.getElementById("annualBonusRate");
+      if (annualRate) annualRate.textContent = annual.rate.toFixed(1).replace(".",",")+"%";
+      const annualHeading = document.getElementById("annualBonusHeading");
+      if (annualHeading) annualHeading.textContent = "Acumulado em "+year;
+      const annualDetails = document.getElementById("annualBonusDetails");
+      if (annualDetails) annualDetails.textContent =
+        "Base: "+formatMoney(annual.gross)+" brutos de "+annual.days+
+        " registo(s) até "+annual.asOf+". Sem o próprio prémio ou panier. "+
+        (annual.years !== null ? annual.years+" ano(s) de antiguidade. " : "")+
+        "Valores estimados com as taxas atuais; não substituem o contrato nem o recibo.";
+      const homeAnnual = document.getElementById("homeAnnualBonusValue");
+      if (homeAnnual) homeAnnual.textContent=formatMoney(annual.bonus);
+      const homeRate = document.getElementById("homeAnnualBonusRate");
+      if (homeRate) homeRate.textContent=annual.rate.toFixed(1).replace(".",",")+"%";
+      const homeNote=document.getElementById("homeAnnualBonusNote");
+      if (homeNote) homeNote.textContent=year+": "+
+        annual.days+" registo(s), bruto "+formatMoney(annual.gross)+
+        ". Estimativa sem projeção de dias futuros.";
+      const homeBox=document.getElementById("homeAnnualBonusCard");
+      if (homeBox) homeBox.classList.toggle("hidden",!annual.enabled);
 
       window.lastCalculatedNet = d.finalNet;
       comparePayslip();
