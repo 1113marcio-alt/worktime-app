@@ -354,17 +354,20 @@
         </div>
       </div>
       <p class="wt-note">O Luxemburgo dispõe de uma estimativa por classe; França e Portugal precisam de retenção manual e dados adicionais. Confirma sempre com o recibo.</p>
+      <button type="button" onclick="exportCSV()" id="salaryExportCsv"
+        class="wt-button w-full no-print">📊 Exportar horas para Excel (.csv)</button>
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-4">
         <div class="flex justify-between items-center border-b border-slate-800 pb-3">
           <div>
             <h2 class="font-bold text-base text-blue-400" data-i18n="payslipTitle">Simulação Fiche de Salaire</h2>
             <p class="text-xs text-slate-400" id="payslipSubtitle">Estimativa salarial — confirmar com o recibo</p>
           </div>
-          <button onclick="window.print()" class="no-print bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-1.5 rounded-xl text-xs font-medium">
+          <button type="button" onclick="printSalaryReport()" id="salaryPrintButton" class="no-print bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-1.5 rounded-xl text-xs font-medium">
             🖨️ PDF / Imprimir
           </button>
         </div>
 
+        <p id="salaryPrintStatus" class="text-xs text-sky-300 no-print" aria-live="polite"></p>
         <!-- Rendimentos Brutos -->
         <div class="space-y-2 text-sm">
           <h3 class="text-xs font-bold uppercase text-slate-400 tracking-wider">1. Rendimentos Brutos</h3>
@@ -493,6 +496,12 @@
       <h1 class="text-xl font-bold px-1" data-i18n="settingsTitle">Configurações</h1>
       <p class="wt-note px-1">Organizadas por assunto. Abre apenas o grupo que precisas de ajustar.</p>
 
+      <div id="settingsSaveBar" class="wt-settings-savebar no-print" role="status" aria-live="polite">
+        <button type="button" id="settingsSaveButton" onclick="saveSettings()" disabled
+          class="wt-settings-save-button wt-day-saved">✓ Configurações guardadas</button>
+        <p id="settingsSaveStatus" class="text-[11px] text-slate-300">As alterações às definições precisam de ser guardadas. PIN, widget, notificações e tema têm comandos próprios.</p>
+      </div>
+
       <!-- Início rápido: não altera dados históricos -->
       <div class="wt-card wt-settings-launch space-y-3">
         <div class="wt-flex">
@@ -503,7 +512,7 @@
           <span class="wt-pill">Acesso rápido</span>
         </div>
         <p class="wt-note">Por defeito abre no Relógio de ponto para marcares a entrada imediatamente.</p>
-        <select id="cfgStartScreen" onchange="saveSettings()" aria-label="Ecrã inicial" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-sm">
+        <select id="cfgStartScreen" onchange="markSettingsDirty()" aria-label="Ecrã inicial" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-sm">
           <option value="ponto">⏱ Relógio de ponto</option>
           <option value="home">🏠 Painel principal</option>
           <option value="calendario">📅 Calendário</option>
@@ -551,27 +560,27 @@
         <div class="grid grid-cols-2 gap-3 text-xs">
           <div>
             <label class="block text-slate-400 mb-1">Valor Hora Base (€/h)</label>
-            <input type="number" step="0.01" id="cfgHourlyRate" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm font-bold" />
+            <input type="number" step="0.01" id="cfgHourlyRate" onchange="markSettingsDirty()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm font-bold" />
           </div>
           <div>
             <label class="block text-slate-400 mb-1">Bónus Horário Fixo (€/h)</label>
-            <input type="number" step="0.01" id="cfgHourlyBonus" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm font-bold text-cyan-400" />
+            <input type="number" step="0.01" id="cfgHourlyBonus" onchange="markSettingsDirty()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm font-bold text-cyan-400" />
           </div>
           <div>
             <label class="block text-slate-400 mb-1">Majoração Hora Extra (%)</label>
-            <input type="number" step="1" id="cfgOvertimePct" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
+            <input type="number" step="1" id="cfgOvertimePct" onchange="markSettingsDirty()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
           </div>
           <div>
             <label class="block text-slate-400 mb-1">Majoração Noturna (%)</label>
-            <input type="number" step="1" id="cfgNightPct" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
+            <input type="number" step="1" id="cfgNightPct" onchange="markSettingsDirty()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
           </div>
           <div>
             <label class="block text-slate-400 mb-1">Subsídio Diário / Panier (€/dia)</label>
-            <input type="number" step="0.10" id="cfgDailyPanier" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
+            <input type="number" step="0.10" id="cfgDailyPanier" onchange="markSettingsDirty()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
           </div>
           <div>
             <label class="block text-slate-400 mb-1">Média 3M Extra p/ Férias (€/dia)</label>
-            <input type="number" step="0.10" id="cfgVacAvgSupplement" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
+            <input type="number" step="0.10" id="cfgVacAvgSupplement" onchange="markSettingsDirty()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
           </div>
         </div>
       </div>
@@ -582,14 +591,14 @@
         <div class="grid grid-cols-2 gap-3 text-xs">
           <div>
             <label class="block text-slate-400 mb-1">Regime Fiscal</label>
-            <select id="cfgTaxSystem" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm">
+            <select id="cfgTaxSystem" onchange="markSettingsDirty()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm">
               <option value="luxembourg">Automático (apenas LU, aproximado)</option>
               <option value="custom">Taxas manuais (outros países)</option>
             </select>
           </div>
           <div>
             <label class="block text-slate-400 mb-1">Classe de Imposto</label>
-            <select id="cfgTaxClass" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm font-bold">
+            <select id="cfgTaxClass" onchange="markSettingsDirty()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm font-bold">
               <option value="1">Classe 1 (Solteiro/Divorciado)</option>
               <option value="1a">Classe 1a (Monoparental)</option>
               <option value="2">Classe 2 (Casado / PACS)</option>
@@ -597,15 +606,15 @@
           </div>
           <div>
             <label class="block text-slate-400 mb-1">Retenção manual (%)</label>
-            <input type="number" step="0.1" id="cfgManualTaxRate" placeholder="Automático se 0" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
+            <input type="number" step="0.1" id="cfgManualTaxRate" placeholder="Automático se 0" onchange="markSettingsDirty()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
           </div>
           <div>
             <label class="block text-slate-400 mb-1">Taxa social manual (%)</label>
-            <input type="number" step="0.1" min="0" max="100" id="cfgManualSocialRate" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
+            <input type="number" step="0.1" min="0" max="100" id="cfgManualSocialRate" onchange="markSettingsDirty()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
           </div>
           <div id="cfgCisBox">
             <label class="block text-slate-400 mb-1">Crédito Fiscal CIS (€/mês)</label>
-            <input type="number" step="1" id="cfgCisCredit" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
+            <input type="number" step="1" id="cfgCisCredit" onchange="markSettingsDirty()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
           </div>
         </div>
         <p id="taxPolicyStatus" class="text-[11px] text-amber-300 bg-slate-800/80 p-2.5 rounded-xl"></p>
@@ -618,7 +627,7 @@
       <!-- 3. Idioma -->
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-2">
         <h3 class="font-bold text-sm text-blue-400">3. Idioma</h3>
-        <select id="cfgLang" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm">
+        <select id="cfgLang" onchange="markSettingsDirty()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm">
           <option value="pt">🇵🇹 Português</option>
           <option value="fr">🇫🇷 Français</option>
           <option value="de">🇩🇪 Deutsch</option>
@@ -659,15 +668,15 @@
           </div>
           <div>
             <label class="block text-slate-400 mb-1">País de residência</label>
-            <select id="cfgResidenceCountry" onchange="saveSettings()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm"></select>
+            <select id="cfgResidenceCountry" onchange="markSettingsDirty()" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm"></select>
           </div>
           <label class="col-span-2 flex items-center gap-2 text-slate-300">
-            <input type="checkbox" id="cfgSyncCalendarWithEmployer" onchange="saveSettings()" class="w-4 h-4 accent-blue-500" />
+            <input type="checkbox" id="cfgSyncCalendarWithEmployer" onchange="markSettingsDirty()" class="w-4 h-4 accent-blue-500" />
             Usar também o calendário de feriados do país empregador
           </label>
           <div class="col-span-2">
             <label class="block text-slate-400 mb-1">Região do calendário (opcional)</label>
-            <input id="cfgCalendarRegion" type="text" maxlength="100" onchange="saveSettings()" placeholder="Ex.: Lisboa, Grand Est" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
+            <input id="cfgCalendarRegion" type="text" maxlength="100" onchange="markSettingsDirty()" placeholder="Ex.: Lisboa, Grand Est" class="w-full bg-slate-800 border border-slate-700 rounded-xl p-2.5 text-sm" />
           </div>
         </div>
         <p id="countryPolicyNotice" class="text-[11px] text-amber-300">O país do empregador define o modelo fiscal e os mínimos de férias. O país do calendário define os feriados, independentemente. Só LU, PT e FR têm regras básicas verificadas nesta versão; os restantes usam modo manual.</p>
@@ -691,26 +700,23 @@
         </button>
       </div>
 
-      <!-- 6. Dados e Backup -->
+      <!-- 6. Dados e Backup: guardar JSON e restaurar JSON são ações diferentes. -->
       <div class="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
         <h3 class="font-bold text-sm text-blue-400">6. Dados e Backup</h3>
-        <div class="grid grid-cols-2 gap-2 text-xs">
-          <button onclick="exportBackupJSON()" class="bg-blue-600/20 border border-blue-500/40 text-blue-300 py-2.5 px-3 rounded-xl font-semibold">
-            ⬇️ Guardar Backup (.json)
-          </button>
-          <p id="backupSaveStatus" class="col-span-2 text-[11px] text-slate-400" aria-live="polite">O backup só está seguro quando existir fora da aplicação. O ficheiro não inclui o PIN, mas contém horários e valores sem encriptação: guarda-o num local privado.</p>
-          <button onclick="exportCSV()" class="bg-emerald-600/20 border border-emerald-500/40 text-emerald-300 py-2.5 px-3 rounded-xl font-semibold">
-            📊 Exportar Excel (.csv)
-          </button>
-        </div>
-        <div>
-          <label class="block text-xs text-slate-400 mb-1">Restaurar Backup anterior (.json)</label>
-          <input type="file" accept=".json" onchange="importBackupJSON(event)" class="w-full text-xs bg-slate-800 border border-slate-700 rounded-xl p-2" />
-        </div>
-        <button onclick="restorePreviousState()" class="w-full bg-amber-600/20 border border-amber-500/40 text-amber-200 py-2.5 px-3 rounded-xl text-xs font-semibold">
-          ↩️ Repor dados anteriores à última importação
+        <p class="text-xs text-slate-300">O backup JSON completo inclui registos, horários semanais, salário, impostos, países, idioma, férias, tema e turnos. Não inclui o PIN nem autorizações nativas do Android.</p>
+        <button type="button" onclick="exportBackupJSON()" id="backupExportButton"
+          class="wt-button primary w-full">⬇️ Guardar backup completo (.json)</button>
+        <p id="backupSaveStatus" class="text-xs text-slate-400" aria-live="polite">Guarda o ficheiro JSON fora da aplicação. Inclui horários e valores sem encriptação.</p>
+        <button type="button" onclick="chooseBackupJSON()" id="backupRestoreButton"
+          class="wt-button w-full">📂 Restaurar backup completo (.json)</button>
+        <input id="backupImportFile" type="file" accept=".json,application/json"
+          class="hidden" aria-label="Escolher backup JSON"
+          onchange="importBackupJSON(event)" />
+        <p id="backupImportStatus" class="text-xs text-slate-400" aria-live="polite">O restauro pede confirmação antes de substituir os dados. O PIN deste telemóvel é preservado.</p>
+        <button type="button" onclick="restorePreviousState()"
+          class="w-full bg-amber-600/20 border border-amber-500/40 text-amber-200 py-2.5 px-3 rounded-xl text-xs font-semibold">
+          ↩️ Desfazer a última importação
         </button>
-        <p class="text-[11px] text-slate-400">Antes de importar ou instalar versões novas, exporte e guarde o ficheiro JSON fora da aplicação.</p>
       </div>
 
       <!-- 7. Segurança -->
@@ -1044,7 +1050,7 @@
         const slot = schedule[day] || defaultSettings.weeklySchedule[day];
         const row = document.createElement("div");
         row.className = "bg-slate-800/70 p-2 rounded-xl";
-        row.innerHTML = '<div class="flex items-center justify-between mb-2"><label class="text-xs font-semibold">' + name + '</label><label class="text-[11px] flex items-center gap-2"><span>Trabalha</span><input type="checkbox" id="weekEnabled' + day + '" onchange="saveWeeklySchedule()" /></label></div><div class="grid grid-cols-3 gap-2 text-[11px]"><label>Entrada<input type="time" id="weekStart' + day + '" onchange="saveWeeklySchedule()" class="mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg p-1.5" /></label><label>Saída<input type="time" id="weekEnd' + day + '" onchange="saveWeeklySchedule()" class="mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg p-1.5" /></label><label>Pausa (min)<input type="number" min="0" max="1439" step="1" id="weekBreak' + day + '" onchange="saveWeeklySchedule()" class="mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg p-1.5" /></label></div>';
+        row.innerHTML = '<div class="flex items-center justify-between mb-2"><label class="text-xs font-semibold">' + name + '</label><label class="text-[11px] flex items-center gap-2"><span>Trabalha</span><input type="checkbox" id="weekEnabled' + day + '" onchange="markSettingsDirty()" /></label></div><div class="grid grid-cols-3 gap-2 text-[11px]"><label>Entrada<input type="time" id="weekStart' + day + '" onchange="markSettingsDirty()" class="mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg p-1.5" /></label><label>Saída<input type="time" id="weekEnd' + day + '" onchange="markSettingsDirty()" class="mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg p-1.5" /></label><label>Pausa (min)<input type="number" min="0" max="1439" step="1" id="weekBreak' + day + '" onchange="markSettingsDirty()" class="mt-1 w-full bg-slate-900 border border-slate-700 rounded-lg p-1.5" /></label></div>';
         container.appendChild(row);
         document.getElementById("weekEnabled" + day).checked = Boolean(slot.enabled);
         document.getElementById("weekStart" + day).value = slot.start || "08:00";
