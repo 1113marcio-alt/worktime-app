@@ -2161,6 +2161,11 @@
       const start=Date.parse(row.start),end=Date.parse(row.end);
       return Number.isFinite(start)&&Number.isFinite(end)&&end>start&&end-start<=25*3600000;
     }
+    function validDriverActivities(rows){
+      if(!Array.isArray(rows)||!rows.every(validDriverActivity)||new Set(rows.map(row=>row.id)).size!==rows.length)return false;
+      const sorted=rows.slice().sort((a,b)=>Date.parse(a.start)-Date.parse(b.start));
+      return sorted.every((row,i)=>i===0||Date.parse(sorted[i-1].end)<=Date.parse(row.start));
+    }
     function driverActivities(source=settings){
       return Array.isArray(source.driverActivities)?source.driverActivities.filter(validDriverActivity):[];
     }
@@ -3132,7 +3137,8 @@
         ? `Horas Normais (${d.normalH}h • taxas por data)`
         : `Horas Normais (${d.normalH}h × ${settings.hourlyRate.toFixed(2)} €)`;
       document.getElementById("valNormalGross").textContent = formatMoney(d.normalGross);
-      document.getElementById("lblExtraBreakdown").textContent = hasHistory ? `Horas Extras (${d.extraH}h • taxas por data)` : `Horas Extras +${settings.overtimePct}% (${d.extraH}h • regras fiscais ${d.country})`;
+      const bankedForMonth=d.monthEntries.reduce((sum,entry)=>sum+bankCredit(entry),0);
+      document.getElementById("lblExtraBreakdown").textContent = bankedForMonth>0 ? `Horas extra não acumuladas (${(d.extraH-bankedForMonth).toFixed(2)}h • ${bankedForMonth.toFixed(2)}h no banco)` : hasHistory ? `Horas Extras (${d.extraH}h • taxas por data)` : `Horas Extras +${settings.overtimePct}% (${d.extraH}h • regras fiscais ${d.country})`;
       document.getElementById("valExtraGross").textContent = formatMoney(d.extraTotalGross);
       document.getElementById("lblNightBreakdown").textContent = hasHistory ? `Suplemento Noturno (${d.nightH}h • taxas por data)` : `Suplemento Noturno +${settings.nightPct}% (${d.nightH}h)`;
       document.getElementById("valNightGross").textContent = formatMoney(d.nightGross);
@@ -3383,7 +3389,7 @@
       );
       if (!validEntries) return false;
       if(!Object.values(value.entries).every(validBankEntry)||!bankLedger(value.entries).valid)return false;
-      if("driverActivities" in value.settings && (!Array.isArray(value.settings.driverActivities)||!value.settings.driverActivities.every(validDriverActivity)))return false;
+      if("driverActivities" in value.settings && !validDriverActivities(value.settings.driverActivities))return false;
       if("vacationCarryByYear" in value.settings && (!isPlainRecord(value.settings.vacationCarryByYear)||!Object.entries(value.settings.vacationCarryByYear).every(([y,n])=>/^\d{4}$/.test(y)&&Number.isInteger(n)&&n>=0&&n<=365)))return false;
       if ("payrollClosures" in value.settings && (!isPlainRecord(value.settings.payrollClosures) || !Object.keys(value.settings.payrollClosures).every(month=>!!payrollClosure(month,value.settings)))) return false;
       const validShift = shift => isPlainRecord(shift) &&
