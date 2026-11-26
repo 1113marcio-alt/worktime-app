@@ -691,7 +691,7 @@
           <button onclick="exportBackupJSON()" class="bg-blue-600/20 border border-blue-500/40 text-blue-300 py-2.5 px-3 rounded-xl font-semibold">
             ⬇️ Guardar Backup (.json)
           </button>
-          <p id="backupSaveStatus" class="col-span-2 text-[11px] text-slate-400" aria-live="polite">O backup só está seguro quando existir fora da aplicação.</p>
+          <p id="backupSaveStatus" class="col-span-2 text-[11px] text-slate-400" aria-live="polite">O backup só está seguro quando existir fora da aplicação. O ficheiro não inclui o PIN, mas contém horários e valores sem encriptação: guarda-o num local privado.</p>
           <button onclick="exportCSV()" class="bg-emerald-600/20 border border-emerald-500/40 text-emerald-300 py-2.5 px-3 rounded-xl font-semibold">
             📊 Exportar Excel (.csv)
           </button>
@@ -1861,7 +1861,12 @@
       catch (_) {}
       try { shiftDrafts = JSON.parse(localStorage.getItem("wt_shift_drafts") || "[]"); }
       catch (_) {}
-      return { settings, entries, activeShift, shiftDrafts };
+      // No PIN or verifier is ever exported; device-local authentication
+      // is retained across imports and must be set anew on another device.
+      const backupSettings = { ...settings };
+      delete backupSettings.securityPin;
+      delete backupSettings.pinVerifier;
+      return { settings: backupSettings, entries, activeShift, shiftDrafts };
     }
 
     // Android: guardar ficheiro JSON no cache temporário e abrir a folha
@@ -1940,7 +1945,14 @@
     }
 
     function writeBackupState(parsed) {
-      localStorage.setItem("wt_settings", JSON.stringify(parsed.settings));
+      // Authentication belongs to this device. Ignore a legacy PIN in
+      // imported JSON so a backup cannot silently change / disable it.
+      const restoredSettings = {
+        ...defaultSettings, ...parsed.settings,
+        securityPin: settings.securityPin || ""
+      };
+      delete restoredSettings.pinVerifier;
+      localStorage.setItem("wt_settings", JSON.stringify(restoredSettings));
       localStorage.setItem("wt_entries", JSON.stringify(parsed.entries));
       // Backups da versão 1 não tinham turnos. Não apagar os turnos da Preview
       // se o backup importado não mencionar estes campos.
@@ -1950,7 +1962,7 @@
         if (parsed.activeShift === null) localStorage.removeItem("wt_active_shift");
         else localStorage.setItem("wt_active_shift", JSON.stringify(parsed.activeShift));
       }
-      settings = { ...defaultSettings, ...parsed.settings };
+      settings = restoredSettings;
       entries = parsed.entries;
       loadSettingsToInputs();
       renderAll();
