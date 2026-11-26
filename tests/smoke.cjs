@@ -938,7 +938,7 @@ test("taxas de suplemento definidas a 0% permanecem a 0% após guardar",()=>{
     cfgLang:"pt",cfgStartScreen:"ponto",
     cfgHolidayCountry:"LU",cfgEmployerCountry:"LU",
     cfgResidenceCountry:"LU",cfgCalendarRegion:"",
-    cfgAnnualVacation:"26",cfgManualSocialRate:"0"
+    cfgAnnualVacation:"26",cfgManualSocialRate:"0",cfgYearEndBonusPct:"8"
   };
   app.ctx.document.getElementById=id=>({value:vals[id]??"",checked:id==="cfgSyncCalendarWithEmployer"});
   assert.equal(app.ctx.saveSettings(),true);
@@ -962,7 +962,7 @@ test("falha ao guardar opções não altera as configurações na memória",()=>
     cfgTaxClass:"2",cfgManualTaxRate:"0",cfgCisCredit:"0",cfgLang:"pt",
     cfgStartScreen:"ponto",cfgHolidayCountry:"LU",cfgEmployerCountry:"LU",
     cfgResidenceCountry:"LU",cfgCalendarRegion:"",cfgAnnualVacation:"26",
-    cfgManualSocialRate:"0"};
+    cfgManualSocialRate:"0",cfgYearEndBonusPct:"8"};
   app.ctx.document.getElementById=id=>({value:ids[id]??"",checked:false});
   const old=app.values.get("wt_settings");
   app.ctx.localStorage.setItem=()=>{throw Error("Sem espaço");};
