@@ -2398,3 +2398,29 @@ test("v3: publicação da atualização é manual e exige APK assinada verificad
   assert.ok(workflow.includes("test -s dist/WorkTime-Pro-2-PREVIEW-SIGNED.apk"));
   assert.ok(workflow.includes("gh release create"));
 });
+
+test("v3: pausa opcional valida o horário e preserva configuração antiga",()=>{
+  const app=makeApp(),base={enabled:true,days:62,entry:"05:00",exit:"16:00"};
+  assert.equal(app.ctx.validPersonalReminderConfig(base),true);
+  assert.equal(app.ctx.validPersonalReminderConfig({...base,pauseEnabled:true,pause:"12:00"}),true);
+  assert.equal(app.ctx.validPersonalReminderConfig({...base,pauseEnabled:true,pause:"25:00"}),false);
+  assert.equal(app.ctx.validPersonalReminderConfig({...base,pauseEnabled:false,pause:""}),true);
+  const receiver=fs.readFileSync("android-widget/src/main/java/lu/marcio/worktimepro/preview/WorkTimeReminderReceiver.java","utf8");
+  const plugin=fs.readFileSync("android-widget/src/main/java/lu/marcio/worktimepro/preview/WorkTimeReminderPlugin.java","utf8");
+  assert.ok(receiver.includes("new String[]{ENTRY, EXIT, PAUSE}"));
+  assert.ok(receiver.includes("manager.notify(reminderId(kind)"));
+  assert.ok(receiver.includes('getBoolean("pauseEnabled", false)'));
+  assert.ok(plugin.includes('putBoolean("pauseEnabled", oldPauseEnabled)'));
+});
+test("v3: privacidade bloqueia PDF antigo e CSV; importação inválida ou cancelada não modifica dados",async()=>{
+  const date="2026-11-25",app=makeApp({}, {[date]:{date,type:"work",normal:8,extra:0,night:0}});
+  const before=JSON.stringify(app.ctx.snapshotAllData());
+  app.evaluate("privacyMode=true;");
+  assert.equal(await app.ctx.printSalaryReport(),false);
+  assert.equal(app.ctx.exportCSV(),false);
+  assert.equal(app.ctx.restoreParsedBackup({},()=>{}),false);
+  app.ctx.confirm=()=>false;
+  assert.equal(app.ctx.restoreParsedBackup({settings:{},entries:{}},()=>{}),false);
+  assert.equal(JSON.stringify(app.ctx.snapshotAllData()),before);
+  assert.equal(app.ctx.validCalendarDate("2026-02-30"),false);
+});
