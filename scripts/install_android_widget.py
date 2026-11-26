@@ -35,6 +35,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(WorkTimeWidgetPlugin.class);
         registerPlugin(WorkTimePrintPlugin.class);
+        registerPlugin(WorkTimeBiometricPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }
@@ -53,7 +54,7 @@ if not any(el.get(permission) == "android.permission.POST_NOTIFICATIONS"
     ET.SubElement(manifest, "uses-permission", {
         permission: "android.permission.POST_NOTIFICATIONS"
     })
-app = manifest.find("application")
+if not any(el.get(permission) == "android.permission.USE_BIOMETRIC"\n           for el in manifest.findall("uses-permission")):\n    ET.SubElement(manifest, "uses-permission", {permission: "android.permission.USE_BIOMETRIC"})\napp = manifest.find("application")
 assert app is not None, "AndroidManifest has no application node"
 # Reuse the same WT blue identity across the launcher and widget.
 # Adaptive icons are overridden in mipmap-anydpi-v26; legacy icons remain
