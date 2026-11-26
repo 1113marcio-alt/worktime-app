@@ -1257,8 +1257,11 @@ test("um novo registo assume automaticamente os 30 min de pausa do dia configura
   };
   const app=makeApp({weeklySchedule:schedule});
   const e=manualDayFixture(app,"2026-11-25");
-  e.entryStartTime.value="06:00";e.entryEndTime.value="14:30";
   app.ctx.loadManualEntryForDate("2026-11-25");
+  // O carregamento de um dia novo deixa a entrada/saída em branco.
+  // Simular o utilizador a indicar as horas e atualizar a pré-visualização.
+  e.entryStartTime.value="06:00";e.entryEndTime.value="14:30";
+  app.ctx.refreshManualTimePreview();
   assert.equal(Number(e.entryBreakMinutes.value),30);
   assert.match(e.entryBreakScheduleHint.textContent,/30 min aplicada automaticamente/);
   assert.equal(e.entryUseScheduledBreak.disabled,false);
@@ -1276,9 +1279,10 @@ test("06:00 às 16:30 desconta os 30 min programados e conta 2h extra",()=>{
     3:{enabled:true,start:"06:00",end:"14:30",breakMinutes:30}
   }});
   const e=manualDayFixture(app,"2026-11-25");
-  e.entryStartTime.value="06:00";e.entryEndTime.value="16:30";
   app.ctx.loadManualEntryForDate("2026-11-25");
-  assert.equal(e.entryBreakMinutes.value,30);
+  e.entryStartTime.value="06:00";e.entryEndTime.value="16:30";
+  app.ctx.refreshManualTimePreview();
+  assert.equal(Number(e.entryBreakMinutes.value),30);
   assert.equal(Number(e.entryNormal.value),8);
   assert.equal(Number(e.entryExtra.value),2);
   assert.match(e.entryTimePreview.textContent,/10h 00min/);
