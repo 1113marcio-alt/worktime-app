@@ -122,6 +122,11 @@
         </div>
       </div>
 
+      <div id="homeForecastPanel" class="wt-card space-y-1">
+        <p class="wt-kicker">Previsão fim do mês • sem CIS</p>
+        <p id="homeForecastNet" class="text-xl font-bold money-val">—</p>
+        <p class="wt-note">Bruto estimado: <strong id="homeForecastGross" class="money-val">—</strong></p>
+      </div>
       <div id="homeAnnualBonusCard" class="wt-card space-y-1">
         <p class="wt-kicker">Prémio anual acumulado (contratual)</p>
         <div class="wt-flex"><strong id="homeAnnualBonusValue" class="text-xl font-bold text-sky-300 money-val">0,00 €</strong><span id="homeAnnualBonusRate" class="wt-pill">8%</span></div>
@@ -391,6 +396,14 @@
           <div class="wt-balance-cell"><span>Descontos estim.</span><strong class="money-val" id="salaryPreviewDeductions">0,00 €</strong></div>
           <div class="wt-balance-cell"><span>Bónus</span><strong class="money-val" id="salaryPreviewBonus">0,00 €</strong></div>
         </div>
+      </div>
+      <div class="wt-card space-y-2" id="salaryForecastPanel">
+        <p class="wt-kicker">Previsão até ao fim do mês</p>
+        <p class="text-xs wt-muted">Líquido estimado sem CIS</p>
+        <p class="text-2xl font-bold money-val" id="salaryForecastNet">—</p>
+        <p class="wt-note">Bruto previsto: <strong class="money-val" id="salaryForecastGross">—</strong></p>
+        <p class="wt-note" id="salaryForecastDetails"></p>
+        <p class="wt-note">Simulação, não é um recibo. Não cria registos nem altera os valores acumulados.</p>
       </div>
       <div class="wt-card space-y-2" id="annualBonusPanel">
         <p class="wt-kicker">Prémio contratual de fim de ano</p>
@@ -2264,11 +2277,11 @@
         year,asOf:cutoff,enabled};
     }
 
-    function calculateMonthData(monthPrefix) {
+    function calculateMonthData(monthPrefix, sourceEntries=entries) {
       let normalH = 0, extraH = 0, nightH = 0, bonusH = 0, workDays = 0, vacDays = 0, vacPaidHours = 0;
       let vacationGross = 0, normalGross=0, extraBaseGross=0, extraMajorationGross=0,
         nightGross=0, bonusGross=0, panierGross=0;
-      const monthEntries = Object.values(entries)
+      const monthEntries = Object.values(sourceEntries)
         .filter(e => e.date.startsWith(monthPrefix))
         .sort((a, b) => b.date.localeCompare(a.date));
 
@@ -2335,6 +2348,55 @@
       };
     }
 
+    // Projection is a read-only simulation, not a new daily entry.
+    function forecastMonth(month,asOf=payrollToday()) {
+      if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month||"") || !validCalendarDate(asOf)) return null;
+      if(month!==asOf.slice(0,7)) return null; // Do not fabricate missing historical or future months.
+      const simulated={...entries};
+      const cutoff=new Date(asOf+"T12:00:00");
+      const holidays=window.WTCountryRules.holidays(Number(month.slice(0,4)),settings.holidayCountry||"LU",settings.calendarRegion);
+      const holidayDates=new Set(holidays.items.map(item=>item.date));
+      let projectedDays=0,projectedHours=0,holidayDays=0;
+      // Include today if not yet recorded; existing planned leave, shifts, and off days take precedence.
+      for(const d=new Date(cutoff);;d.setDate(d.getDate()+1)){
+        const date=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+        if(!date.startsWith(month+"-"))break;
+        if(Object.prototype.hasOwnProperty.call(simulated,date))continue;
+        const hours=scheduledLeaveHours(date);
+        if(hours<=0)continue;
+        if(holidayDates.has(date)){
+          simulated[date]={date,type:"holiday",normal:0,extra:0,night:0,paidLeaveHours:hours,
+            vacSupplementPerDay:threeMonthWorkAverage(date).avgPerDay,vacSupplementHoursBase:hours};
+          holidayDays++;
+        } else {
+          simulated[date]={date,type:"work",normal:hours,extra:0,night:0,includeBonus:true};
+        }
+        projectedDays++;projectedHours+=hours;
+      }
+      const projected=calculateMonthData(month,simulated);
+      const current=calculateMonthData(month);
+      const missingPast=Object.keys(entries).filter(date=>date.startsWith(month+"-") && date<asOf).length===0;
+      return {gross:projected.totalGross,netBeforeCredit:projected.netBeforeCredit,net:projected.finalNet,
+        recordedGross:current.totalGross,projectedDays,projectedHours,holidayDays,missingPast,
+        calendarVerified:holidays.verified===true};
+    }
+    function renderForecast(month) {
+      const panel=document.getElementById("salaryForecastPanel");
+      const home=document.getElementById("homeForecastPanel");
+      if(!panel && !home)return;
+      const forecast=forecastMonth(month);
+      for(const card of [panel,home])if(card)card.classList.toggle("hidden",!forecast);
+      if(!forecast)return;
+      for(const id of ["salaryForecastGross","homeForecastGross"]){
+        const el=document.getElementById(id);if(el)el.textContent=formatMoney(forecast.gross);
+      }
+      for(const id of ["salaryForecastNet","homeForecastNet"]){
+        const el=document.getElementById(id);if(el)el.textContent=formatMoney(forecast.netBeforeCredit);
+      }
+      const details=document.getElementById("salaryForecastDetails");
+      if(details)details.textContent=forecast.projectedDays+" dia(s) projetados • "+forecast.projectedHours.toFixed(2)+" h pelo horário semanal • "+forecast.holidayDays+" feriado(s). Sem novas horas extra ou noturnas. Dias passados sem registo não são preenchidos. "+(forecast.calendarVerified?"":"Calendário de feriados não verificado. ");
+    }
+
     function escapeHtml(value) {
       return String(value ?? "").replace(/[&<>"']/g, char =>
         ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
@@ -2344,6 +2406,7 @@
       const monthPrefix = document.getElementById("currentMonthPicker").value || new Date().toISOString().slice(0, 7);
       const d = calculateMonthData(monthPrefix);
 
+      renderForecast(monthPrefix);
       // Resumo Rápido
       document.getElementById("quickTotalHours").textContent = (d.normalH + d.extraH) + "h";
       document.getElementById("quickExtraHours").textContent = "+" + d.extraH + "h";
