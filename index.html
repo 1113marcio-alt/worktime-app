@@ -266,6 +266,13 @@
                 Saída no dia seguinte
               </label>
             </div>
+            <div class="flex flex-wrap items-center gap-2 rounded-xl border border-slate-600/60 bg-slate-900/45 px-3 py-2">
+              <p id="entryBreakScheduleHint" class="text-xs text-slate-300 flex-1" aria-live="polite"></p>
+              <button id="entryUseScheduledBreak" type="button" onclick="applyScheduledBreak()"
+                class="rounded-lg border border-sky-500/50 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-300">
+                ↻ Aplicar pausa do horário
+              </button>
+            </div>
             <p id="entryTimePreview" class="text-xs text-sky-300" aria-live="polite">
               Preenche as horas exatas. As horas normais e extra serão calculadas pelo horário configurado.
             </p>
@@ -1069,6 +1076,7 @@
       }
       settings = next;
       refreshPaidLeaveInput(true);
+      refreshScheduledBreakHint();
       return true;
     }
 
@@ -1364,6 +1372,66 @@
       entrySaveVisual(false, "Alterações por guardar.", false);
     }
 
+    // A pausa é uma propriedade do dia da semana configurado nas Opções.
+    // Novos dias usam-na automaticamente. Alterações a dias já gravados
+    // requerem confirmação explícita para evitar mudar salários históricos.
+    function scheduledUnpaidBreakMinutes(date) {
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date || "")) return null;
+      const [y, m, d] = date.split("-").map(Number);
+      const parsed = new Date(y, m - 1, d, 12);
+      if (parsed.getFullYear() !== y || parsed.getMonth() !== m - 1 ||
+          parsed.getDate() !== d) return null;
+      const schedule = settings.weeklySchedule || defaultSettings.weeklySchedule;
+      const weekday = parsed.getDay();
+      const slot = schedule[weekday] || defaultSettings.weeklySchedule[weekday];
+      if (!slot || !slot.enabled) return null;
+      const minutes = Number(slot.breakMinutes);
+      return Number.isInteger(minutes) && minutes >= 0 && minutes <= 1439
+        ? minutes : null;
+    }
+
+    function refreshScheduledBreakHint() {
+      const hint = document.getElementById("entryBreakScheduleHint");
+      const button = document.getElementById("entryUseScheduledBreak");
+      if (!hint || !button) return;
+      const date = document.getElementById("entryDate").value;
+      const enabled = document.getElementById("entryType").value === "work" &&
+        document.getElementById("entryUseTimes").checked;
+      const scheduled = enabled ? scheduledUnpaidBreakMinutes(date) : null;
+      button.disabled = scheduled === null;
+      button.classList.toggle("opacity-50", scheduled === null);
+      if (scheduled === null) {
+        hint.textContent = "Sem pausa predefinida para este dia. Podes indicá-la manualmente.";
+        return;
+      }
+      const recorded = Number(document.getElementById("entryBreakMinutes").value);
+      const existing = entries[date] && entries[date].manualTime;
+      if (existing && recorded !== scheduled) {
+        hint.textContent = "O registo guardado indica " + recorded + " min. O horário semanal indica " +
+          scheduled + " min. Toca em «Aplicar pausa do horário» e guarda para corrigir.";
+      } else if (!existing && recorded === scheduled) {
+        hint.textContent = "Pausa de " + scheduled + " min aplicada automaticamente do horário semanal.";
+      } else {
+        hint.textContent = "Pausa do horário semanal: " + scheduled +
+          " min. Podes ajustar o valor para este dia.";
+      }
+    }
+
+    function applyScheduledBreak() {
+      const scheduled = scheduledUnpaidBreakMinutes(
+        document.getElementById("entryDate").value);
+      if (scheduled === null || document.getElementById("entryType").value !== "work" ||
+          !document.getElementById("entryUseTimes").checked) return false;
+      const input = document.getElementById("entryBreakMinutes");
+      if (Number(input.value) !== scheduled) {
+        input.value = scheduled;
+        refreshManualTimePreview();
+        markEntryDirty();
+      }
+      refreshScheduledBreakHint();
+      return true;
+    }
+
     function refreshManualEntryMode() {
       const type = document.getElementById("entryType").value;
       const enabled = type === "work" && document.getElementById("entryUseTimes").checked;
@@ -1379,6 +1447,7 @@
         input.classList.toggle("wt-calculated", enabled);
       });
       if (enabled) refreshManualTimePreview();
+      refreshScheduledBreakHint();
     }
 
     function refreshManualTimePreview() {
@@ -1424,7 +1493,12 @@
       document.getElementById("entryUseTimes").checked = !entry || !!clock;
       document.getElementById("entryStartTime").value = clock ? clock.startTime : "";
       document.getElementById("entryEndTime").value = clock ? clock.endTime : "";
-      document.getElementById("entryBreakMinutes").value = clock ? clock.breakMinutes : 0;
+      // Existing entries keep their original break, even if it was 0.
+      // New entries automatically inherit the configured weekday break.
+      const scheduledBreak = scheduledUnpaidBreakMinutes(date);
+      document.getElementById("entryBreakMinutes").value = clock
+        ? clock.breakMinutes
+        : scheduledBreak === null ? 0 : scheduledBreak;
       document.getElementById("entryNextDay").checked = !!(clock && clock.nextDay);
       document.getElementById("entryNormal").value = entry ? Number(entry.normal) || 0 : 0;
       document.getElementById("entryExtra").value = entry ? Number(entry.extra) || 0 : 0;
@@ -1463,6 +1537,7 @@
         if (event.target.id === "entryDate") return;
         if (["entryStartTime","entryEndTime","entryBreakMinutes"].includes(event.target.id))
           refreshManualTimePreview();
+        if (event.target.id === "entryBreakMinutes") refreshScheduledBreakHint();
         markEntryDirty();
       });
       card.addEventListener("change", event => {
