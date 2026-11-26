@@ -2754,7 +2754,7 @@
       document.getElementById("statsYear").textContent=annual.year;
       summary("statsMonthSummary",[
         ["Mês selecionado",row.month],["Dias trabalhados",row.workdays],["Horas trabalhadas",hrs(row.hours)],["Horas extra",hrs(row.extra)],
-        ["Horas noturnas",hrs(row.night)],["Férias / baixa",row.vacation+" / "+row.sick],["Bruto estimado",money(row.gross)],["Líquido real recebido",money(row.actualNet)]]);
+        ["Horas noturnas",hrs(row.night)],["Férias / baixa",row.vacation+" / "+row.sick],["Bruto estimado",money(row.gross)],["Líquido estimado",money(row.net)],["Líquido real recebido",money(row.actualNet)],["Dias previstos sem registo",row.missing]]);
       summary("statsAnnualSummary",[
         ["Bruto estimado",money(t.recordedMonths?t.gross:null)],["Líquido estimado",money(t.recordedMonths?t.net:null)],
         ["Líquido real recebido",money(t.actualMonths?t.actualNet:null)],["Meses com recibo real",t.actualMonths+" / 12"],
