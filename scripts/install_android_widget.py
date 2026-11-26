@@ -34,6 +34,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(WorkTimeWidgetPlugin.class);
+        registerPlugin(WorkTimePrintPlugin.class);
         super.onCreate(savedInstanceState);
     }
 }
