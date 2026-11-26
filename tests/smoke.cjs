@@ -1876,3 +1876,20 @@ test("v3: histórico inválido importado não é usado nos cálculos",()=>{
   assert.equal(app.ctx.validPayrollHistory(app.evaluate("settings")).length,0);
   assert.equal(app.ctx.payRatesForDate("2026-11-01").hourlyRate,25);
 });
+
+test("v3: previsão salarial usa horário semanal sem criar registos",()=>{
+  const entries={"2026-11-25":{date:"2026-11-25",type:"work",normal:8,extra:2,night:0,includeBonus:true},
+    "2026-11-27":{date:"2026-11-27",type:"off",normal:0,extra:0,night:0}};
+  const app=makeApp({hourlyRate:20,hourlyBonus:2,overtimePct:40,dailyPanier:4},entries);
+  const before=JSON.stringify(app.ctx.snapshotAllData());
+  const q=app.ctx.forecastMonth("2026-11","2026-11-26");
+  assert.equal(q.projectedDays,2);
+  assert.equal(q.projectedHours,16);
+  assert.equal(q.recordedGross,240);
+  assert.equal(q.gross,600);
+  assert.equal(JSON.stringify(app.ctx.snapshotAllData()),before);
+  assert.equal(app.ctx.forecastMonth("2026-10","2026-11-26"),null);
+  assert.equal(app.ctx.forecastMonth("2026-12","2026-11-26"),null);
+  assert.equal(app.ctx.forecastMonth("2026-11","invalid"),null);
+  assert.equal(app.ctx.forecastMonth("2026-11","2026-11-30").projectedDays,1);
+});
