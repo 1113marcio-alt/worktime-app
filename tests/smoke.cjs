@@ -2228,3 +2228,29 @@ test("v3: integração Android declara plugins biométrico e lembretes privados"
   assert.ok(reminders.includes("IMPORTANCE_LOW"));
   assert.ok(!reminders.includes("setExact"));
 });
+
+test("v3: instalador Android executa sem erro Python e não duplica permissões ou receivers",()=>{
+  const os=require("node:os"),path=require("node:path"),{spawnSync}=require("node:child_process");
+  const tmp=fs.mkdtempSync(path.join(os.tmpdir(),"wt-android-installer-"));
+  try{
+    const root=path.join(tmp,"android/app/src/main"), java=path.join(root,"java/lu/marcio/worktimepro/preview");
+    fs.mkdirSync(java,{recursive:true});
+    fs.writeFileSync(path.join(java,"MainActivity.java"),"public class MainActivity extends BridgeActivity {}");
+    fs.writeFileSync(path.join(root,"AndroidManifest.xml"),'<manifest xmlns:android="http://schemas.android.com/apk/res/android"><application/></manifest>');
+    for(const asset of ["mipmap-anydpi-v26/ic_launcher.xml","mipmap-anydpi-v26/ic_launcher_round.xml","drawable/wt_logo_badge.xml"]){
+      const target=path.join(tmp,"android-widget/res",asset);
+      fs.mkdirSync(path.dirname(target),{recursive:true});fs.writeFileSync(target,"<resources/>");
+    }
+    const installer=path.resolve("scripts/install_android_widget.py");
+    for(let i=0;i<2;i++){
+      const result=spawnSync("python3",[installer],{cwd:tmp,encoding:"utf8"});
+      assert.equal(result.status,0,result.error?.message||result.stderr);
+    }
+    const manifest=fs.readFileSync(path.join(root,"AndroidManifest.xml"),"utf8");
+    for(const permission of ["USE_BIOMETRIC","POST_NOTIFICATIONS"])assert.equal(manifest.split('android.permission.'+permission).length-1,1);
+    for(const receiver of ["WorkTimeWidgetProvider","WorkTimeReminderReceiver"])assert.equal(manifest.split('android:name=".'+receiver+'"').length-1,1);
+    assert.equal(manifest.split('android:exported="false"').length-1,2);
+    const activity=fs.readFileSync(path.join(java,"MainActivity.java"),"utf8");
+    for(const plugin of ["WorkTimeWidgetPlugin","WorkTimePrintPlugin","WorkTimeBiometricPlugin","WorkTimeReminderPlugin"])assert.ok(activity.includes("registerPlugin("+plugin+".class)"));
+  }finally{fs.rmSync(tmp,{recursive:true,force:true});}
+});
