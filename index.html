@@ -1047,8 +1047,7 @@
           <label class="block text-xs">Confirmar palavra-passe (para criar cópias)<input id="encryptedBackupConfirm" type="password" autocomplete="new-password" maxlength="1024" class="w-full mt-1 bg-slate-800 border border-slate-700 rounded-xl p-2" /></label>
           <button type="button" onclick="exportEncryptedBackup()" class="wt-button primary w-full">Exportar backup encriptado</button>
           <button type="button" onclick="createLocalBackupNow()" class="wt-button w-full">Criar cópia local agora</button>
-          <button type="button" onclick="restorePreviousState()" class="wt-button w-full">Recuperar estado anterior à importação</button>
-          <p class="wt-note">Ao importar um backup encriptado, a cópia de recuperação anterior é protegida com a palavra-passe desse ficheiro. Para a recuperar, introduz essa mesma palavra-passe acima.</p>
+          <p class="wt-note">Ao importar um backup encriptado, a cópia de recuperação anterior é protegida com a palavra-passe desse ficheiro. Para a recuperar, introduz essa mesma palavra-passe acima e carrega em «Desfazer a última importação».</p>
           <button type="button" onclick="document.getElementById('encryptedBackupFile').click()" class="wt-button w-full">Restaurar ficheiro encriptado</button>
           <input id="encryptedBackupFile" type="file" accept=".json,application/json" class="hidden" onchange="importEncryptedBackup(event)" />
           <label class="block text-xs">Frequência das cópias locais
@@ -3879,7 +3878,7 @@
       try { parsed = JSON.parse(saved); } catch (_) { alert("Cópia de recuperação inválida."); return; }
       if(window.WTBackupCrypto&&window.WTBackupCrypto.isEncrypted(parsed)){
         const password=backupPassphrase(false);
-        if(!password){alert("Introduz a palavra-passe do backup importado na secção Backup encriptado.");return false;}
+        if(!password){const input=document.getElementById("encryptedBackupPassword");const panel=input&&typeof input.closest==="function"?input.closest("details"):null;if(panel)panel.open=true;if(input&&typeof input.focus==="function")input.focus();alert("Introduz a palavra-passe do backup importado na secção Backup encriptado.");return false;}
         return restoreEncryptedPreviousState(parsed,password);
       }
       return applyPreviousState(parsed);
