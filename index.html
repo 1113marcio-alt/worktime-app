@@ -1833,8 +1833,33 @@
       };
       if (manualTime) updated.manualTime = manualTime;
       else delete updated.manualTime;
-      if (isPaidLeave) updated.paidLeaveHours = paidLeaveHours;
-      else delete updated.paidLeaveHours;
+      if (isPaidLeave) {
+        updated.paidLeaveHours = paidLeaveHours;
+        if (oldEntry && oldEntry.type === type && oldEntry.vacSupplementPerDay === undefined) {
+          // Não alterar o valor já pago/estimado num registo legado.
+          delete updated.vacSupplementPerDay;
+          delete updated.vacSupplementHoursBase;
+        } else if (oldEntry && oldEntry.type === type &&
+                   Number.isFinite(Number(oldEntry.vacSupplementPerDay))) {
+          // Ao editar horas, manter a média usada na gravação original.
+          updated.vacSupplementPerDay = oldEntry.vacSupplementPerDay;
+          updated.vacSupplementHoursBase = oldEntry.vacSupplementHoursBase || 8;
+        } else {
+          const sample = threeMonthWorkAverage(date);
+          updated.vacSupplementPerDay = Math.round(sample.avgPerDay*100)/100;
+          updated.vacSupplementHoursBase = scheduledLeaveHours(date) || 8;
+          updated.vacSupplementSampleDays = sample.days;
+          updated.vacSupplementSampleFrom = sample.from;
+          updated.vacSupplementEstimated = true;
+        }
+      } else {
+        delete updated.paidLeaveHours;
+        delete updated.vacSupplementPerDay;
+        delete updated.vacSupplementHoursBase;
+        delete updated.vacSupplementSampleDays;
+        delete updated.vacSupplementSampleFrom;
+        delete updated.vacSupplementEstimated;
+      }
       // Copy-on-write: nunca alterar os registos em memória antes do
       // armazenamento confirmar que a gravação foi possível.
       const next = { ...entries, [date]: updated };
@@ -1962,8 +1987,127 @@
       return { pensionRate: 0.08, depAllowance: 675.94 };
     }
 
+    // Para cada data, usar os três meses imediatamente anteriores sem
+    // utilizar dias futuros ou outros dias de férias no numerador.
+    // Amostra parcial é admitida (por ex. 7 ou 30 dias), mas identificada.
+    function threeMonthWorkAverage(referenceDate) {
+      if (!validCalendarDate(referenceDate))
+        return {avgPerDay:0,days:0,from:"",to:referenceDate,partial:true,
+          variableGross:0,reason:"data inválida"};
+      const [y,m,d] = referenceDate.split("-").map(Number);
+      const first = new Date(y,m-4,1,12); // index m-1, menos 3 meses
+      const last = new Date(first.getFullYear(),first.getMonth()+1,0,12).getDate();
+      first.setDate(Math.min(d,last));
+      const from = first.getFullYear()+"-"+
+        String(first.getMonth()+1).padStart(2,"0")+"-"+
+        String(first.getDate()).padStart(2,"0");
+      const sample = Object.values(entries).filter(e => e && e.type === "work" &&
+        typeof e.date === "string" && e.date >= from && e.date < referenceDate &&
+        (Number(e.normal)||0)+(Number(e.extra)||0) > 0);
+      let variableGross = 0;
+      const rate = Number(settings.hourlyRate)||0;
+      const ot = (Number(settings.overtimePct)||0)/100;
+      const night = (Number(settings.nightPct)||0)/100;
+      const bonus = Number(settings.hourlyBonus)||0;
+      sample.forEach(e => {
+        const overtimeHours = Math.max(0,Number(e.extra)||0);
+        const nightHours = Math.max(0,Number(e.night)||0);
+        // Extra base + majoração, suplemento noturno e bónus em horas extras.
+        // Não duplicar a remuneração das horas normais nem incluir panier.
+        variableGross += overtimeHours*rate*(1+ot) + nightHours*rate*night +
+          (e.includeBonus ? overtimeHours*bonus : 0);
+      });
+      const earliest = sample.length
+        ? sample.map(e=>e.date).sort()[0] : "";
+      return {avgPerDay:sample.length ? variableGross/sample.length : 0,
+        days:sample.length,from,to:referenceDate,variableGross,
+        partial:!earliest || earliest > from,reason:sample.length
+          ? (earliest > from ? "histórico parcial" : "janela observada")
+          : "sem dias trabalhados registados"};
+    }
+
+    function paidVacationSupplement(entry) {
+      const hours = paidHoursForEntry(entry);
+      const planned = Number(entry.vacSupplementHoursBase);
+      const base = Number.isFinite(planned) && planned > 0 && planned <= 24
+        ? planned : 8; // Contratos/registos antigos usavam 8 horas base.
+      // Registos antigos ficam intactos: o valor histórico manual é usado
+      // apenas quando ainda não existe a nova média gravada no dia.
+      const captured = Number(entry.vacSupplementPerDay);
+      const supplement = entry.vacSupplementPerDay !== undefined &&
+        Number.isFinite(captured) && captured >= 0
+          ? captured : Number(settings.vacAvgSupplement)||0;
+      return supplement * (hours/base);
+    }
+
+    function completedSeniorityYears(startDate,referenceDate) {
+      if (!validCalendarDate(startDate) || !validCalendarDate(referenceDate) ||
+          startDate > referenceDate) return null;
+      let years = Number(referenceDate.slice(0,4)) - Number(startDate.slice(0,4));
+      if (referenceDate.slice(5) < startDate.slice(5)) years--;
+      return Math.max(0,years);
+    }
+
+    function yearEndBonusRate(referenceDate) {
+      let rate = Number(settings.yearEndBonusPct);
+      if (!Number.isFinite(rate) || rate < 0 || rate > 100) rate = 8;
+      const years = completedSeniorityYears(settings.companyStartDate, referenceDate);
+      const tiers = Array.isArray(settings.yearEndBonusTiers)
+        ? settings.yearEndBonusTiers : [];
+      if (years !== null) tiers.slice().sort((a,b)=>Number(a.years)-Number(b.years))
+        .forEach(tier => {
+          if (Number.isFinite(Number(tier.years)) &&
+              Number.isFinite(Number(tier.rate)) &&
+              Number(tier.years) <= years && Number(tier.rate) >= 0 &&
+              Number(tier.rate) <= 100) rate=Number(tier.rate);
+        });
+      return {rate,years};
+    }
+
+    function annualRecordedBonus(year,asOfDate) {
+      const date = validCalendarDate(asOfDate) ? asOfDate :
+        (new Date().getFullYear()+"-"+String(new Date().getMonth()+1).padStart(2,"0")+"-"+
+        String(new Date().getDate()).padStart(2,"0"));
+      const selectedYear = Number(year);
+      if (!Number.isInteger(selectedYear) || selectedYear < 1970 || selectedYear > 2200)
+        return {gross:0,bonus:0,rate:0,days:0,year};
+      const todayYear = Number(date.slice(0,4));
+      const cutoff = selectedYear < todayYear ? year+"-12-31" :
+        selectedYear === todayYear ? date : year+"-01-00";
+      const jobs = Object.values(entries).filter(e => e && typeof e.date==="string" &&
+        e.date.startsWith(year+"-") && e.date <= cutoff);
+      const hourRate = Number(settings.hourlyRate)||0;
+      const hourlyBonus = Number(settings.hourlyBonus)||0;
+      const extraPct = (Number(settings.overtimePct)||0)/100;
+      const nightPct = (Number(settings.nightPct)||0)/100;
+      let gross = 0;
+      for (const e of jobs) {
+        if (e.type === "work") {
+          const norm = Math.max(0,Number(e.normal)||0),
+            extra = Math.max(0,Number(e.extra)||0),
+            night = Math.max(0,Number(e.night)||0);
+          gross += norm*hourRate + extra*hourRate*(1+extraPct) +
+            night*hourRate*nightPct +
+            (e.includeBonus ? (norm+extra)*hourlyBonus : 0);
+        } else if (e.type === "vacation" || e.type === "holiday") {
+          gross += paidHoursForEntry(e)*(hourRate+hourlyBonus)+paidVacationSupplement(e);
+        } else if (e.type === "sick") {
+          gross += Math.max(0,Number(e.normal)||0)*hourRate;
+        }
+      }
+      // Prémio acumulado: só dias realmente registados até à data de hoje.
+      // Exclui o próprio prémio e o subsídio diário, sem previsão de dias futuros.
+      const effectiveDate = selectedYear < todayYear ? year+"-12-31" : date;
+      const effective = yearEndBonusRate(effectiveDate);
+      const enabled = settings.yearEndBonusEnabled !== false;
+      return {gross,bonus:enabled?gross*effective.rate/100:0,
+        rate:enabled?effective.rate:0,years:effective.years,days:jobs.length,
+        year,asOf:cutoff,enabled};
+    }
+
     function calculateMonthData(monthPrefix) {
       let normalH = 0, extraH = 0, nightH = 0, bonusH = 0, workDays = 0, vacDays = 0, vacPaidHours = 0;
+      let vacationGross = 0;
       const monthEntries = Object.values(entries)
         .filter(e => e.date.startsWith(monthPrefix))
         .sort((a, b) => b.date.localeCompare(a.date));
@@ -1979,7 +2123,10 @@
           }
         } else if (e.type === "vacation" || e.type === "holiday") {
           vacDays += 1;
-          vacPaidHours += paidHoursForEntry(e);
+          const paid = paidHoursForEntry(e);
+          vacPaidHours += paid;
+          vacationGross += paid * (Number(settings.hourlyRate)+Number(settings.hourlyBonus)) +
+            paidVacationSupplement(e);
         } else if (e.type === "sick") {
           normalH += e.normal;
         }
@@ -1995,8 +2142,8 @@
       // vacDailyBase continua a referência legada de 8h do painel.
       // O cálculo real usa as horas pagas gravadas em cada dia.
       const vacDailyBase = (8 * rate) + (8 * settings.hourlyBonus) + settings.vacAvgSupplement;
-      const vacationGross = vacPaidHours * (rate + settings.hourlyBonus) +
-        (vacPaidHours / 8) * settings.vacAvgSupplement;
+      // A média é capturada separadamente em cada férias; somar no loop.
+      // 'vacAvgSupplement' preserva apenas os dias antigos sem cálculo automático.
       const panierGross = workDays * settings.dailyPanier;
 
       const totalGross = normalGross + extraTotalGross + nightGross + bonusGross + vacationGross + panierGross;
