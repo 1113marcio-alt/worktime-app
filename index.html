@@ -3100,6 +3100,8 @@
         row={...old,status:"open",reopenedAt:new Date().toISOString()};
       }
       const next={...settings,payrollClosures:{...(isPlainRecord(settings.payrollClosures)?settings.payrollClosures:{}),[month]:row}};
+      const existingReceipt=salaryReceipt(month);
+      if(closed&&existingReceipt&&row.actualNet!==null&&existingReceipt.net!==row.actualNet)next.receiptsByMonth={...settings.receiptsByMonth,[month]:{...existingReceipt,net:row.actualNet,savedAt:new Date().toISOString()}};
       try {localStorage.setItem("wt_settings",JSON.stringify(next));}
       catch (_) {return false;}
       settings=next;
@@ -3135,7 +3137,9 @@
         ?"Valores fixados em "+row.closedAt.slice(0,10)+". O líquido continua a ser uma estimativa."
         :month>=payrollToday().slice(0,7)?"O mês só pode ser fechado depois de terminar.":"Confirma os registos e o recibo antes de fechar.";
       const input=document.getElementById("payrollActualNet");
-      if(input.dataset.month!==month||closed){
+      const receiptActual=recordedActualNet(month), receiptSignature=String(receiptActual);
+      if(input.dataset.month!==month||closed||input.dataset.receipt!==receiptSignature){
+        input.dataset.receipt=receiptSignature;
         const actual=closed?row.actualNet:recordedActualNet(month)??(row?row.actualNet:null);
         input.value=actual!==null?String(actual):"";
         input.dataset.month=month;
@@ -3565,6 +3569,7 @@
         navBtn.classList.toggle("active", t === navTarget);
         navBtn.setAttribute("aria-current", t === navTarget ? "page" : "false");
       });
+      if(tab!=="folha")clearReceiptPreview();
       if (window.ProUI) window.ProUI.onTabChange(tab);
       if (typeof window.scrollTo === "function") window.scrollTo(0, 0);
     }
@@ -4090,12 +4095,12 @@
     function renderReceipt(month){
       const field=document.getElementById("receiptMonth");if(!field)return;
       const row=salaryReceipt(month),gross=document.getElementById("receiptGross"),net=document.getElementById("receiptNet");
-      if(field.textContent!==month||privacyMode||gross.dataset.private==="1"){
+      const actual=recordedActualNet(month), signature=JSON.stringify([row,actual]);
+      if(field.textContent!==month||privacyMode||gross.dataset.private==="1"||gross.dataset.saved!==signature){
         clearReceiptPreview();field.textContent=month;
         gross.value=privacyMode?"":row&&row.gross!==null?String(row.gross.toFixed(2)):"";
-        const actual=recordedActualNet(month);
         net.value=privacyMode||actual===null?"":actual.toFixed(2);
-        gross.dataset.private=privacyMode?"1":"0";
+        gross.dataset.private=privacyMode?"1":"0";gross.dataset.saved=signature;
       }
       const plugins=window.Capacitor&&window.Capacitor.Plugins;
       for(const id of ["receiptCamera","receiptGallery"])document.getElementById(id).disabled=privacyMode||!plugins||!plugins.Camera||!plugins.WorkTimeReceipt;
@@ -4168,14 +4173,15 @@
         const stats=period==="year"?yearStatistics(reference.slice(0,4),asOf):null;
         const months=stats?stats.months:[monthStatistics(reference,asOf)];
         const statuses={future:"Futuro",empty:"Sem registos",closed:"Fechado",open:"Aberto"};
-        monthly=months.map(m=>[m.month,statuses[m.status],m.count,m.count?rounded(m.hours):null,m.gross===null?null:rounded(m.gross),m.net===null?null:rounded(m.net),m.actualNet,m.missing]);
+        monthly=months.map(m=>[m.month,statuses[m.status],m.count,m.count?rounded(m.hours):null,m.gross===null?null:rounded(m.gross),m.net===null?null:rounded(m.net),m.actualNet,m.missing,m.status==="future"?null:(salaryReceipt(m.month)?.gross??null)]);
         const recordedMonths=months.filter(m=>m.gross!==null),actualMonths=months.filter(m=>m.actualNet!==null);
+        const actualGross=monthly.filter(row=>row[8]!==null);summary.push(["Bruto real do recibo (€)",actualGross.length?rounded(sum(actualGross,row=>row[8])):null]);
         summary.push(["Bruto estimado (€)",recordedMonths.length?rounded(sum(recordedMonths,m=>m.gross)):null],["Líquido estimado com CIS (€)",recordedMonths.length?rounded(sum(recordedMonths,m=>m.net)):null],["Líquido real recebido (€)",actualMonths.length?rounded(sum(actualMonths,m=>m.actualNet)):null],["Meses com valor real",actualMonths.length],["Dias previstos sem registo",sum(months,m=>m.missing)]);
       }
       return {period,start,end,heading,summary,rows,monthly};
     }
     const REPORT_ENTRY_HEADERS=["Data","Tipo","Normais (h)","Extra (h)","Noite (h)","Banco + (h)","Banco − (h)","Notas"];
-    const REPORT_MONTH_HEADERS=["Mês","Estado","Registos","Trabalho (h)","Bruto est. (€)","Líquido est. (€)","Líquido real (€)","Dias sem registo"];
+    const REPORT_MONTH_HEADERS=["Mês","Estado","Registos","Trabalho (h)","Bruto est. (€)","Líquido est. (€)","Líquido real (€)","Dias sem registo","Bruto real (€)"];
     function reportSheets(model){
       return [{name:"Resumo",rows:[["WorkTime Pro — "+model.heading],["Simulação pessoal; não é recibo oficial. Valores em EUR; horas decimais."],["Indicador","Valor"],...model.summary]},
         {name:"Registos",rows:[REPORT_ENTRY_HEADERS,...model.rows]},
@@ -4197,7 +4203,7 @@
     }
     function xlsxColumn(index){let s="";for(let i=index+1;i>0;i=Math.floor((i-1)/26))s=String.fromCharCode(65+(i-1)%26)+s;return s;}
     function xlsxWorksheet(rows){
-      return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols><col min="1" max="1" width="23" customWidth="1"/><col min="2" max="8" width="21" customWidth="1"/></cols><sheetData>'+rows.map((row,i)=>'<row r="'+(i+1)+'">'+row.map((v,j)=>{
+      return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><cols><col min="1" max="1" width="23" customWidth="1"/><col min="2" max="9" width="21" customWidth="1"/></cols><sheetData>'+rows.map((row,i)=>'<row r="'+(i+1)+'">'+row.map((v,j)=>{
         const ref=xlsxColumn(j)+(i+1);
         if(v===null||v===undefined)return "";
         if(typeof v==="number"&&Number.isFinite(v))return '<c r="'+ref+'" t="n"><v>'+v+'</v></c>';
