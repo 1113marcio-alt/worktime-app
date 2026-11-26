@@ -1802,3 +1802,30 @@ test("traduções incluem controlos do prémio, média de férias e cores",()=>{
   assert.equal(app.ctx.window.WTLocale.tr("Média variável de férias (automática)","de"),
     "Variabler Urlaubsentgeltdurchschnitt (automatisch)");
 });
+
+test("fundo independente: pré-visualização, gravação e restauro",()=>{
+  const app=makeApp({accentColor:"purple"});
+  const ui=settingsEditFixture(app);
+  ui.elements.cfgAccentColor={value:"purple"};
+  ui.elements.cfgBackgroundColor={value:"forest"};
+  const html={attrs:{},setAttribute(name,value){this.attrs[name]=value;}};
+  app.ctx.document.documentElement=html;
+  app.ctx.previewBackgroundColor();
+  assert.equal(html.attrs["data-wt-background"],"forest");
+  assert.equal(app.evaluate("settings.backgroundColor"),"original");
+  assert.equal(ui.button.disabled,false);
+  assert.equal(app.ctx.saveSettings(),true);
+  const saved=JSON.parse(app.values.get("wt_settings"));
+  assert.equal(saved.backgroundColor,"forest");
+  assert.equal(saved.accentColor,"purple");
+  const backup=app.ctx.snapshotAllData();
+  app.ctx.writeBackupState({settings:{},entries:{}});
+  assert.equal(app.evaluate("settings.backgroundColor"),"original");
+  app.ctx.writeBackupState(backup);
+  assert.equal(app.evaluate("settings.backgroundColor"),"forest");
+  assert.equal(app.ctx.allowedBackgroundColor("invalid"),"original");
+  for(const color of ["neutral","navy","teal","forest","violet","sand","rose","graphite"]){
+    assert.ok(source.includes('data-wt-background="'+color+'"'));
+    assert.ok(source.includes('data-wt-theme="light"][data-wt-background="'+color+'"'));
+  }
+});
