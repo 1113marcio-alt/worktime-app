@@ -35,6 +35,8 @@ Cada alteração precisa de testes específicos e regressão antes de disponibil
 - Corrigidas datas locais perto da meia-noite, reposição de aparência ao descartar alterações, retorno explícito em importações canceladas/inválidas, privacidade no PDF antigo e CSV, e proteção contra leitura de recibo fora do mês válido.
 - 37 títulos/controlos principais traduzidos em francês, inglês, alemão, espanhol e luxemburguês; mensagens dinâmicas e restantes textos ainda por rever.
 - Backup portátil encriptado continua dependente de sessão desbloqueada. Um serviço persistente exigirá desenho e validação próprios; não simular backup de dados atuais a partir de ficheiros antigos.
-- 131 testes definidos. Verificações direcionadas em JavaScript executadas; execução integral do CI e APK continuam por confirmar. Não publicar release assinada antes de validar instalação/atualização e restauro num dispositivo real.
+- 132 testes definidos. Verificações direcionadas em JavaScript executadas; execução integral do CI e APK continuam por confirmar. Não publicar release assinada antes de validar instalação/atualização e restauro num dispositivo real.
 
 - Proteção da recuperação anterior à importação encriptada e botão de cópia local imediata. Verificações direcionadas da lógica com módulo criptográfico simulado aprovadas; novos testes com Web Crypto real adicionados ao CI, ainda sem confirmação integral. Mantém recuperação JSON antiga; não altera a proteção dos dados internos nem cria um serviço persistente em segundo plano.
+
+- Verificação não destrutiva de ficheiros de backup JSON e encriptados: valida formato e palavra-passe, mostra quantidade de registos, intervalo de datas, definições e turnos sem gravar dados. Seis verificações dirigidas com módulo simulado aprovadas; teste Web Crypto real adicionado ao CI. A verificação não substitui teste de instalação e recuperação.
