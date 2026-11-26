@@ -281,3 +281,11 @@ html[data-wt-theme="light"][data-wt-accent]:not([data-wt-accent="blue"]) .wt-clo
 html[data-wt-theme="light"][data-wt-accent]:not([data-wt-accent="blue"]) .wt-pill{
   color:var(--wt-dark-color)!important;
 }
+
+
+/* Stronger contrast for selected accents on a light background. */
+html[data-wt-theme="light"][data-wt-accent]:not([data-wt-accent="blue"]) .text-blue-300,
+html[data-wt-theme="light"][data-wt-accent]:not([data-wt-accent="blue"]) .text-blue-400,
+html[data-wt-theme="light"][data-wt-accent]:not([data-wt-accent="blue"]) .text-sky-300 {
+  color:var(--wt-dark-color)!important;
+}
