@@ -120,7 +120,7 @@
     $("homeWorkdays").textContent = data.monthEntries.filter(e => e.type === "work").length;
     $("homeVacationDays").textContent = data.monthEntries.filter(e => e.type === "vacation").length;
     $("homeHours").textContent = (data.normalH + data.extraH).toFixed(2) + " h";
-    $("homeCountry").textContent = settings.employerCountry || "LU";
+    $("homeCountry").textContent = data.country || "LU";
     if ($("salaryPreviewNet")) {
       $("salaryPreviewNet").textContent = formatMoney(data.netBeforeCredit);
       $("salaryPreviewGross").textContent = formatMoney(data.totalGross);
