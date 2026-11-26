@@ -300,6 +300,14 @@ test("mudança de empregador prepara férias mas só grava ao confirmar", () => 
   assert.equal(elements.cfgAnnualVacation.value,29);
 });
 
+function setupPinSecurity(app) {
+  app.ctx.window.crypto=require("node:crypto").webcrypto;
+  app.ctx.window.btoa=btoa;
+  app.ctx.window.atob=atob;
+  app.ctx.TextEncoder=TextEncoder;
+  vm.runInContext(fs.readFileSync("wt-pin.js","utf8"),app.ctx);
+}
+
 test("PIN novo usa verificador criptográfico e não é guardado em texto", async() => {
   const app=makeApp({}, {});
   setupPinSecurity(app);
